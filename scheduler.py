@@ -1,7 +1,8 @@
 import logging
 import os
+import time
 import asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram import Bot
 from reminder_data import load_reminders, jalali_to_gregorian, toggle_reminder
@@ -16,42 +17,50 @@ if not TOKEN:
 
 bot = Bot(token=TOKEN)
 
-async def send_reminder_async(chat_id, reminder):
-    """ارسال پیام به صورت async"""
+def send_reminder_sync(chat_id, reminder):
+    """ارسال پیام با مدیریت بهتر خطا و timeout"""
     try:
-        if reminder["type"] == "exam":
-            message = f"⏰ **یادآوری کنکور!**\n\n📖 {reminder['title']}\n📅 تاریخ: {reminder['jalali_date']}\n🕐 ساعت: {reminder['time']}"
-        else:
-            message = f"⏰ **یادآوری شخصی!**\n\n📝 {reminder['title']}\n📅 تاریخ: {reminder['jalali_date']}\n🕐 ساعت: {reminder['time']}"
-        
-        await bot.send_message(
-            chat_id=chat_id,
-            text=message,
-            parse_mode="Markdown",
-            read_timeout=10,
-            write_timeout=10,
-            connect_timeout=10
-        )
-        
-        # غیرفعال کردن یادآوری بعد از ارسال
-        from reminder_data import toggle_reminder
-        toggle_reminder(chat_id, reminder["id"])
-        
-        logger.info(f"✅ Reminder sent to {chat_id}: {reminder['title']}")
-        return True
-        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            if reminder["type"] == "exam":
+                message = f"⏰ **یادآوری کنکور!**\n\n📖 {reminder['title']}\n📅 تاریخ: {reminder['jalali_date']}\n🕐 ساعت: {reminder['time']}"
+            else:
+                message = f"⏰ **یادآوری شخصی!**\n\n📝 {reminder['title']}\n📅 تاریخ: {reminder['jalali_date']}\n🕐 ساعت: {reminder['time']}"
+            
+            loop.run_until_complete(
+                bot.send_message(
+                    chat_id=chat_id,
+                    text=message,
+                    parse_mode="Markdown",
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60,
+                    pool_timeout=60
+                )
+            )
+            logger.info(f"✅ Reminder sent to {chat_id}: {reminder['title']}")
+            toggle_reminder(chat_id, reminder["id"])
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to send reminder to {chat_id}: {e}")
+            return False
+        finally:
+            loop.close()
     except Exception as e:
-        logger.error(f"❌ Failed to send reminder to {chat_id}: {e}")
+        logger.error(f"❌ Error in send_reminder_sync: {e}")
         return False
 
-async def check_and_send_reminders():
-    """بررسی و ارسال یادآوری‌ها - نسخه async"""
+def check_and_send_reminders():
+    """بررسی و ارسال یادآوری‌های سررسید شده با زمان تهران"""
     try:
         reminders = load_reminders()
         now_tehran = datetime.now(pytz.timezone('Asia/Tehran'))
-        due_reminders = []
         
-        logger.debug(f"🔍 Checking reminders at Tehran time: {now_tehran.strftime('%Y-%m-%d %H:%M:%S')}")
+        # 🆕 لاگ جدید
+        logger.info(f"🔍 CHECKING at Tehran: {now_tehran.strftime('%H:%M:%S')}")
+        
+        due_reminders = []
         
         for user_id, user_reminders in reminders.items():
             for r in user_reminders:
@@ -72,38 +81,45 @@ async def check_and_send_reminders():
                         tzinfo=pytz.timezone('Asia/Tehran')
                     )
                     
-                    # بررسی بدون محدودیت time_diff - هرچی زمانش رسیده باشه
+                    # 🆕 لاگ جدید
+                    diff = (now_tehran - reminder_datetime).total_seconds()
+                    if diff >= -60:
+                        logger.info(f"📅 Reminder: {r['title']} | Scheduled: {reminder_datetime.strftime('%H:%M:%S')} | Now: {now_tehran.strftime('%H:%M:%S')} | Diff: {diff}s")
+                    
                     if now_tehran >= reminder_datetime:
                         due_reminders.append({
                             "user_id": int(user_id),
                             "reminder": r,
-                            "scheduled_time": reminder_datetime.strftime('%H:%M:%S')
+                            "datetime": reminder_datetime
                         })
-                        
-                        logger.info(f"⏰ Due: {r['title']} | Scheduled: {reminder_datetime.strftime('%H:%M:%S')} | Now: {now_tehran.strftime('%H:%M:%S')}")
-                        
                 except Exception as e:
-                    logger.warning(f"⚠️ Error processing reminder: {e}")
+                    logger.warning(f"⚠️ Error processing reminder {r.get('id', 'unknown')}: {e}")
                     continue
         
         if due_reminders:
-            logger.info(f"🔔 Sending {len(due_reminders)} reminders...")
+            logger.info(f"🔔 Found {len(due_reminders)} due reminders (Tehran time)")
             for item in due_reminders:
-                await send_reminder_async(item["user_id"], item["reminder"])
-                await asyncio.sleep(0.1)  # تاخیر کم بین ارسال‌ها
-        
+                success = send_reminder_sync(item["user_id"], item["reminder"])
+                if success:
+                    time.sleep(1)
+                else:
+                    logger.warning(f"⚠️ Failed to send reminder to {item['user_id']}")
+        else:
+            if int(time.time()) % 50 < 10:
+                logger.info(f"📭 No due reminders (Tehran time: {now_tehran.strftime('%Y-%m-%d %H:%M:%S')})")
+                
     except Exception as e:
         logger.error(f"❌ Error in check_and_send_reminders: {e}")
 
-async def start_async_scheduler():
-    """راه‌اندازی AsyncIOScheduler"""
-    scheduler = AsyncIOScheduler()
+def start_scheduler():
+    """راه‌اندازی برنامه‌ریز با تنظیمات بهینه"""
+    scheduler = BackgroundScheduler()
     scheduler.add_job(
-        check_and_send_reminders,
-        trigger=IntervalTrigger(seconds=10),  # هر ۱۰ ثانیه چک کن
+        func=check_and_send_reminders,
+        trigger=IntervalTrigger(seconds=10),
         id='reminder_checker',
         replace_existing=True
     )
     scheduler.start()
-    logger.info("✅ AsyncIOScheduler started - checking every 10 seconds (Tehran time)")
+    logger.info("✅ Scheduler started - checking reminders every 10 seconds (Tehran timezone)")
     return scheduler
