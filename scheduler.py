@@ -52,10 +52,10 @@ def check_and_send_reminders():
 def start_scheduler():
     """راه‌اندازی برنامه‌ریز"""
     scheduler = BackgroundScheduler()
-    # هر ۳۰ ثانیه یک بار بررسی کن
+    # هر ۱۰ ثانیه یک بار بررسی کن
     scheduler.add_job(
         func=check_and_send_reminders,
-        trigger=IntervalTrigger(seconds=30),
+        trigger=IntervalTrigger(seconds=10),
         id='reminder_checker',
         replace_existing=True
     )
