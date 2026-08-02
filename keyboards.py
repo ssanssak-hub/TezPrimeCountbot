@@ -3,7 +3,7 @@ from exam_data import EXAMS
 
 def get_main_menu(admin_id, user_id):
     """
-    منوی اصلی با دکمه‌های معمولی (فقط همینجا معمولی هست)
+    منوی اصلی - دکمه‌های معمولی
     """
     buttons = [
         ["📚 اطلاعات کنکور"],
