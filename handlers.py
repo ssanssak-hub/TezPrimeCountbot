@@ -1,12 +1,13 @@
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
-from keyboards import get_main_menu, get_admin_panel
+from keyboards import get_main_menu, get_exam_menu, get_exam_detail_menu, get_admin_panel
+from exam_data import get_exam_info, EXAMS
 
 logger = logging.getLogger(__name__)
 
-# لیست ادمین‌ها (می‌توانید چند ادمین اضافه کنید)
-ADMINS = [7703672187]  # ادمین اصلی
+# لیست ادمین‌ها (ادمین اصلی)
+ADMINS = [7703672187]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /start"""
@@ -28,7 +29,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
     
-    # دکمه بازگشت به منوی اصلی
+    # بازگشت به منوی اصلی
     if text == "🔙 بازگشت به منوی اصلی":
         keyboard = get_main_menu(ADMINS[0], user_id)
         await update.message.reply_text(
@@ -37,7 +38,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # پنل مدیریت (فقط برای ادمین‌ها)
+    # بازگشت به منوی کنکورها
+    if text == "🔙 بازگشت به کنکورها":
+        keyboard = get_exam_menu()
+        await update.message.reply_text(
+            "📚 لطفاً یکی از کنکورها را انتخاب کنید:",
+            reply_markup=keyboard
+        )
+        return
+    
+    # دکمه اطلاعات کنکور
+    if text == "📚 اطلاعات کنکور":
+        keyboard = get_exam_menu()
+        await update.message.reply_text(
+            "📚 **اطلاعات کنکورها**\n\n"
+            "لطفاً یکی از کنکورهای زیر را انتخاب کنید تا اطلاعات کامل و زمان باقی‌مانده را مشاهده کنید:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+        return
+    
+    # بررسی دکمه‌های کنکور
+    for exam_name in EXAMS.keys():
+        if text == f"📖 {exam_name}":
+            await show_exam_details(update, exam_name)
+            return
+        
+        if text == f"🔄 تازه کردن {exam_name}":
+            await show_exam_details(update, exam_name, refresh=True)
+            return
+    
+    # پنل مدیریت (فقط برای ادمین)
     if text == "🛠 پنل مدیریت" and user_id in ADMINS:
         keyboard = get_admin_panel()
         await update.message.reply_text(
@@ -55,8 +86,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_admin_commands(update, text)
         return
     
-    # پردازش سایر دکمه‌ها (نمونه)
+    # سایر دکمه‌های منوی اصلی
     await handle_menu_buttons(update, text)
+
+async def show_exam_details(update: Update, exam_name: str, refresh: bool = False):
+    """نمایش جزئیات کنکور"""
+    exam_info = get_exam_info(exam_name)
+    if not exam_info:
+        await update.message.reply_text("❌ اطلاعات این کنکور یافت نشد!")
+        return
+    
+    time_left = exam_info["time_left"]
+    
+    if time_left["passed"]:
+        time_text = "⏰ **این کنکور برگزار شده است!**"
+    else:
+        time_text = (
+            f"⏳ **زمان باقی‌مانده تا کنکور:**\n\n"
+            f"📅 **{time_left['weeks']}** هفته\n"
+            f"📆 **{time_left['days']}** روز\n"
+            f"🕐 **{time_left['hours']}** ساعت\n"
+            f"⏱ **{time_left['minutes']}** دقیقه\n"
+            f"⚡️ **{time_left['seconds']}** ثانیه"
+        )
+    
+    message = (
+        f"📖 **{exam_info['title']}**\n\n"
+        f"📅 تاریخ برگزاری: **{exam_info['date']}**\n"
+        f"🕐 ساعت برگزاری: **{exam_info['time']}**\n"
+        f"📍 به وقت تهران\n\n"
+        f"{time_text}\n\n"
+        f"🔄 برای بروزرسانی زمان، دکمه تازه کردن را بزنید."
+    )
+    
+    keyboard = get_exam_detail_menu(exam_name)
+    await update.message.reply_text(
+        message,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
 
 async def handle_admin_commands(update: Update, command: str):
     """مدیریت دستورات پنل مدیریت"""
@@ -74,9 +142,8 @@ async def handle_admin_commands(update: Update, command: str):
 async def handle_menu_buttons(update: Update, text: str):
     """مدیریت دکمه‌های منوی اصلی"""
     responses = {
-        "📚 اطلاعات کنکور": "📚 **اطلاعات کنکور:**\n\n• تاریخ کنکور: ۱۴۰۵/۰۲/۱۵\n• زمان باقی‌مانده: ۲۵۰ روز\n• مواد امتحانی: ریاضی، فیزیک، شیمی، زیست",
         "⏰ یادآوری کن": "⏰ **یادآوری:**\n\nلطفاً موضوع و تاریخ یادآوری را مشخص کن.\nمثال: `یادآوری فردا ساعت ۱۰ جلسه مشاوره`",
-        "⏳ شمارش معکوس": "⏳ **شمارش معکوس تا کنکور:**\n\n⏱ ۲۵۰ روز مانده به کنکور سراسری ۱۴۰۵",
+        "⏳ شمارش معکوس": "⏳ **شمارش معکوس تا کنکور:**\n\n⏱ ۲۵۰ روز مانده به کنکور سراسری ۱۴۰۶",
         "📝 ثبت اطلاعات درسی": "📝 **ثبت اطلاعات درسی:**\n\nلطفاً اطلاعات درسی خود را وارد کن:\n• درس: \n• مبحث: \n• درصد: \n• زمان مطالعه:",
         "📋 برنامه ریزی": "📋 **برنامه ریزی درسی:**\n\nبرنامه هفتگی خود را تنظیم کن:\n• شنبه: \n• یکشنبه: \n• دوشنبه: \n• سه‌شنبه: \n• چهارشنبه: \n• پنجشنبه: \n• جمعه:",
         "📊 مشاهده وضعیت درسی": "📊 **وضعیت درسی:**\n\n• میانگین مطالعه روزانه: ۴.۵ ساعت\n• درصد پیشرفت: ۶۰٪\n• دروس ضعیف: شیمی، فیزیک",
