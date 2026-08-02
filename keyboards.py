@@ -1,4 +1,5 @@
 from telegram import ReplyKeyboardMarkup, KeyboardButton
+from exam_data import EXAMS
 
 def get_main_menu(admin_id, user_id):
     """
@@ -20,16 +21,41 @@ def get_main_menu(admin_id, user_id):
         [KeyboardButton("🗑 حذف حساب و اطلاعات من")]
     ]
     
-    # دکمه پنل مدیریت (فقط برای ادمین‌ها)
+    # دکمه پنل مدیریت (فقط برای ادمین)
     if user_id == admin_id:
         buttons.append([KeyboardButton("🛠 پنل مدیریت")])
     
-    # ایجاد صفحه‌کلید با ۳ ستون برای زیبایی
+    # ایجاد صفحه‌کلید با ۱ ستون برای زیبایی
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+def get_exam_menu():
+    """
+    ساخت منوی انتخاب کنکور
+    """
+    buttons = []
+    
+    # اضافه کردن دکمه‌های کنکورها
+    for exam_name in EXAMS.keys():
+        buttons.append([KeyboardButton(f"📖 {exam_name}")])
+    
+    # دکمه بازگشت به منوی اصلی
+    buttons.append([KeyboardButton("🔙 بازگشت به منوی اصلی")])
+    
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+def get_exam_detail_menu(exam_name):
+    """
+    ساخت منوی جزئیات کنکور با دکمه‌های تازه کردن و بازگشت
+    """
+    buttons = [
+        [KeyboardButton(f"🔄 تازه کردن {exam_name}")],
+        [KeyboardButton("🔙 بازگشت به کنکورها")]
+    ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
 def get_admin_panel():
     """
-    دکمه‌های پنل مدیریت
+    ساخت پنل مدیریت
     """
     buttons = [
         ["📊 آمار کاربران"],
