@@ -1,3 +1,4 @@
+
 from .exam_handler import show_exam_details, handle_exam_menu, handle_exam_selection
 from .admin_handler import handle_admin_panel, handle_admin_commands, is_admin
 from .menu_handler import handle_menu_buttons
@@ -10,14 +11,14 @@ from .reminder_handler import (
     handle_personal_reminder_date,
     handle_personal_reminder_time,
     handle_view_reminders,
-    handle_reminder_action
+    handle_reminder_action,
+    user_states
 )
 from keyboards import get_main_menu
 
 ADMINS = [7703672187]
 
 async def start(update, context):
-    """دستور /start"""
     user = update.effective_user
     user_id = user.id
     
@@ -32,7 +33,6 @@ async def start(update, context):
     await update.message.reply_text(welcome_message, reply_markup=keyboard)
 
 async def handle_message(update, context):
-    """مدیریت پیام‌های دریافتی"""
     user_id = update.effective_user.id
     text = update.message.text
     
@@ -84,8 +84,7 @@ async def handle_message(update, context):
     
     # ========== مراحل افزودن یادآوری شخصی ==========
     if user_id in user_states:
-        from .reminder_handler import user_states as reminder_states
-        step = reminder_states.get(user_id, {}).get("step")
+        step = user_states[user_id].get("step")
         
         if step == 2:  # WAITING_FOR_PERSONAL_TITLE
             await handle_personal_reminder_title(update, context)
@@ -102,6 +101,7 @@ async def handle_message(update, context):
     
     # ========== انتخاب کنکور برای یادآوری ==========
     if text.startswith("📖 "):
+        from exam_data import EXAMS
         for exam_name in EXAMS.keys():
             if text == f"📖 {exam_name}":
                 await handle_exam_selection_for_reminder(update, context)
