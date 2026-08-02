@@ -1,58 +1,156 @@
 import os
 import logging
-from flask import Flask, request
+import asyncio
+from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
 
-# بارگذاری متغیرهای محیطی از فایل .env (برای لوکال)
+# بارگذاری متغیرهای محیطی
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+# تنظیم لاگ
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
+# خواندن متغیرها
 TOKEN = os.environ.get("TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 7703672187))
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("TOKEN not found in environment variables!")
+    raise ValueError("TOKEN is required!")
+if not ADMIN_ID:
+    raise ValueError("ADMIN_ID is required!")
+if not WEBHOOK_URL:
+    raise ValueError("WEBHOOK_URL is required!")
 
+# ایجاد ربات
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
+# حلقه رویداد برای async
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+async def send_message(chat_id, text):
+    """ارسال پیام به صورت async"""
+    try:
+        await bot.send_message(chat_id=chat_id, text=text)
+        logger.info(f"Message sent to {chat_id}")
+    except Exception as e:
+        logger.error(f"Error sending message: {e}")
+
+async def set_webhook():
+    """تنظیم وب‌هوک به صورت async"""
+    try:
+        await bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
+        logger.info("Webhook set successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
+        return False
+
 @app.route("/", methods=["GET"])
 def home():
-    return "🤖 Bot is running!"
+    """صفحه اصلی"""
+    return jsonify({
+        "status": "running",
+        "bot": "@" + bot.username if bot.username else "unknown",
+        "webhook": WEBHOOK_URL
+    })
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
+    """دریافت آپدیت از تلگرام"""
     try:
+        # دریافت داده
         data = request.get_json(force=True)
         update = Update.de_json(data, bot)
         
-        if update.message:
-            chat_id = update.message.chat_id
-            text = update.message.text
-
-            # دستور /setwebhook فقط برای ادمین
-            if text == "/setwebhook" and chat_id == ADMIN_ID:
-                bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
-                bot.send_message(chat_id, "✅ Webhook تنظیم شد.")
-                return "ok"
-
-            # دستور /start
-            if text == "/start":
-                await bot.send_message(chat_id, "👋 سلام! به ربات خوش اومدی.")
-                return "ok"
-
-            # اکو پیام
-            await bot.send_message(chat_id, f"📩 پیام شما: {text}")
+        if not update.message:
+            return "ok", 200
             
-        return "ok"
+        chat_id = update.message.chat_id
+        text = update.message.text
+        
+        # بررسی دستورات
+        if not text:
+            return "ok", 200
+            
+        # دستور /start
+        if text == "/start":
+            message = (
+                "👋 سلام! به ربات خوش اومدی.\n\n"
+                "📌 این یک ربات نمونه است.\n"
+                "🔹 هر پیامی بفرستی، برمی‌گردونه.\n"
+                "🔹 دستور /help برای راهنما."
+            )
+            loop.run_until_complete(send_message(chat_id, message))
+            
+        # دستور /help
+        elif text == "/help":
+            message = (
+                "📖 راهنمای ربات:\n\n"
+                "/start - شروع کار\n"
+                "/help - راهنما\n"
+                "/setwebhook - تنظیم وب‌هوک (فقط ادمین)\n"
+                "/info - اطلاعات ربات (فقط ادمین)"
+            )
+            loop.run_until_complete(send_message(chat_id, message))
+            
+        # دستور /setwebhook (فقط ادمین)
+        elif text == "/setwebhook" and chat_id == ADMIN_ID:
+            result = loop.run_until_complete(set_webhook())
+            if result:
+                await send_message(chat_id, "✅ Webhook با موفقیت تنظیم شد!")
+            else:
+                await send_message(chat_id, "❌ خطا در تنظیم Webhook!")
+                
+        # دستور /info (فقط ادمین)
+        elif text == "/info" and chat_id == ADMIN_ID:
+            info = (
+                f"📊 اطلاعات ربات:\n"
+                f"🔹 توکن: {TOKEN[:10]}...\n"
+                f"🔹 ادمین: {ADMIN_ID}\n"
+                f"🔹 وب‌هوک: {WEBHOOK_URL}\n"
+                f"🔹 وضعیت: فعال ✅"
+            )
+            loop.run_until_complete(send_message(chat_id, info))
+            
+        # دستورات غیرمجاز برای ادمین
+        elif chat_id == ADMIN_ID and text.startswith("/"):
+            loop.run_until_complete(send_message(chat_id, "⚠️ دستور نامعتبر! برای راهنما /help را بفرست."))
+            
+        # اکو پیام (فقط برای کاربران عادی)
+        else:
+            loop.run_until_complete(send_message(chat_id, f"📩 پیام شما: {text}"))
+            
+        return "ok", 200
         
     except Exception as e:
-        logging.error(f"خطا: {e}")
+        logger.error(f"Error in webhook: {e}")
         return "error", 500
+
+@app.errorhandler(404)
+def not_found(error):
+    """خطای 404"""
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """خطای 500"""
+    logger.error(f"Internal error: {error}")
+    return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    
+    logger.info(f"🚀 Starting bot on port {port}")
+    logger.info(f"🤖 Bot token: {TOKEN[:10]}...")
+    logger.info(f"👤 Admin ID: {ADMIN_ID}")
+    logger.info(f"🔗 Webhook URL: {WEBHOOK_URL}")
+    
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
