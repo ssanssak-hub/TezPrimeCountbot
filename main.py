@@ -3,13 +3,11 @@ import logging
 from flask import Flask, request
 import telegram
 
-# تنظیم لاگ
 logging.basicConfig(level=logging.INFO)
 
-# خواندن از محیط (برای امنیت)
-TOKEN = os.environ.get("TOKEN", "8915869660:AAF9vloRJroWyxFYgFVTw2lo-ai4HqbR-0c")
+TOKEN = os.environ.get("TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7703672187))
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://konkoor-bot-2g3e.onrender.com")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
 bot = telegram.Bot(token=TOKEN)
 app = Flask(__name__)
@@ -27,18 +25,15 @@ def webhook():
             chat_id = update.message.chat_id
             text = update.message.text
 
-            # دستورات ویژه ادمین
             if text == "/setwebhook" and chat_id == ADMIN_ID:
                 bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
                 bot.send_message(chat_id, "✅ Webhook تنظیم شد.")
                 return "ok"
 
-            # پاسخ به دستور /start
             if text == "/start":
                 bot.send_message(chat_id, "👋 سلام! به ربات خوش اومدی.")
                 return "ok"
 
-            # اکو پیام کاربر
             bot.send_message(chat_id, f"📩 پیام شما: {text}")
             
         return "ok"
