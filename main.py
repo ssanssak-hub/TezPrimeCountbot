@@ -5,8 +5,9 @@ from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
 
-# ✅ ایمپورت از پوشه handlers (نه از فایل handlers.py)
+# ✅ ایمپورت از پوشه handlers
 from handlers import start, handle_message
+from scheduler import start_scheduler
 
 # بارگذاری متغیرهای محیطی
 load_dotenv()
@@ -48,6 +49,9 @@ def initialize_bot():
 if not initialize_bot():
     logger.error("Failed to initialize bot! Exiting...")
     exit(1)
+
+# ==================== راه‌اندازی Scheduler ====================
+scheduler = start_scheduler()
 
 @app.route("/", methods=["GET"])
 def home():
