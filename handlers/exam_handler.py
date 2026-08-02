@@ -6,7 +6,7 @@ from exam_data import get_exam_info
 logger = logging.getLogger(__name__)
 
 async def show_exam_details(update: Update, exam_name: str, refresh: bool = False):
-    """نمایش جزئیات کنکور با دکمه‌های شیشه‌ای"""
+    """نمایش جزئیات کنکور"""
     exam_info = get_exam_info(exam_name)
     if not exam_info:
         await update.message.reply_text("❌ اطلاعات این کنکور یافت نشد!")
@@ -32,22 +32,18 @@ async def show_exam_details(update: Update, exam_name: str, refresh: bool = Fals
         f"🕐 ساعت برگزاری: **{exam_info['time']}**\n"
         f"📍 به وقت تهران\n\n"
         f"{time_text}\n\n"
-        f"🔄 برای بروزرسانی زمان، دکمه تازه کردن را بزنید."
+        f"🔄 برای بروزرسانی، دکمه تازه کردن را بزنید."
     )
     
     keyboard = get_exam_detail_menu(exam_name)
-    await update.message.reply_text(
-        message,
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(message, reply_markup=keyboard, parse_mode="Markdown")
 
 async def handle_exam_menu(update: Update):
     """نمایش منوی انتخاب کنکور با دکمه‌های شیشه‌ای"""
     keyboard = get_exam_menu()
-    # حذف parse_mode برای جلوگیری از تداخل
+    # مهم: هیچ parse_mode ای استفاده نکن
     await update.message.reply_text(
-        "📚 اطلاعات کنکورها\n\nلطفاً یکی از کنکورهای زیر را انتخاب کنید:",
+        "📚 لطفاً یکی از کنکورهای زیر را انتخاب کنید:",
         reply_markup=keyboard
     )
 
