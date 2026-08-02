@@ -6,9 +6,7 @@ from exam_data import get_exam_info
 logger = logging.getLogger(__name__)
 
 async def show_exam_details(update: Update, exam_name: str, refresh: bool = False):
-    """
-    نمایش جزئیات کنکور با دکمه‌های شیشه‌ای
-    """
+    """نمایش جزئیات کنکور با دکمه‌های شیشه‌ای"""
     exam_info = get_exam_info(exam_name)
     if not exam_info:
         await update.message.reply_text("❌ اطلاعات این کنکور یافت نشد!")
@@ -45,19 +43,16 @@ async def show_exam_details(update: Update, exam_name: str, refresh: bool = Fals
     )
 
 async def handle_exam_menu(update: Update):
-    """
-    نمایش منوی انتخاب کنکور
-    """
+    """نمایش منوی انتخاب کنکور با دکمه‌های شیشه‌ای"""
     keyboard = get_exam_menu()
+    # حذف parse_mode برای جلوگیری از تداخل
     await update.message.reply_text(
         "📚 اطلاعات کنکورها\n\nلطفاً یکی از کنکورهای زیر را انتخاب کنید:",
         reply_markup=keyboard
     )
 
 async def handle_exam_selection(update: Update, text: str):
-    """
-    مدیریت انتخاب کنکور
-    """
+    """مدیریت انتخاب کنکور"""
     from exam_data import EXAMS
     for exam_name in EXAMS.keys():
         if text == f"📖 {exam_name}":
