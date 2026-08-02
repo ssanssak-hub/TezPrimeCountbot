@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
 
-# ایمپورت از پوشه handlers
+# ✅ ایمپورت از پوشه handlers (نه از فایل handlers.py)
 from handlers import start, handle_message
 
 # بارگذاری متغیرهای محیطی
