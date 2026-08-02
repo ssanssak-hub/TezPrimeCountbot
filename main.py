@@ -17,13 +17,10 @@ logger = logging.getLogger(__name__)
 
 # خواندن متغیرها
 TOKEN = os.environ.get("TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
 if not TOKEN:
     raise ValueError("TOKEN is required!")
-if not ADMIN_ID:
-    raise ValueError("ADMIN_ID is required!")
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is required!")
 
@@ -59,29 +56,17 @@ def send_message_sync(chat_id, text):
     except Exception as e:
         logger.error(f"Error sending message: {e}")
 
-def set_webhook_sync():
-    """تنظیم وب‌هوک به صورت sync"""
-    try:
-        loop.run_until_complete(bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}"))
-        logger.info("Webhook set successfully")
-        return True
-    except Exception as e:
-        logger.error(f"Error setting webhook: {e}")
-        return False
-
 @app.route("/", methods=["GET"])
 def home():
     """صفحه اصلی"""
     try:
-        # دریافت اطلاعات ربات
         bot_info = loop.run_until_complete(bot.get_me())
         bot_username = f"@{bot_info.username}" if bot_info.username else "unknown"
         
         return jsonify({
             "status": "running",
             "bot": bot_username,
-            "webhook": WEBHOOK_URL,
-            "admin_id": ADMIN_ID
+            "webhook": WEBHOOK_URL
         })
     except Exception as e:
         logger.error(f"Error in home: {e}")
@@ -120,43 +105,11 @@ def webhook():
             message = (
                 "📖 راهنمای ربات:\n\n"
                 "/start - شروع کار\n"
-                "/help - راهنما\n"
-                "/setwebhook - تنظیم وب‌هوک (فقط ادمین)\n"
-                "/info - اطلاعات ربات (فقط ادمین)"
+                "/help - راهنما"
             )
             send_message_sync(chat_id, message)
             
-        # دستور /setwebhook (فقط ادمین)
-        elif text == "/setwebhook" and chat_id == ADMIN_ID:
-            result = set_webhook_sync()
-            if result:
-                send_message_sync(chat_id, "✅ Webhook با موفقیت تنظیم شد!")
-            else:
-                send_message_sync(chat_id, "❌ خطا در تنظیم Webhook!")
-                
-        # دستور /info (فقط ادمین)
-        elif text == "/info" and chat_id == ADMIN_ID:
-            try:
-                bot_info = loop.run_until_complete(bot.get_me())
-                info = (
-                    f"📊 اطلاعات ربات:\n"
-                    f"🔹 نام: {bot_info.first_name}\n"
-                    f"🔹 یوزرنیم: @{bot_info.username if bot_info.username else 'ندارد'}\n"
-                    f"🔹 توکن: {TOKEN[:10]}...\n"
-                    f"🔹 ادمین: {ADMIN_ID}\n"
-                    f"🔹 وب‌هوک: {WEBHOOK_URL}\n"
-                    f"🔹 وضعیت: فعال ✅"
-                )
-                send_message_sync(chat_id, info)
-            except Exception as e:
-                logger.error(f"Error getting bot info: {e}")
-                send_message_sync(chat_id, "❌ خطا در دریافت اطلاعات!")
-            
-        # دستورات غیرمجاز برای ادمین
-        elif chat_id == ADMIN_ID and text.startswith("/"):
-            send_message_sync(chat_id, "⚠️ دستور نامعتبر! برای راهنما /help را بفرست.")
-            
-        # اکو پیام (برای کاربران عادی)
+        # اکو پیام (همه کاربران)
         else:
             send_message_sync(chat_id, f"📩 پیام شما: {text}")
             
@@ -182,7 +135,6 @@ if __name__ == "__main__":
     
     logger.info(f"🚀 Starting bot on port {port}")
     logger.info(f"🤖 Bot token: {TOKEN[:10]}...")
-    logger.info(f"👤 Admin ID: {ADMIN_ID}")
     logger.info(f"🔗 Webhook URL: {WEBHOOK_URL}")
     
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
