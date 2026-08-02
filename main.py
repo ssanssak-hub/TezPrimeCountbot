@@ -5,6 +5,10 @@ from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
 
+# اضافه کردن ایمپورت‌های جدید
+import handlers
+from keyboards import get_main_menu
+
 # بارگذاری متغیرهای محیطی
 load_dotenv()
 
@@ -34,7 +38,6 @@ asyncio.set_event_loop(loop)
 
 # مقداردهی اولیه ربات
 def initialize_bot():
-    """مقداردهی اولیه ربات"""
     try:
         loop.run_until_complete(bot.initialize())
         logger.info("✅ Bot initialized successfully")
@@ -43,29 +46,32 @@ def initialize_bot():
         logger.error(f"❌ Bot initialization failed: {e}")
         return False
 
-# مقداردهی اولیه در زمان اجرا
 if not initialize_bot():
     logger.error("Failed to initialize bot! Exiting...")
     exit(1)
 
-def send_message_sync(chat_id, text):
-    """ارسال پیام به صورت sync (با استفاده از loop)"""
+def send_message_sync(chat_id, text, reply_markup=None):
+    """ارسال پیام به صورت sync"""
     try:
-        loop.run_until_complete(bot.send_message(chat_id=chat_id, text=text))
+        if reply_markup:
+            loop.run_until_complete(bot.send_message(
+                chat_id=chat_id, 
+                text=text, 
+                reply_markup=reply_markup
+            ))
+        else:
+            loop.run_until_complete(bot.send_message(chat_id=chat_id, text=text))
         logger.info(f"Message sent to {chat_id}")
     except Exception as e:
         logger.error(f"Error sending message: {e}")
 
 @app.route("/", methods=["GET"])
 def home():
-    """صفحه اصلی"""
     try:
         bot_info = loop.run_until_complete(bot.get_me())
-        bot_username = f"@{bot_info.username}" if bot_info.username else "unknown"
-        
         return jsonify({
             "status": "running",
-            "bot": bot_username,
+            "bot": f"@{bot_info.username}" if bot_info.username else "unknown",
             "webhook": WEBHOOK_URL
         })
     except Exception as e:
@@ -74,9 +80,7 @@ def home():
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    """دریافت آپدیت از تلگرام"""
     try:
-        # دریافت داده
         data = request.get_json(force=True)
         update = Update.de_json(data, bot)
         
@@ -86,33 +90,21 @@ def webhook():
         chat_id = update.message.chat_id
         text = update.message.text
         
-        # بررسی دستورات
         if not text:
             return "ok", 200
-            
-        # دستور /start
-        if text == "/start":
-            message = (
-                "👋 سلام! به ربات روز شمار هوشمند تزپرایم خوش اومدی.\n\n"
-                "📌 این یک ربات پیشرفته برای مطالعه و کنکور است.\n"
-                "🔹 این ربات توسط کانال تزپرایم ساخته شده است.\n"
-                "🔹 دستور /help برای راهنما."
-            )
-            send_message_sync(chat_id, message)
-            
-        # دستور /help
-        elif text == "/help":
-            message = (
-                "📖 راهنمای ربات تزپرایم:\n\n"
-                "/start - شروع کار\n"
-                "/help - راهنما"
-            )
-            send_message_sync(chat_id, message)
-            
-        # اکو پیام (همه کاربران)
-        else:
-            send_message_sync(chat_id, f"📩 پیام شما: {text}")
-            
+        
+        # ایجاد یک تابع async برای پردازش پیام
+        async def process_update():
+            # اگر پیام /start بود
+            if text == "/start":
+                await handlers.start(update, None)
+            # در غیر این صورت به handlers ارسال کن
+            else:
+                await handlers.handle_message(update, None)
+        
+        # اجرای تابع async
+        loop.run_until_complete(process_update())
+        
         return "ok", 200
         
     except Exception as e:
@@ -121,20 +113,14 @@ def webhook():
 
 @app.errorhandler(404)
 def not_found(error):
-    """خطای 404"""
     return jsonify({"error": "Not found"}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    """خطای 500"""
     logger.error(f"Internal error: {error}")
     return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    
     logger.info(f"🚀 Starting bot on port {port}")
-    logger.info(f"🤖 Bot token: {TOKEN[:10]}...")
-    logger.info(f"🔗 Webhook URL: {WEBHOOK_URL}")
-    
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
