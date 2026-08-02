@@ -43,10 +43,7 @@ def get_exam_datetime(exam_key):
     if not exam:
         return None
     
-    # تبدیل تاریخ شمسی به میلادی
     gregorian_date = jalali_to_gregorian(exam["date"])
-    
-    # تنظیم زمان
     hour, minute = map(int, exam["time"].split(':'))
     exam_datetime = datetime(
         gregorian_date.year,
@@ -57,7 +54,6 @@ def get_exam_datetime(exam_key):
         0,
         tzinfo=pytz.timezone('Asia/Tehran')
     )
-    
     return exam_datetime
 
 def calculate_time_remaining(exam_key):
@@ -71,6 +67,7 @@ def calculate_time_remaining(exam_key):
     
     if time_left.total_seconds() < 0:
         return {
+            "total_days": 0,
             "weeks": 0,
             "days": 0,
             "hours": 0,
@@ -79,22 +76,20 @@ def calculate_time_remaining(exam_key):
             "passed": True
         }
     
-    # محاسبه هفته‌ها، روزها، ساعت‌ها، دقیقه‌ها و ثانیه‌ها
+    total_days = time_left.days
     total_seconds = int(time_left.total_seconds())
     
     weeks = total_seconds // (7 * 24 * 3600)
     remaining = total_seconds % (7 * 24 * 3600)
-    
     days = remaining // (24 * 3600)
     remaining %= (24 * 3600)
-    
     hours = remaining // 3600
     remaining %= 3600
-    
     minutes = remaining // 60
     seconds = remaining % 60
     
     return {
+        "total_days": total_days,
         "weeks": weeks,
         "days": days,
         "hours": hours,
@@ -111,7 +106,6 @@ def get_exam_info(exam_key):
         return None
     
     time_left = calculate_time_remaining(exam_key)
-    
     return {
         "title": exam["title"],
         "date": exam["date"],
