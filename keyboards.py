@@ -24,12 +24,10 @@ def get_main_menu(admin_id, user_id):
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
 def get_exam_menu():
-    """منوی انتخاب کنکور - همه دکمه‌ها شیشه‌ای"""
+    """منوی انتخاب کنکور - دکمه‌های شیشه‌ای"""
     buttons = []
-    # دکمه‌های شیشه‌ای برای هر کنکور
     for exam_name in EXAMS.keys():
         buttons.append([KeyboardButton(f"📖 {exam_name}")])
-    # دکمه بازگشت شیشه‌ای
     buttons.append([KeyboardButton("🔙 بازگشت به منوی اصلی")])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
@@ -51,4 +49,24 @@ def get_admin_panel():
         [KeyboardButton("📋 لیست کاربران")],
         [KeyboardButton("🔙 بازگشت به منوی اصلی")]
     ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+# ==================== دکمه‌های جدید برای یادآوری ====================
+
+def get_reminder_menu():
+    """منوی یادآوری - دکمه‌های شیشه‌ای"""
+    buttons = [
+        [KeyboardButton("➕ افزودن یادآوری کنکور")],
+        [KeyboardButton("➕ افزودن یادآوری شخصی")],
+        [KeyboardButton("📋 مشاهده یادآوری‌ها")],
+        [KeyboardButton("🔙 بازگشت به منوی اصلی")]
+    ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+def get_exam_selection_menu():
+    """منوی انتخاب کنکور برای یادآوری - دکمه‌های شیشه‌ای"""
+    buttons = []
+    for exam_name in EXAMS.keys():
+        buttons.append([KeyboardButton(f"📖 {exam_name}")])
+    buttons.append([KeyboardButton("🔙 بازگشت به یادآوری")])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
