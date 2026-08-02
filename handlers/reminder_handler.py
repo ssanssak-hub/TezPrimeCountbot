@@ -8,7 +8,7 @@ from reminder_data import (
     delete_reminder, toggle_reminder, get_reminder_by_id
 )
 from exam_data import EXAMS
-from keyboards import get_reminder_menu, get_exam_selection_menu
+from keyboards import get_exam_selection_menu
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,47 @@ WAITING_FOR_PERSONAL_TITLE = 2
 WAITING_FOR_PERSONAL_DATE = 3
 WAITING_FOR_PERSONAL_TIME = 4
 WAITING_FOR_REMINDER_ACTION = 5
+WAITING_FOR_REMINDER_ID = 6
 
 # ==================== دیکشنری وضعیت کاربران ====================
 user_states = {}
 
-# ==================== توابع ====================
+# ==================== منوهای دکمه‌ای ====================
+
+def get_reminder_menu():
+    """منوی یادآوری"""
+    buttons = [
+        [KeyboardButton("➕ افزودن یادآوری کنکور")],
+        [KeyboardButton("➕ افزودن یادآوری شخصی")],
+        [KeyboardButton("📋 مشاهده یادآوری‌ها")],
+        [KeyboardButton("🔙 بازگشت به منوی اصلی")]
+    ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+def get_cancel_menu():
+    """منوی لغو عملیات"""
+    buttons = [[KeyboardButton("❌ لغو و بازگشت")]]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+def get_reminder_action_menu(reminder_id):
+    """منوی عملیات روی یادآوری"""
+    buttons = [
+        [KeyboardButton(f"✅ فعال کردن {reminder_id}")],
+        [KeyboardButton(f"❌ غیرفعال کردن {reminder_id}")],
+        [KeyboardButton(f"🗑 حذف {reminder_id}")],
+        [KeyboardButton("🔙 بازگشت به لیست یادآوری‌ها")]
+    ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+def get_exam_reminder_menu():
+    """منوی انتخاب کنکور برای یادآوری"""
+    buttons = []
+    for exam_name in EXAMS.keys():
+        buttons.append([KeyboardButton(f"📖 {exam_name}")])
+    buttons.append([KeyboardButton("❌ لغو و بازگشت")])
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+# ==================== توابع اصلی ====================
 
 async def handle_reminder_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش منوی یادآوری"""
@@ -36,7 +72,7 @@ async def handle_reminder_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_add_exam_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع فرآیند افزودن یادآوری کنکور"""
-    keyboard = get_exam_selection_menu()
+    keyboard = get_exam_reminder_menu()
     await update.message.reply_text(
         "📚 **انتخاب کنکور برای یادآوری**\n\n"
         "لطفاً یکی از کنکورهای زیر را انتخاب کنید:",
@@ -51,10 +87,16 @@ async def handle_exam_selection_for_reminder(update: Update, context: ContextTyp
     user_id = update.effective_user.id
     text = update.message.text
     
-    # بررسی اینکه کاربر آیا یک کنکور انتخاب کرده
+    # اگر کاربر لغو کرد
+    if text == "❌ لغو و بازگشت":
+        if user_id in user_states:
+            del user_states[user_id]
+        await handle_reminder_menu(update, context)
+        return
+    
+    # بررسی انتخاب کنکور
     for exam_name in EXAMS.keys():
         if text == f"📖 {exam_name}":
-            # پیدا کردن تاریخ و زمان کنکور
             exam_info = EXAMS[exam_name]
             reminder_id = add_reminder(
                 user_id,
@@ -74,49 +116,61 @@ async def handle_exam_selection_for_reminder(update: Update, context: ContextTyp
                 parse_mode="Markdown"
             )
             
-            # پاک کردن وضعیت کاربر
             if user_id in user_states:
                 del user_states[user_id]
             
-            # نمایش منوی اصلی یادآوری
             await handle_reminder_menu(update, context)
             return
     
-    # اگر کاربر گزینه بازگشت را انتخاب کرد
-    if text == "🔙 بازگشت به یادآوری":
-        await handle_reminder_menu(update, context)
-        return
-    
-    await update.message.reply_text("❌ لطفاً یکی از کنکورهای موجود را انتخاب کنید.")
+    await update.message.reply_text(
+        "❌ لطفاً یکی از کنکورهای موجود را انتخاب کنید یا روی دکمه لغو کلیک کنید."
+    )
 
 async def handle_add_personal_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع فرآیند افزودن یادآوری شخصی"""
     user_id = update.effective_user.id
     user_states[user_id] = {"step": WAITING_FOR_PERSONAL_TITLE}
     
+    keyboard = get_cancel_menu()
     await update.message.reply_text(
-        "📝 **افزودن یادآوری شخصی**\n\n"
+        "📝 **مرحله ۱ از ۳: افزودن یادآوری شخصی**\n\n"
         "لطفاً عنوان یادآوری را وارد کنید:\n"
-        "(مثلاً: جلسه مشاوره، مطالعه ریاضی، و غیره)",
+        "(مثلاً: جلسه مشاوره، مطالعه ریاضی، و غیره)\n\n"
+        "⚠️ برای لغو عملیات، روی دکمه زیر کلیک کنید.",
+        reply_markup=keyboard,
         parse_mode="Markdown"
     )
 
 async def handle_personal_reminder_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان یادآوری شخصی"""
     user_id = update.effective_user.id
-    title = update.message.text
+    text = update.message.text
     
-    if len(title) > 50:
-        await update.message.reply_text("❌ عنوان یادآوری نباید بیشتر از ۵۰ کاراکتر باشد. لطفاً دوباره وارد کنید:")
+    # اگر کاربر لغو کرد
+    if text == "❌ لغو و بازگشت":
+        if user_id in user_states:
+            del user_states[user_id]
+        await handle_reminder_menu(update, context)
         return
     
-    user_states[user_id]["title"] = title
+    if len(text) > 50:
+        await update.message.reply_text(
+            "❌ عنوان یادآوری نباید بیشتر از ۵۰ کاراکتر باشد.\n"
+            "لطفاً دوباره وارد کنید:"
+        )
+        return
+    
+    user_states[user_id]["title"] = text
     user_states[user_id]["step"] = WAITING_FOR_PERSONAL_DATE
     
+    keyboard = get_cancel_menu()
     await update.message.reply_text(
-        f"📅 عنوان: **{title}**\n\n"
+        f"✅ عنوان: **{text}**\n\n"
+        "📅 **مرحله ۲ از ۳:**\n"
         "لطفاً تاریخ را به صورت **شمسی** وارد کنید:\n"
-        "مثال: `1404/01/15`",
+        "مثال: `1404/01/15`\n\n"
+        "⚠️ برای لغو عملیات، روی دکمه زیر کلیک کنید.",
+        reply_markup=keyboard,
         parse_mode="Markdown"
     )
 
@@ -125,12 +179,18 @@ async def handle_personal_reminder_date(update: Update, context: ContextTypes.DE
     user_id = update.effective_user.id
     date_text = update.message.text.strip()
     
+    # اگر کاربر لغو کرد
+    if date_text == "❌ لغو و بازگشت":
+        if user_id in user_states:
+            del user_states[user_id]
+        await handle_reminder_menu(update, context)
+        return
+    
     # بررسی فرمت تاریخ
     if not re.match(r'^\d{4}/\d{2}/\d{2}$', date_text):
         await update.message.reply_text(
             "❌ فرمت تاریخ نامعتبر!\n"
-            "لطفاً تاریخ را به صورت `1404/01/15` وارد کنید:",
-            parse_mode="Markdown"
+            "لطفاً تاریخ را به صورت `1404/01/15` وارد کنید:"
         )
         return
     
@@ -148,10 +208,14 @@ async def handle_personal_reminder_date(update: Update, context: ContextTypes.DE
     user_states[user_id]["date"] = date_text
     user_states[user_id]["step"] = WAITING_FOR_PERSONAL_TIME
     
+    keyboard = get_cancel_menu()
     await update.message.reply_text(
-        f"📅 تاریخ: **{date_text}**\n\n"
+        f"✅ تاریخ: **{date_text}**\n\n"
+        "🕐 **مرحله ۳ از ۳:**\n"
         "لطفاً ساعت را به صورت **۲۴ ساعته** وارد کنید:\n"
-        "مثال: `14:30`",
+        "مثال: `14:30`\n\n"
+        "⚠️ برای لغو عملیات، روی دکمه زیر کلیک کنید.",
+        reply_markup=keyboard,
         parse_mode="Markdown"
     )
 
@@ -160,12 +224,18 @@ async def handle_personal_reminder_time(update: Update, context: ContextTypes.DE
     user_id = update.effective_user.id
     time_text = update.message.text.strip()
     
+    # اگر کاربر لغو کرد
+    if time_text == "❌ لغو و بازگشت":
+        if user_id in user_states:
+            del user_states[user_id]
+        await handle_reminder_menu(update, context)
+        return
+    
     # بررسی فرمت زمان
     if not re.match(r'^\d{2}:\d{2}$', time_text):
         await update.message.reply_text(
             "❌ فرمت زمان نامعتبر!\n"
-            "لطفاً زمان را به صورت `14:30` وارد کنید:",
-            parse_mode="Markdown"
+            "لطفاً زمان را به صورت `14:30` وارد کنید:"
         )
         return
     
@@ -199,11 +269,9 @@ async def handle_personal_reminder_time(update: Update, context: ContextTypes.DE
         parse_mode="Markdown"
     )
     
-    # پاک کردن وضعیت کاربر
     if user_id in user_states:
         del user_states[user_id]
     
-    # نمایش منوی اصلی یادآوری
     await handle_reminder_menu(update, context)
 
 async def handle_view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -241,7 +309,6 @@ async def handle_view_reminders(update: Update, context: ContextTypes.DEFAULT_TY
     
     message += f"📊 **جمع:** {len(reminders)} یادآوری ({active_count} فعال، {inactive_count} غیرفعال)"
     
-    # ایجاد دکمه‌های عملیات
     keyboard = [
         [KeyboardButton("✏️ ویرایش/حذف یادآوری")],
         [KeyboardButton("🔙 بازگشت به یادآوری")]
@@ -256,21 +323,31 @@ async def handle_view_reminders(update: Update, context: ContextTypes.DEFAULT_TY
 async def handle_reminder_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت ویرایش/حذف یادآوری"""
     user_id = update.effective_user.id
+    text = update.message.text
     
     # اگر کاربر روی دکمه "✏️ ویرایش/حذف یادآوری" کلیک کرد
-    if update.message.text == "✏️ ویرایش/حذف یادآوری":
+    if text == "✏️ ویرایش/حذف یادآوری":
         await update.message.reply_text(
             "✏️ **ویرایش/حذف یادآوری**\n\n"
             "لطفاً شناسه یادآوری مورد نظر را وارد کنید.\n"
-            "می‌توانید شناسه را از لیست یادآوری‌ها پیدا کنید.",
+            "می‌توانید شناسه را از لیست یادآوری‌ها پیدا کنید.\n\n"
+            "⚠️ برای لغو، روی دکمه زیر کلیک کنید.",
+            reply_markup=get_cancel_menu(),
             parse_mode="Markdown"
         )
-        user_states[user_id] = {"step": WAITING_FOR_REMINDER_ACTION}
+        user_states[user_id] = {"step": WAITING_FOR_REMINDER_ID}
+        return
+    
+    # اگر کاربر لغو کرد
+    if text == "❌ لغو و بازگشت":
+        if user_id in user_states:
+            del user_states[user_id]
+        await handle_view_reminders(update, context)
         return
     
     # اگر کاربر شناسه یادآوری را وارد کرده
-    if user_id in user_states and user_states[user_id].get("step") == WAITING_FOR_REMINDER_ACTION:
-        reminder_id = update.message.text.strip()
+    if user_id in user_states and user_states[user_id].get("step") == WAITING_FOR_REMINDER_ID:
+        reminder_id = text.strip()
         reminder = get_reminder_by_id(user_id, reminder_id)
         
         if not reminder:
@@ -281,54 +358,55 @@ async def handle_reminder_action(update: Update, context: ContextTypes.DEFAULT_T
             return
         
         # نمایش منوی عملیات برای آن یادآوری
-        keyboard = [
-            [KeyboardButton(f"✅ فعال کردن")],
-            [KeyboardButton(f"❌ غیرفعال کردن")],
-            [KeyboardButton(f"🗑 حذف")],
-            [KeyboardButton("🔙 بازگشت به یادآوری")]
-        ]
-        
-        # ذخیره شناسه یادآوری در وضعیت کاربر
+        keyboard = get_reminder_action_menu(reminder_id)
         user_states[user_id]["target_reminder_id"] = reminder_id
+        user_states[user_id]["step"] = WAITING_FOR_REMINDER_ACTION
         
         await update.message.reply_text(
             f"🆔 **یادآوری:** {reminder['title']}\n"
             f"وضعیت: {'✅ فعال' if reminder.get('is_active', True) else '❌ غیرفعال'}\n\n"
             "لطفاً عملیات مورد نظر را انتخاب کنید:",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+            reply_markup=keyboard,
             parse_mode="Markdown"
         )
         return
     
     # اگر کاربر روی یکی از دکمه‌های عملیات کلیک کرد
-    text = update.message.text
     target_id = user_states.get(user_id, {}).get("target_reminder_id")
     
-    if text == "✅ فعال کردن" and target_id:
+    if text.startswith("✅ فعال کردن") and target_id:
         if toggle_reminder(user_id, target_id):
             await update.message.reply_text(f"✅ یادآوری با شناسه `{target_id}` فعال شد!")
         else:
             await update.message.reply_text("❌ خطا در فعال‌سازی یادآوری!")
-        # نمایش مجدد لیست
+        if user_id in user_states:
+            del user_states[user_id]
         await handle_view_reminders(update, context)
         return
     
-    if text == "❌ غیرفعال کردن" and target_id:
+    if text.startswith("❌ غیرفعال کردن") and target_id:
         if toggle_reminder(user_id, target_id):
             await update.message.reply_text(f"❌ یادآوری با شناسه `{target_id}` غیرفعال شد!")
         else:
             await update.message.reply_text("❌ خطا در غیرفعال‌سازی یادآوری!")
+        if user_id in user_states:
+            del user_states[user_id]
         await handle_view_reminders(update, context)
         return
     
-    if text == "🗑 حذف" and target_id:
+    if text.startswith("🗑 حذف") and target_id:
         if delete_reminder(user_id, target_id):
             await update.message.reply_text(f"🗑 یادآوری با شناسه `{target_id}` حذف شد!")
-            # پاک کردن وضعیت کاربر
             if user_id in user_states:
                 del user_states[user_id]
         else:
             await update.message.reply_text("❌ خطا در حذف یادآوری!")
+        await handle_view_reminders(update, context)
+        return
+    
+    if text == "🔙 بازگشت به لیست یادآوری‌ها":
+        if user_id in user_states:
+            del user_states[user_id]
         await handle_view_reminders(update, context)
         return
 
