@@ -1,4 +1,3 @@
-
 from .exam_handler import show_exam_details, handle_exam_menu, handle_exam_selection
 from .admin_handler import handle_admin_panel, handle_admin_commands, is_admin
 from .menu_handler import handle_menu_buttons
@@ -19,6 +18,7 @@ from keyboards import get_main_menu
 ADMINS = [7703672187]
 
 async def start(update, context):
+    """دستور /start"""
     user = update.effective_user
     user_id = user.id
     
@@ -33,6 +33,7 @@ async def start(update, context):
     await update.message.reply_text(welcome_message, reply_markup=keyboard)
 
 async def handle_message(update, context):
+    """مدیریت پیام‌های دریافتی"""
     user_id = update.effective_user.id
     text = update.message.text
     
@@ -50,7 +51,7 @@ async def handle_message(update, context):
     
     # ========== بازگشت به منوی یادآوری ==========
     if text == "🔙 بازگشت به یادآوری":
-        await handle_reminder_menu(update)
+        await handle_reminder_menu(update, context)  # ✅ اینجا context رو اضافه کردم
         return
     
     # ========== دکمه اطلاعات کنکور ==========
@@ -66,20 +67,20 @@ async def handle_message(update, context):
     
     # ========== دکمه یادآوری کن ==========
     if text == "⏰ یادآوری کن":
-        await handle_reminder_menu(update)
+        await handle_reminder_menu(update, context)  # ✅ اینجا context رو اضافه کردم
         return
     
     # ========== منوی یادآوری ==========
     if text == "➕ افزودن یادآوری کنکور":
-        await handle_add_exam_reminder(update)
+        await handle_add_exam_reminder(update, context)  # ✅ اینجا context رو اضافه کردم
         return
     
     if text == "➕ افزودن یادآوری شخصی":
-        await handle_add_personal_reminder(update)
+        await handle_add_personal_reminder(update, context)  # ✅ اینجا context رو اضافه کردم
         return
     
     if text == "📋 مشاهده یادآوری‌ها":
-        await handle_view_reminders(update)
+        await handle_view_reminders(update, context)  # ✅ اینجا context رو اضافه کردم
         return
     
     # ========== مراحل افزودن یادآوری شخصی ==========
