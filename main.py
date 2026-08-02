@@ -35,6 +35,22 @@ app = Flask(__name__)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
+# مقداردهی اولیه ربات
+def initialize_bot():
+    """مقداردهی اولیه ربات"""
+    try:
+        loop.run_until_complete(bot.initialize())
+        logger.info("✅ Bot initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Bot initialization failed: {e}")
+        return False
+
+# مقداردهی اولیه در زمان اجرا
+if not initialize_bot():
+    logger.error("Failed to initialize bot! Exiting...")
+    exit(1)
+
 def send_message_sync(chat_id, text):
     """ارسال پیام به صورت sync (با استفاده از loop)"""
     try:
@@ -56,11 +72,20 @@ def set_webhook_sync():
 @app.route("/", methods=["GET"])
 def home():
     """صفحه اصلی"""
-    return jsonify({
-        "status": "running",
-        "bot": "@" + bot.username if bot.username else "unknown",
-        "webhook": WEBHOOK_URL
-    })
+    try:
+        # دریافت اطلاعات ربات
+        bot_info = loop.run_until_complete(bot.get_me())
+        bot_username = f"@{bot_info.username}" if bot_info.username else "unknown"
+        
+        return jsonify({
+            "status": "running",
+            "bot": bot_username,
+            "webhook": WEBHOOK_URL,
+            "admin_id": ADMIN_ID
+        })
+    except Exception as e:
+        logger.error(f"Error in home: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -111,20 +136,27 @@ def webhook():
                 
         # دستور /info (فقط ادمین)
         elif text == "/info" and chat_id == ADMIN_ID:
-            info = (
-                f"📊 اطلاعات ربات:\n"
-                f"🔹 توکن: {TOKEN[:10]}...\n"
-                f"🔹 ادمین: {ADMIN_ID}\n"
-                f"🔹 وب‌هوک: {WEBHOOK_URL}\n"
-                f"🔹 وضعیت: فعال ✅"
-            )
-            send_message_sync(chat_id, info)
+            try:
+                bot_info = loop.run_until_complete(bot.get_me())
+                info = (
+                    f"📊 اطلاعات ربات:\n"
+                    f"🔹 نام: {bot_info.first_name}\n"
+                    f"🔹 یوزرنیم: @{bot_info.username if bot_info.username else 'ندارد'}\n"
+                    f"🔹 توکن: {TOKEN[:10]}...\n"
+                    f"🔹 ادمین: {ADMIN_ID}\n"
+                    f"🔹 وب‌هوک: {WEBHOOK_URL}\n"
+                    f"🔹 وضعیت: فعال ✅"
+                )
+                send_message_sync(chat_id, info)
+            except Exception as e:
+                logger.error(f"Error getting bot info: {e}")
+                send_message_sync(chat_id, "❌ خطا در دریافت اطلاعات!")
             
         # دستورات غیرمجاز برای ادمین
         elif chat_id == ADMIN_ID and text.startswith("/"):
             send_message_sync(chat_id, "⚠️ دستور نامعتبر! برای راهنما /help را بفرست.")
             
-        # اکو پیام (فقط برای کاربران عادی)
+        # اکو پیام (برای کاربران عادی)
         else:
             send_message_sync(chat_id, f"📩 پیام شما: {text}")
             
