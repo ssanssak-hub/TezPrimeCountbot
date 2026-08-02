@@ -2,9 +2,7 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton
 from exam_data import EXAMS
 
 def get_main_menu(admin_id, user_id):
-    """
-    منوی اصلی - دکمه‌های معمولی
-    """
+    """منوی اصلی - دکمه‌های معمولی"""
     buttons = [
         ["📚 اطلاعات کنکور"],
         ["⏰ یادآوری کن"],
@@ -26,19 +24,17 @@ def get_main_menu(admin_id, user_id):
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
 def get_exam_menu():
-    """
-    منوی انتخاب کنکور - همه دکمه‌ها شیشه‌ای ✅
-    """
+    """منوی انتخاب کنکور - همه دکمه‌ها شیشه‌ای ✅"""
     buttons = []
     for exam_name in EXAMS.keys():
+        # استفاده از KeyboardButton برای شیشه‌ای شدن
         buttons.append([KeyboardButton(f"📖 {exam_name}")])
+    # دکمه بازگشت هم شیشه‌ای
     buttons.append([KeyboardButton("🔙 بازگشت به منوی اصلی")])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
 def get_exam_detail_menu(exam_name):
-    """
-    منوی جزئیات کنکور - همه دکمه‌ها شیشه‌ای ✅
-    """
+    """منوی جزئیات کنکور - همه دکمه‌ها شیشه‌ای ✅"""
     buttons = [
         [KeyboardButton(f"🔄 تازه کردن {exam_name}")],
         [KeyboardButton("🔙 بازگشت به کنکورها")]
@@ -46,9 +42,7 @@ def get_exam_detail_menu(exam_name):
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
 def get_admin_panel():
-    """
-    پنل مدیریت - همه دکمه‌ها شیشه‌ای ✅
-    """
+    """پنل مدیریت - همه دکمه‌ها شیشه‌ای ✅"""
     buttons = [
         [KeyboardButton("📊 آمار کاربران")],
         [KeyboardButton("📨 ارسال پیام همگانی")],
