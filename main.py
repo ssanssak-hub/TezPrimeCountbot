@@ -35,18 +35,18 @@ app = Flask(__name__)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-async def send_message(chat_id, text):
-    """ارسال پیام به صورت async"""
+def send_message_sync(chat_id, text):
+    """ارسال پیام به صورت sync (با استفاده از loop)"""
     try:
-        await bot.send_message(chat_id=chat_id, text=text)
+        loop.run_until_complete(bot.send_message(chat_id=chat_id, text=text))
         logger.info(f"Message sent to {chat_id}")
     except Exception as e:
         logger.error(f"Error sending message: {e}")
 
-async def set_webhook():
-    """تنظیم وب‌هوک به صورت async"""
+def set_webhook_sync():
+    """تنظیم وب‌هوک به صورت sync"""
     try:
-        await bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
+        loop.run_until_complete(bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}"))
         logger.info("Webhook set successfully")
         return True
     except Exception as e:
@@ -88,7 +88,7 @@ def webhook():
                 "🔹 هر پیامی بفرستی، برمی‌گردونه.\n"
                 "🔹 دستور /help برای راهنما."
             )
-            loop.run_until_complete(send_message(chat_id, message))
+            send_message_sync(chat_id, message)
             
         # دستور /help
         elif text == "/help":
@@ -99,15 +99,15 @@ def webhook():
                 "/setwebhook - تنظیم وب‌هوک (فقط ادمین)\n"
                 "/info - اطلاعات ربات (فقط ادمین)"
             )
-            loop.run_until_complete(send_message(chat_id, message))
+            send_message_sync(chat_id, message)
             
         # دستور /setwebhook (فقط ادمین)
         elif text == "/setwebhook" and chat_id == ADMIN_ID:
-            result = loop.run_until_complete(set_webhook())
+            result = set_webhook_sync()
             if result:
-                await send_message(chat_id, "✅ Webhook با موفقیت تنظیم شد!")
+                send_message_sync(chat_id, "✅ Webhook با موفقیت تنظیم شد!")
             else:
-                await send_message(chat_id, "❌ خطا در تنظیم Webhook!")
+                send_message_sync(chat_id, "❌ خطا در تنظیم Webhook!")
                 
         # دستور /info (فقط ادمین)
         elif text == "/info" and chat_id == ADMIN_ID:
@@ -118,15 +118,15 @@ def webhook():
                 f"🔹 وب‌هوک: {WEBHOOK_URL}\n"
                 f"🔹 وضعیت: فعال ✅"
             )
-            loop.run_until_complete(send_message(chat_id, info))
+            send_message_sync(chat_id, info)
             
         # دستورات غیرمجاز برای ادمین
         elif chat_id == ADMIN_ID and text.startswith("/"):
-            loop.run_until_complete(send_message(chat_id, "⚠️ دستور نامعتبر! برای راهنما /help را بفرست."))
+            send_message_sync(chat_id, "⚠️ دستور نامعتبر! برای راهنما /help را بفرست.")
             
         # اکو پیام (فقط برای کاربران عادی)
         else:
-            loop.run_until_complete(send_message(chat_id, f"📩 پیام شما: {text}"))
+            send_message_sync(chat_id, f"📩 پیام شما: {text}")
             
         return "ok", 200
         
