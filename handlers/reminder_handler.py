@@ -12,15 +12,17 @@ from keyboards import get_reminder_menu, get_exam_selection_menu
 
 logger = logging.getLogger(__name__)
 
-# وضعیت‌های مختلف برای مکالمه
+# ==================== وضعیت‌های مختلف برای مکالمه ====================
 WAITING_FOR_EXAM_SELECTION = 1
 WAITING_FOR_PERSONAL_TITLE = 2
 WAITING_FOR_PERSONAL_DATE = 3
 WAITING_FOR_PERSONAL_TIME = 4
 WAITING_FOR_REMINDER_ACTION = 5
 
-# ذخیره وضعیت کاربران به صورت موقت
+# ==================== دیکشنری وضعیت کاربران ====================
 user_states = {}
+
+# ==================== توابع ====================
 
 async def handle_reminder_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش منوی یادآوری"""
@@ -49,7 +51,7 @@ async def handle_exam_selection_for_reminder(update: Update, context: ContextTyp
     user_id = update.effective_user.id
     text = update.message.text
     
-    # بررسی اینکه آیا کاربر یک کنکور انتخاب کرده
+    # بررسی اینکه کاربر آیا یک کنکور انتخاب کرده
     for exam_name in EXAMS.keys():
         if text == f"📖 {exam_name}":
             # پیدا کردن تاریخ و زمان کنکور
@@ -135,7 +137,7 @@ async def handle_personal_reminder_date(update: Update, context: ContextTypes.DE
     # بررسی اعتبار تاریخ شمسی
     try:
         year, month, day = map(int, date_text.split('/'))
-        jdatetime.date(year, month, day)  # بررسی اعتبار
+        jdatetime.date(year, month, day)
     except ValueError:
         await update.message.reply_text(
             "❌ تاریخ نامعتبر!\n"
@@ -255,9 +257,19 @@ async def handle_reminder_action(update: Update, context: ContextTypes.DEFAULT_T
     """مدیریت ویرایش/حذف یادآوری"""
     user_id = update.effective_user.id
     
-    # بررسی اینکه کاربر در حال ویرایش است یا خیر
+    # اگر کاربر روی دکمه "✏️ ویرایش/حذف یادآوری" کلیک کرد
+    if update.message.text == "✏️ ویرایش/حذف یادآوری":
+        await update.message.reply_text(
+            "✏️ **ویرایش/حذف یادآوری**\n\n"
+            "لطفاً شناسه یادآوری مورد نظر را وارد کنید.\n"
+            "می‌توانید شناسه را از لیست یادآوری‌ها پیدا کنید.",
+            parse_mode="Markdown"
+        )
+        user_states[user_id] = {"step": WAITING_FOR_REMINDER_ACTION}
+        return
+    
+    # اگر کاربر شناسه یادآوری را وارد کرده
     if user_id in user_states and user_states[user_id].get("step") == WAITING_FOR_REMINDER_ACTION:
-        # کاربر شناسه یادآوری را وارد کرده
         reminder_id = update.message.text.strip()
         reminder = get_reminder_by_id(user_id, reminder_id)
         
@@ -270,11 +282,14 @@ async def handle_reminder_action(update: Update, context: ContextTypes.DEFAULT_T
         
         # نمایش منوی عملیات برای آن یادآوری
         keyboard = [
-            [KeyboardButton(f"✅ فعال کردن {reminder_id}")],
-            [KeyboardButton(f"❌ غیرفعال کردن {reminder_id}")],
-            [KeyboardButton(f"🗑 حذف {reminder_id}")],
+            [KeyboardButton(f"✅ فعال کردن")],
+            [KeyboardButton(f"❌ غیرفعال کردن")],
+            [KeyboardButton(f"🗑 حذف")],
             [KeyboardButton("🔙 بازگشت به یادآوری")]
         ]
+        
+        # ذخیره شناسه یادآوری در وضعیت کاربر
+        user_states[user_id]["target_reminder_id"] = reminder_id
         
         await update.message.reply_text(
             f"🆔 **یادآوری:** {reminder['title']}\n"
@@ -283,52 +298,38 @@ async def handle_reminder_action(update: Update, context: ContextTypes.DEFAULT_T
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
             parse_mode="Markdown"
         )
-        
-        user_states[user_id]["action_step"] = WAITING_FOR_REMINDER_ACTION
         return
     
     # اگر کاربر روی یکی از دکمه‌های عملیات کلیک کرد
     text = update.message.text
+    target_id = user_states.get(user_id, {}).get("target_reminder_id")
     
-    if text.startswith("✅ فعال کردن"):
-        reminder_id = text.replace("✅ فعال کردن ", "").strip()
-        if toggle_reminder(user_id, reminder_id):
-            await update.message.reply_text(f"✅ یادآوری با شناسه `{reminder_id}` فعال شد!")
+    if text == "✅ فعال کردن" and target_id:
+        if toggle_reminder(user_id, target_id):
+            await update.message.reply_text(f"✅ یادآوری با شناسه `{target_id}` فعال شد!")
         else:
             await update.message.reply_text("❌ خطا در فعال‌سازی یادآوری!")
-        
         # نمایش مجدد لیست
         await handle_view_reminders(update, context)
         return
     
-    if text.startswith("❌ غیرفعال کردن"):
-        reminder_id = text.replace("❌ غیرفعال کردن ", "").strip()
-        if toggle_reminder(user_id, reminder_id):
-            await update.message.reply_text(f"❌ یادآوری با شناسه `{reminder_id}` غیرفعال شد!")
+    if text == "❌ غیرفعال کردن" and target_id:
+        if toggle_reminder(user_id, target_id):
+            await update.message.reply_text(f"❌ یادآوری با شناسه `{target_id}` غیرفعال شد!")
         else:
             await update.message.reply_text("❌ خطا در غیرفعال‌سازی یادآوری!")
-        
         await handle_view_reminders(update, context)
         return
     
-    if text.startswith("🗑 حذف"):
-        reminder_id = text.replace("🗑 حذف ", "").strip()
-        if delete_reminder(user_id, reminder_id):
-            await update.message.reply_text(f"🗑 یادآوری با شناسه `{reminder_id}` حذف شد!")
+    if text == "🗑 حذف" and target_id:
+        if delete_reminder(user_id, target_id):
+            await update.message.reply_text(f"🗑 یادآوری با شناسه `{target_id}` حذف شد!")
+            # پاک کردن وضعیت کاربر
+            if user_id in user_states:
+                del user_states[user_id]
         else:
             await update.message.reply_text("❌ خطا در حذف یادآوری!")
-        
         await handle_view_reminders(update, context)
-        return
-    
-    if text == "✏️ ویرایش/حذف یادآوری":
-        await update.message.reply_text(
-            "✏️ **ویرایش/حذف یادآوری**\n\n"
-            "لطفاً شناسه یادآوری مورد نظر را وارد کنید.\n"
-            "می‌توانید شناسه را از لیست یادآوری‌ها پیدا کنید.",
-            parse_mode="Markdown"
-        )
-        user_states[user_id] = {"step": WAITING_FOR_REMINDER_ACTION}
         return
 
 def get_reminder_status(reminder):
