@@ -28,10 +28,7 @@ async def handle_message(update, context):
     # بازگشت به منوی اصلی
     if text == "🔙 بازگشت به منوی اصلی":
         keyboard = get_main_menu(ADMINS[0], user_id)
-        await update.message.reply_text(
-            "🔙 به منوی اصلی بازگشتید.",
-            reply_markup=keyboard
-        )
+        await update.message.reply_text("🔙 به منوی اصلی بازگشتید.", reply_markup=keyboard)
         return
     
     # بازگشت به منوی کنکورها
@@ -48,7 +45,7 @@ async def handle_message(update, context):
     if await handle_exam_selection(update, text):
         return
     
-    # پنل مدیریت (فقط برای ادمین)
+    # پنل مدیریت
     if text == "🛠 پنل مدیریت" and is_admin(user_id):
         await handle_admin_panel(update)
         return
@@ -60,5 +57,5 @@ async def handle_message(update, context):
         await handle_admin_commands(update, text)
         return
     
-    # سایر دکمه‌های منوی اصلی
+    # سایر دکمه‌ها
     await handle_menu_buttons(update, text)
