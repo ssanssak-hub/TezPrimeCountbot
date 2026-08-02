@@ -4,22 +4,17 @@ import asyncio
 from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
-
-# ✅ ایمپورت از پوشه handlers
 from handlers import start, handle_message
 from scheduler import start_scheduler
 
-# بارگذاری متغیرهای محیطی
 load_dotenv()
 
-# تنظیم لاگ
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# خواندن متغیرها
 TOKEN = os.environ.get("TOKEN")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
@@ -51,7 +46,11 @@ if not initialize_bot():
     exit(1)
 
 # ==================== راه‌اندازی Scheduler ====================
-scheduler = start_scheduler()
+try:
+    scheduler = start_scheduler()
+    logger.info("✅ Scheduler started successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to start scheduler: {e}")
 
 @app.route("/", methods=["GET"])
 def home():
@@ -80,7 +79,6 @@ def webhook():
         if not text:
             return "ok", 200
         
-        # پردازش پیام
         async def process_update():
             if text == "/start":
                 await start(update, None)
@@ -93,15 +91,6 @@ def webhook():
     except Exception as e:
         logger.error(f"Error in webhook: {e}")
         return "error", 500
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"Internal error: {error}")
-    return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
