@@ -111,29 +111,33 @@ def get_due_reminders():
     
     for user_id, user_reminders in reminders.items():
         for r in user_reminders:
-            if not r.get("is_active", True):
+            try:
+                if not r.get("is_active", True):
+                    continue
+                
+                # بررسی تاریخ
+                gregorian_date = jalali_to_gregorian(r["jalali_date"])
+                hour, minute = map(int, r["time"].split(':'))
+                
+                reminder_datetime = datetime(
+                    gregorian_date.year,
+                    gregorian_date.month,
+                    gregorian_date.day,
+                    hour,
+                    minute,
+                    0,
+                    tzinfo=pytz.timezone('Asia/Tehran')
+                )
+                
+                # اگر زمان یادآوری رسیده باشد
+                if now >= reminder_datetime:
+                    due_reminders.append({
+                        "user_id": int(user_id),
+                        "reminder": r,
+                        "datetime": reminder_datetime
+                    })
+            except Exception as e:
+                logger.warning(f"⚠️ Error processing reminder {r.get('id', 'unknown')}: {e}")
                 continue
-            
-            # تبدیل تاریخ شمسی به میلادی
-            gregorian_date = jalali_to_gregorian(r["jalali_date"])
-            hour, minute = map(int, r["time"].split(':'))
-            
-            reminder_datetime = datetime(
-                gregorian_date.year,
-                gregorian_date.month,
-                gregorian_date.day,
-                hour,
-                minute,
-                0,
-                tzinfo=pytz.timezone('Asia/Tehran')
-            )
-            
-            # اگر زمان یادآوری رسیده باشد
-            if now >= reminder_datetime:
-                due_reminders.append({
-                    "user_id": int(user_id),
-                    "reminder": r,
-                    "datetime": reminder_datetime
-                })
     
     return due_reminders
