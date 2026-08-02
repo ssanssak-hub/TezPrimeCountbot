@@ -5,9 +5,8 @@ from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from dotenv import load_dotenv
 
-# اضافه کردن ایمپورت‌های جدید
-import handlers
-from keyboards import get_main_menu
+# ایمپورت از پوشه handlers
+from handlers import start, handle_message
 
 # بارگذاری متغیرهای محیطی
 load_dotenv()
@@ -50,21 +49,6 @@ if not initialize_bot():
     logger.error("Failed to initialize bot! Exiting...")
     exit(1)
 
-def send_message_sync(chat_id, text, reply_markup=None):
-    """ارسال پیام به صورت sync"""
-    try:
-        if reply_markup:
-            loop.run_until_complete(bot.send_message(
-                chat_id=chat_id, 
-                text=text, 
-                reply_markup=reply_markup
-            ))
-        else:
-            loop.run_until_complete(bot.send_message(chat_id=chat_id, text=text))
-        logger.info(f"Message sent to {chat_id}")
-    except Exception as e:
-        logger.error(f"Error sending message: {e}")
-
 @app.route("/", methods=["GET"])
 def home():
     try:
@@ -87,24 +71,19 @@ def webhook():
         if not update.message:
             return "ok", 200
             
-        chat_id = update.message.chat_id
         text = update.message.text
         
         if not text:
             return "ok", 200
         
-        # ایجاد یک تابع async برای پردازش پیام
+        # پردازش پیام
         async def process_update():
-            # اگر پیام /start بود
             if text == "/start":
-                await handlers.start(update, None)
-            # در غیر این صورت به handlers ارسال کن
+                await start(update, None)
             else:
-                await handlers.handle_message(update, None)
+                await handle_message(update, None)
         
-        # اجرای تابع async
         loop.run_until_complete(process_update())
-        
         return "ok", 200
         
     except Exception as e:
