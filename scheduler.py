@@ -6,6 +6,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram import Bot
 from reminder_data import get_due_reminders
+import pytz
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +55,6 @@ def send_reminder_sync(chat_id, reminder):
 def check_and_send_reminders():
     """بررسی و ارسال یادآوری‌های سررسید شده با زمان تهران"""
     try:
-        # import را اینجا اضافه می‌کنیم تا از تداخل جلوگیری شود
-        import pytz
-        from datetime import datetime
         from reminder_data import load_reminders, jalali_to_gregorian
         
         reminders = load_reminders()
