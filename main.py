@@ -103,7 +103,7 @@ def webhook():
         # دستور /help
         elif text == "/help":
             message = (
-                "📖 راهنمای ربات:\n\n"
+                "📖 راهنمای ربات تزپرایم:\n\n"
                 "/start - شروع کار\n"
                 "/help - راهنما"
             )
