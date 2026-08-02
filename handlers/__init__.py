@@ -51,7 +51,7 @@ async def handle_message(update, context):
     
     # ========== بازگشت به منوی یادآوری ==========
     if text == "🔙 بازگشت به یادآوری":
-        await handle_reminder_menu(update, context)  # ✅ اینجا context رو اضافه کردم
+        await handle_reminder_menu(update, context)
         return
     
     # ========== دکمه اطلاعات کنکور ==========
@@ -60,27 +60,27 @@ async def handle_message(update, context):
         await handle_exam_menu(update)
         return
     
-    # ========== بررسی انتخاب کنکور ==========
+    # ========== بررسی انتخاب کنکور (از exam_handler) ==========
     from .exam_handler import handle_exam_selection
     if await handle_exam_selection(update, text):
         return
     
     # ========== دکمه یادآوری کن ==========
     if text == "⏰ یادآوری کن":
-        await handle_reminder_menu(update, context)  # ✅ اینجا context رو اضافه کردم
+        await handle_reminder_menu(update, context)
         return
     
     # ========== منوی یادآوری ==========
     if text == "➕ افزودن یادآوری کنکور":
-        await handle_add_exam_reminder(update, context)  # ✅ اینجا context رو اضافه کردم
+        await handle_add_exam_reminder(update, context)
         return
     
     if text == "➕ افزودن یادآوری شخصی":
-        await handle_add_personal_reminder(update, context)  # ✅ اینجا context رو اضافه کردم
+        await handle_add_personal_reminder(update, context)
         return
     
     if text == "📋 مشاهده یادآوری‌ها":
-        await handle_view_reminders(update, context)  # ✅ اینجا context رو اضافه کردم
+        await handle_view_reminders(update, context)
         return
     
     # ========== مراحل افزودن یادآوری شخصی ==========
@@ -96,7 +96,7 @@ async def handle_message(update, context):
         elif step == 4:  # WAITING_FOR_PERSONAL_TIME
             await handle_personal_reminder_time(update, context)
             return
-        elif step == 5:  # WAITING_FOR_REMINDER_ACTION
+        elif step == 5 or step == 6:  # WAITING_FOR_REMINDER_ACTION یا WAITING_FOR_REMINDER_ID
             await handle_reminder_action(update, context)
             return
     
