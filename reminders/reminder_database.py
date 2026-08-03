@@ -1,8 +1,13 @@
 import sqlite3
 import logging
+import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# ایجاد پوشه reminders اگر وجود نداشت
+if not os.path.exists('reminders'):
+    os.makedirs('reminders')
 
 REMINDER_DB_PATH = 'reminders/reminders.db'
 
@@ -12,6 +17,7 @@ def get_reminder_db_connection():
     return conn
 
 def init_reminder_db():
+    """ایجاد جدول reminders اگر وجود نداشت"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
@@ -30,7 +36,7 @@ def init_reminder_db():
     
     conn.commit()
     conn.close()
-    logger.info("Reminder database initialized")
+    logger.info("✅ Reminder database initialized successfully")
 
 def save_reminder(user_id, message, days, hour, minute):
     conn = get_reminder_db_connection()
@@ -47,6 +53,7 @@ def save_reminder(user_id, message, days, hour, minute):
     reminder_id = cursor.lastrowid
     conn.close()
     
+    logger.info(f"✅ Reminder {reminder_id} saved for user {user_id}")
     return reminder_id
 
 def get_user_reminders(user_id):
@@ -56,6 +63,22 @@ def get_user_reminders(user_id):
     cursor.execute('''
         SELECT * FROM reminders 
         WHERE user_id = ? AND is_active = 1
+        ORDER BY created_at DESC
+    ''', (user_id,))
+    
+    reminders = cursor.fetchall()
+    conn.close()
+    
+    return reminders
+
+def get_all_user_reminders(user_id):
+    """دریافت همه اعلان‌های کاربر (فعال و غیرفعال)"""
+    conn = get_reminder_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT * FROM reminders 
+        WHERE user_id = ?
         ORDER BY created_at DESC
     ''', (user_id,))
     
@@ -75,6 +98,7 @@ def delete_reminder(reminder_id, user_id):
     
     conn.commit()
     conn.close()
+    logger.info(f"🗑️ Reminder {reminder_id} deleted for user {user_id}")
 
 def cancel_reminder(reminder_id, user_id):
     conn = get_reminder_db_connection()
@@ -88,6 +112,7 @@ def cancel_reminder(reminder_id, user_id):
     
     conn.commit()
     conn.close()
+    logger.info(f"⛔ Reminder {reminder_id} cancelled for user {user_id}")
 
 def get_all_active_reminders():
     conn = get_reminder_db_connection()
