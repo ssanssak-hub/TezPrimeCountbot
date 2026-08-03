@@ -221,104 +221,69 @@ async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def show_delete_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست اعلان‌ها برای حذف"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
-    
-    if not reminders:
-        await query.edit_message_text(
-            "📭 **هیچ اعلانی برای حذف ندارید!**",
-            reply_markup=reminder_menu_keyboard(),
-            parse_mode='Markdown'
-        )
-        return
-    
-    keyboard = []
-    for r in reminders:
-        keyboard.append([
-            InlineKeyboardButton(
-                f"🗑️ {r['message'][:20]}...", 
-                callback_data=f"delete_{r['id']}"
-            )
-        ])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
-    
-    await query.edit_message_text(
-        "🗑️ **حذف اعلان**\n\n"
-        "برای حذف یک اعلان، روی آن کلیک کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-
-async def show_cancel_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست اعلان‌ها برای لغو"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
-    
-    if not reminders:
-        await query.edit_message_text(
-            "📭 **هیچ اعلانی برای لغو ندارید!**",
-            reply_markup=reminder_menu_keyboard(),
-            parse_mode='Markdown'
-        )
-        return
-    
-    keyboard = []
-    for r in reminders:
-        keyboard.append([
-            InlineKeyboardButton(
-                f"⛔ {r['message'][:20]}...", 
-                callback_data=f"cancel_{r['id']}"
-            )
-        ])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
-    
-    await query.edit_message_text(
-        "⛔ **لغو اعلان**\n\n"
-        "برای لغو یک اعلان، روی آن کلیک کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
 
 async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حذف اعلان"""
     query = update.callback_query
     await query.answer()
     
-    reminder_id = int(query.data.split("_")[1])
-    user_id = update.effective_user.id
-    
-    delete_reminder(reminder_id, user_id)
-    
-    await query.edit_message_text(
-        "✅ **اعلان با موفقیت حذف شد!**",
-        reply_markup=reminder_menu_keyboard(),
-        parse_mode='Markdown'
-    )
+    try:
+        # استخراج ID از callback_data
+        data = query.data
+        if not data.startswith("delete_"):
+            await query.edit_message_text("❌ خطا در پردازش درخواست!")
+            return
+        
+        reminder_id = int(data.split("_")[1])
+        user_id = update.effective_user.id
+        
+        from .reminder_database import delete_reminder as delete_reminder_db
+        delete_reminder_db(reminder_id, user_id)
+        
+        await query.edit_message_text(
+            "✅ **اعلان با موفقیت حذف شد!**",
+            reply_markup=reminder_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+    except (IndexError, ValueError) as e:
+        logger.error(f"Error in delete_reminder: {e}")
+        await query.edit_message_text(
+            "❌ خطا در حذف اعلان!",
+            reply_markup=reminder_menu_keyboard(),
+            parse_mode='Markdown'
+        )
 
 async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو اعلان (غیرفعال کردن)"""
     query = update.callback_query
     await query.answer()
     
-    reminder_id = int(query.data.split("_")[1])
-    user_id = update.effective_user.id
-    
-    cancel_reminder(reminder_id, user_id)
-    
-    await query.edit_message_text(
-        "⛔ **اعلان با موفقیت لغو شد!**\n\n"
-        "برای فعال کردن مجدد، اعلان جدید تنظیم کنید.",
-        reply_markup=reminder_menu_keyboard(),
-        parse_mode='Markdown'
-    )
+    try:
+        # استخراج ID از callback_data
+        data = query.data
+        if not data.startswith("cancel_"):
+            await query.edit_message_text("❌ خطا در پردازش درخواست!")
+            return
+        
+        reminder_id = int(data.split("_")[1])
+        user_id = update.effective_user.id
+        
+        from .reminder_database import cancel_reminder as cancel_reminder_db
+        cancel_reminder_db(reminder_id, user_id)
+        
+        await query.edit_message_text(
+            "⛔ **اعلان با موفقیت لغو شد!**\n\n"
+            "برای فعال کردن مجدد، اعلان جدید تنظیم کنید.",
+            reply_markup=reminder_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+    except (IndexError, ValueError) as e:
+        logger.error(f"Error in cancel_reminder: {e}")
+        await query.edit_message_text(
+            "❌ خطا در لغو اعلان!",
+            reply_markup=reminder_menu_keyboard(),
+            parse_mode='Markdown'
+        )
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بازگشت به منوی اصلی"""
