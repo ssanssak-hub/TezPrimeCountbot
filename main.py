@@ -1,12 +1,10 @@
 import logging
 import asyncio
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import os
 from dotenv import load_dotenv
-from datetime import datetime
-import pytz
 
 # Import ماژول‌های اعلان
 from reminders.reminder_handlers import (
@@ -38,6 +36,7 @@ flask_app = Flask(__name__)
 
 # Telegram Application
 application = None
+loop = None
 
 # دکمه‌های منوی اصلی
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -83,8 +82,69 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting_message'):
         await set_reminder_message(update, context)
 
+# 🔥 **تابع پردازش Webhook با مدیریت Event Loop**
+def process_update(update_json):
+    global application, loop
+    
+    try:
+        # اگر loop وجود نداره، یک loop جدید بساز
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # ایجاد آبجکت Update
+        update = Update.de_json(update_json, application.bot)
+        
+        # اجرای پردازش در event loop
+        future = asyncio.run_coroutine_threadsafe(
+            application.process_update(update),
+            loop
+        )
+        future.result(timeout=10)  # منتظر حداکثر ۱۰ ثانیه
+        
+        return True
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return False
+
+# 🔥 **مسیر اصلی Webhook**
+@flask_app.route('/', methods=['GET', 'POST'])
+def webhook():
+    if request.method == 'POST':
+        try:
+            # دریافت داده JSON
+            json_data = request.get_json(force=True)
+            if not json_data:
+                return jsonify({'status': 'error', 'message': 'No data'}), 400
+            
+            # پردازش درخواست
+            success = process_update(json_data)
+            if success:
+                return jsonify({'status': 'ok'}), 200
+            else:
+                return jsonify({'status': 'error'}), 500
+                
+        except Exception as e:
+            logger.error(f"Webhook exception: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+    # پاسخ به درخواست GET
+    return "TezPrimeCountbot is running! 🚀", 200
+
+@flask_app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy'}), 200
+
+@flask_app.route('/info', methods=['GET'])
+def info():
+    return jsonify({
+        'status': 'running',
+        'bot': 'TezPrimeCountbot',
+        'webhook': WEBHOOK_URL
+    }), 200
+
 def main():
-    global application
+    global application, loop
     
     # مقداردهی اولیه دیتابیس
     init_db()
@@ -94,8 +154,6 @@ def main():
     
     # هندلرها
     application.add_handler(CommandHandler("start", start))
-    
-    # هندلر دکمه‌ها
     application.add_handler(CallbackQueryHandler(button_handler))
     
     # هندلر تنظیم اعلان (Conversation)
@@ -108,44 +166,53 @@ def main():
         },
         fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
         name="reminder_conversation",
-        per_message=False  # اضافه کردن این خط
+        per_message=False
     )
     application.add_handler(conv_handler)
     
     # هندلر پیش‌فرض
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     
-    # راه‌اندازی Webhook
-    async def setup_webhook():
-        await application.bot.set_webhook(WEBHOOK_URL)
-        logger.info(f"Webhook set to {WEBHOOK_URL}")
-    
-    # 🔥 **تغییر مهم: مسیر Webhook به "/"**
-    @flask_app.route('/', methods=['GET', 'POST'])
-    def webhook():
-        if request.method == 'POST':
-            try:
-                update = Update.de_json(request.get_json(force=True), application.bot)
-                asyncio.create_task(application.process_update(update))
-                return 'ok'
-            except Exception as e:
-                logger.error(f"Webhook error: {e}")
-                return 'error', 500
-        return "TezPrimeCountbot is running!", 200
-    
-    # مسیر سلامت (health check) برای Render
-    @flask_app.route('/health', methods=['GET'])
-    def health():
-        return "OK", 200
-    
-    # اجرا
+    # 🚀 **راه‌اندازی Event Loop جدید**
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(setup_webhook())
+    
+    # تنظیم Webhook
+    async def setup_webhook():
+        await application.bot.set_webhook(WEBHOOK_URL)
+        logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
+        return True
+    
+    # اجرای تنظیم Webhook
+    success = loop.run_until_complete(setup_webhook())
+    if not success:
+        logger.error("❌ Failed to set webhook")
+    
+    # 🔥 **مهم: شروع به کار Application در پس‌زمینه**
+    async def run_application():
+        await application.initialize()
+        await application.start()
+        logger.info("✅ Application started")
+        # نگه داشتن application در حالت آماده‌باش
+        await asyncio.Event().wait()  # اینجا منتظر می‌مونه تا forever
+    
+    # اجرای Application در پس‌زمینه
+    import threading
+    def run_bot():
+        loop.run_until_complete(run_application())
+    
+    # اجرا در یک ترد جداگانه
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    logger.info("✅ Bot is ready to receive updates")
     
     # راه‌اندازی Flask
     port = int(os.environ.get('PORT', 5000))
-    flask_app.run(host='0.0.0.0', port=port)
+    logger.info(f"🚀 Starting Flask server on port {port}")
+    
+    # اجرای Flask (این تابع بلاک می‌شه و منتظر می‌مونه)
+    flask_app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 
 if __name__ == "__main__":
     main()
