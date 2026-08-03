@@ -17,6 +17,7 @@ from reminders.reminder_handlers import (
 
 # Import دیتابیس
 from database import init_db
+from reminders.reminder_database import init_reminder_db  # <-- اضافه شد
 
 # Load environment variables
 load_dotenv()
@@ -73,9 +74,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "view_reminders":
         await view_reminders(update, context)
     elif data.startswith("delete_"):
-        await delete_reminder(update, context)
+        # اطمینان از اینکه delete_ فقط برای اعلان‌هاست
+        try:
+            reminder_id = int(data.split("_")[1])
+            await delete_reminder(update, context)
+        except (IndexError, ValueError):
+            logger.error(f"Invalid delete callback data: {data}")
+            await query.edit_message_text("❌ خطا در حذف اعلان!")
     elif data.startswith("cancel_"):
-        await cancel_reminder(update, context)
+        # اطمینان از اینکه cancel_ فقط برای اعلان‌هاست
+        try:
+            reminder_id = int(data.split("_")[1])
+            await cancel_reminder(update, context)
+        except (IndexError, ValueError):
+            logger.error(f"Invalid cancel callback data: {data}")
+            await query.edit_message_text("❌ خطا در لغو اعلان!")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # برای دریافت پیام متنی در طول تنظیم اعلان
@@ -148,6 +161,7 @@ def main():
     
     # مقداردهی اولیه دیتابیس
     init_db()
+    init_reminder_db()  # <-- این خط اضافه شد
     
     # ساخت اپلیکیشن
     application = Application.builder().token(TOKEN).build()
@@ -166,8 +180,8 @@ def main():
         },
         fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
         name="reminder_conversation",
-        per_message=True,  # تغییر داده شد
-        allow_reentry=True  # اضافه شد
+        per_message=False,  # برگشت به False برای رفع هشدار جدید
+        allow_reentry=True
     )
     application.add_handler(conv_handler)
     
