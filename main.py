@@ -2,8 +2,7 @@ import logging
 import asyncio
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from telegram.ext import ConversationHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -108,7 +107,8 @@ def main():
             REMINDER_TIME: [CallbackQueryHandler(set_reminder_time, pattern="^time_")],
         },
         fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
-        name="reminder_conversation"
+        name="reminder_conversation",
+        per_message=False  # اضافه کردن این خط
     )
     application.add_handler(conv_handler)
     
@@ -120,17 +120,23 @@ def main():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"Webhook set to {WEBHOOK_URL}")
     
-    # Flask route
-    @flask_app.route('/', methods=['GET'])
-    def home():
-        return "TezPrimeCountbot is running!"
-    
-    @flask_app.route('/webhook', methods=['POST'])
-    async def webhook():
+    # 🔥 **تغییر مهم: مسیر Webhook به "/"**
+    @flask_app.route('/', methods=['GET', 'POST'])
+    def webhook():
         if request.method == 'POST':
-            update = Update.de_json(request.get_json(force=True), application.bot)
-            await application.process_update(update)
-            return 'ok'
+            try:
+                update = Update.de_json(request.get_json(force=True), application.bot)
+                asyncio.create_task(application.process_update(update))
+                return 'ok'
+            except Exception as e:
+                logger.error(f"Webhook error: {e}")
+                return 'error', 500
+        return "TezPrimeCountbot is running!", 200
+    
+    # مسیر سلامت (health check) برای Render
+    @flask_app.route('/health', methods=['GET'])
+    def health():
+        return "OK", 200
     
     # اجرا
     loop = asyncio.new_event_loop()
