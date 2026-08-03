@@ -77,8 +77,16 @@ def reminders_list_keyboard(reminders):
     keyboard = []
     
     for reminder in reminders:
-        text = f"📌 {reminder['message'][:20]}..."
-        callback = f"view_{reminder['id']}"
+        # بررسی اینکه آیا reminder دیکشنری هست یا آبجکت
+        if isinstance(reminder, dict):
+            reminder_id = reminder['id']
+            message = reminder['message']
+        else:
+            reminder_id = reminder['id']
+            message = reminder['message']
+        
+        text = f"📌 {message[:20]}..."
+        callback = f"view_{reminder_id}"
         keyboard.append([InlineKeyboardButton(text, callback_data=callback)])
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
