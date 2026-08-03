@@ -82,7 +82,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting_message'):
         await set_reminder_message(update, context)
 
-# 🔥 **تابع پردازش Webhook با مدیریت Event Loop**
+# تابع پردازش Webhook با مدیریت Event Loop
 def process_update(update_json):
     global application, loop
     
@@ -107,7 +107,7 @@ def process_update(update_json):
         logger.error(f"Webhook error: {e}")
         return False
 
-# 🔥 **مسیر اصلی Webhook**
+# مسیر اصلی Webhook
 @flask_app.route('/', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'POST':
@@ -156,7 +156,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # هندلر تنظیم اعلان (Conversation)
+    # هندلر تنظیم اعلان (Conversation) - با رفع هشدار
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
@@ -166,14 +166,15 @@ def main():
         },
         fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
         name="reminder_conversation",
-        per_message=False
+        per_message=True,  # تغییر داده شد
+        allow_reentry=True  # اضافه شد
     )
     application.add_handler(conv_handler)
     
     # هندلر پیش‌فرض
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     
-    # 🚀 **راه‌اندازی Event Loop جدید**
+    # راه‌اندازی Event Loop جدید
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -188,7 +189,7 @@ def main():
     if not success:
         logger.error("❌ Failed to set webhook")
     
-    # 🔥 **مهم: شروع به کار Application در پس‌زمینه**
+    # شروع به کار Application در پس‌زمینه
     async def run_application():
         await application.initialize()
         await application.start()
