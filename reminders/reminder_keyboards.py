@@ -45,30 +45,72 @@ def days_keyboard(selected_days=None):
     
     return InlineKeyboardMarkup(keyboard)
 
-def time_keyboard():
+def time_keyboard(selected_hour=None, selected_minute=None, page=0):
+    """
+    کیبورد انتخاب زمان با تفکیک ساعت و دقیقه
+    page: 0 = انتخاب ساعت, 1 = انتخاب دقیقه
+    """
     keyboard = []
     
-    # ساعت‌ها ۰ تا ۲۳
-    hour_row = []
-    for h in range(0, 24):
-        hour_row.append(InlineKeyboardButton(str(h), callback_data=f"time_h_{h}"))
-        if len(hour_row) == 6:
-            keyboard.append(hour_row)
-            hour_row = []
-    if hour_row:
-        keyboard.append(hour_row)
+    if page == 0:
+        # 📌 بخش انتخاب ساعت
+        keyboard.append([InlineKeyboardButton("🕐 انتخاب ساعت (کلیک کنید) 🕐", callback_data="noop")])
+        
+        # ۲۴ ساعت در ۴ ردیف ۶ تایی
+        hour_rows = []
+        for h in range(24):
+            text = f"✅ {h:02d}" if selected_hour == h else f"{h:02d}"
+            callback = f"time_h_{h}"
+            hour_rows.append(InlineKeyboardButton(text, callback_data=callback))
+        
+        # تقسیم به ردیف‌های ۶ تایی
+        for i in range(0, 24, 6):
+            keyboard.append(hour_rows[i:i+6])
+        
+        # دکمه رفتن به انتخاب دقیقه
+        if selected_hour is not None:
+            keyboard.append([InlineKeyboardButton("⏬ برو به انتخاب دقیقه ⏬", callback_data="time_page_1")])
+        else:
+            keyboard.append([InlineKeyboardButton("⚠️ اول یک ساعت انتخاب کن", callback_data="noop")])
     
-    # دقیقه‌ها ۰ تا ۵۹ (با گام ۵)
-    minute_row = []
-    for m in range(0, 60, 5):
-        minute_row.append(InlineKeyboardButton(str(m), callback_data=f"time_m_{m}"))
-        if len(minute_row) == 6:
-            keyboard.append(minute_row)
-            minute_row = []
-    if minute_row:
-        keyboard.append(minute_row)
+    elif page == 1:
+        # 📌 بخش انتخاب دقیقه
+        keyboard.append([InlineKeyboardButton("🕐 انتخاب دقیقه (کلیک کنید) 🕐", callback_data="noop")])
+        
+        # ۶۰ دقیقه در ۶ ردیف ۱۰ تایی
+        minute_rows = []
+        for m in range(60):
+            text = f"✅ {m:02d}" if selected_minute == m else f"{m:02d}"
+            callback = f"time_m_{m}"
+            minute_rows.append(InlineKeyboardButton(text, callback_data=callback))
+        
+        # تقسیم به ردیف‌های ۶ تایی (۱۰ ردیف)
+        for i in range(0, 60, 6):
+            keyboard.append(minute_rows[i:i+6])
+        
+        # دکمه بازگشت به انتخاب ساعت
+        keyboard.append([InlineKeyboardButton("🔼 بازگشت به انتخاب ساعت", callback_data="time_page_0")])
     
-    keyboard.append([InlineKeyboardButton("✅ تایید زمان", callback_data="time_done")])
+    # نمایش وضعیت انتخاب شده
+    status_text = ""
+    if selected_hour is not None:
+        status_text += f"ساعت: {selected_hour:02d}"
+    else:
+        status_text += "ساعت: انتخاب نشده"
+    
+    if selected_minute is not None:
+        status_text += f" | دقیقه: {selected_minute:02d}"
+    else:
+        status_text += " | دقیقه: انتخاب نشده"
+    
+    keyboard.append([InlineKeyboardButton(f"📌 {status_text}", callback_data="noop")])
+    
+    # دکمه تایید نهایی (فقط وقتی هر دو انتخاب شدن)
+    if selected_hour is not None and selected_minute is not None:
+        keyboard.append([InlineKeyboardButton("✅ ثبت نهایی زمان", callback_data="time_done")])
+    else:
+        keyboard.append([InlineKeyboardButton("⚠️ باید ساعت و دقیقه را انتخاب کنید", callback_data="noop")])
+    
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_main")])
     
     return InlineKeyboardMarkup(keyboard)
@@ -77,7 +119,6 @@ def reminders_list_keyboard(reminders):
     keyboard = []
     
     for reminder in reminders:
-        # بررسی اینکه آیا reminder دیکشنری هست یا آبجکت
         if isinstance(reminder, dict):
             reminder_id = reminder['id']
             message = reminder['message']
