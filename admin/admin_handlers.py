@@ -961,6 +961,14 @@ async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await update.message.reply_text("⛔ شما دسترسی به این بخش ندارید!")
+        return ConversationHandler.END
+    
     try:
         new_admin_id = int(update.message.text.strip())
         context.user_data['new_admin_id'] = new_admin_id
@@ -985,6 +993,14 @@ async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT
     """تاگل دسترسی‌ها (شیشه‌ای)"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
     
     data = query.data
     selected = context.user_data.get('new_admin_permissions', [])
@@ -1012,7 +1028,7 @@ async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT
             reply_markup=admin_confirm_add_keyboard(),
             parse_mode='HTML'
         )
-        return ADD_ADMIN_ID
+        return
     elif data.startswith("perm_toggle_"):
         perm = data.replace("perm_toggle_", "")
         if perm in selected:
@@ -1039,20 +1055,25 @@ async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT
             )
         except:
             pass  # متن تغییر نکرده - بی‌خیال
-    
-    return ADD_ADMIN_ID
 
 async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تأیید نهایی و ذخیره ادمین"""
     query = update.callback_query
     await query.answer()
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     new_admin_id = context.user_data.get('new_admin_id')
     permissions = context.user_data.get('new_admin_permissions', [])
     perms_str = ','.join(permissions) if permissions else ''
     
     db_add_admin(new_admin_id, perms_str)
-    
     
     perm_names = [get_permission_name(p) for p in permissions]
     perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
@@ -1074,7 +1095,6 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         perm_names_text = "\n".join([f"🔹 {n}" for n in perm_names]) if perm_names else "🔹 دسترسی محدود"
         
-        # ✅ چک کن که new_admin_id خالی نباشه
         if new_admin_id:
             await bot.send_message(
                 chat_id=new_admin_id,
@@ -1091,7 +1111,6 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning("⚠️ new_admin_id is empty! Cannot send notification.")
     except Exception as e:
         logger.error(f"❌ Failed to notify new admin {new_admin_id}: {e}")
-        # ✅ اینجا به خودت پیام بده که کاربر ربات رو استارت نکرده
         await update.effective_message.reply_text(
             f"⚠️ کاربر <code>{new_admin_id}</code> ربات رو استارت نکرده یا بلاک کرده.\n"
             f"دسترسی‌ها ذخیره شد ولی پیام تایید براش ارسال نشد.",
@@ -1099,8 +1118,7 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     context.user_data.clear()
-    return ConversationHandler.END
-
+    
 async def cancel_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو افزودن ادمین"""
     query = update.callback_query
@@ -1152,12 +1170,20 @@ async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     
-    user_id = int(query.data.split("_")[-1])
-    db_remove_admin(user_id)
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
+    user_id_to_remove = int(query.data.split("_")[-1])
+    db_remove_admin(user_id_to_remove)
     
     # ✅ اول پیام تایید به خودت بفرست
     await query.edit_message_text(
-        f"✅ کاربر <code>{user_id}</code> از ادمین‌ها حذف شد!",
+        f"✅ کاربر <code>{user_id_to_remove}</code> از ادمین‌ها حذف شد!",
         parse_mode='HTML',
         reply_markup=back_to_admin_keyboard()
     )
@@ -1168,20 +1194,19 @@ async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYP
         import os
         bot = Bot(token=os.getenv('TOKEN'))
         
-        if user_id:  # ✅ چک کن خالی نباشه
+        if user_id_to_remove:
             await bot.send_message(
-                chat_id=user_id,
+                chat_id=user_id_to_remove,
                 text="📢 <b>دسترسی ادمین شما لغو شد.</b>\n\nدیگر به پنل مدیریت دسترسی ندارید.",
                 parse_mode='HTML'
             )
-            logger.info(f"📩 Notification sent to removed admin {user_id}")
+            logger.info(f"📩 Notification sent to removed admin {user_id_to_remove}")
         else:
             logger.warning("⚠️ user_id is empty! Cannot send notification.")
     except Exception as e:
-        logger.error(f"❌ Failed to notify removed admin {user_id}: {e}")
-        # ✅ به خودت پیام بده که کاربر ربات رو استارت نکرده
+        logger.error(f"❌ Failed to notify removed admin {user_id_to_remove}: {e}")
         await update.effective_message.reply_text(
-            f"⚠️ کاربر <code>{user_id}</code> ربات رو استارت نکرده یا بلاک کرده.\n"
+            f"⚠️ کاربر <code>{user_id_to_remove}</code> ربات رو استارت نکرده یا بلاک کرده.\n"
             f"دسترسی‌ها حذف شد ولی پیام اطلاع‌رسانی براش ارسال نشد.",
             parse_mode='HTML'
         )
@@ -1247,8 +1272,16 @@ async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     context.user_data['awaiting_message'] = True
-    context.user_data['awaiting_ban'] = True  # ⚠️ اینو اضافه کن
+    context.user_data['awaiting_ban'] = True
     
     await query.edit_message_text(
         "🔨 <b>بن کردن کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
@@ -1262,12 +1295,20 @@ async def ban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await update.message.reply_text("⛔ شما دسترسی به این بخش ندارید!")
+        return ConversationHandler.END
+    
     try:
-        user_id = int(update.message.text.strip())
-        db_ban_user(user_id)
+        user_id_to_ban = int(update.message.text.strip())
+        db_ban_user(user_id_to_ban)
         
         await update.message.reply_text(
-            f"🚫 کاربر <code>{user_id}</code> بن شد!",
+            f"🚫 کاربر <code>{user_id_to_ban}</code> بن شد!",
             parse_mode='HTML',
             reply_markup=back_to_admin_keyboard()
         )
@@ -1284,6 +1325,14 @@ async def unban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع آزادسازی"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
     
     banned = get_banned_users()
     if not banned:
@@ -1303,20 +1352,35 @@ async def unban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
-    user_id = int(query.data.split("_")[-1])
-    db_unban_user(user_id)
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
+    user_id_to_unban = int(query.data.split("_")[-1])
+    db_unban_user(user_id_to_unban)
     
     await query.edit_message_text(
-        f"✅ کاربر <code>{user_id}</code> آزاد شد!",
+        f"✅ کاربر <code>{user_id_to_unban}</code> آزاد شد!",
         parse_mode='HTML',
         reply_markup=back_to_admin_keyboard()
     )
-
-
+    
 async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لیست بن شده‌ها"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
     
     banned = get_banned_users()
     if not banned:
@@ -1329,7 +1393,7 @@ async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"🔴 {name} (<code>{user['user_id']}</code>)\n"
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
-
+    
 # ---------- جستجوی کاربر ----------
 
 async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1337,8 +1401,16 @@ async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_search_user"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     context.user_data['awaiting_message'] = True
-    context.user_data['awaiting_search'] = True  # ⚠️ اینو اضافه کن
+    context.user_data['awaiting_search'] = True
     
     await query.edit_message_text(
         "🔍 <b>جستجوی کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
@@ -1346,20 +1418,28 @@ async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
     return SEARCH_USER_ID
-
+    
 async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نتیجه جستجو"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
+    # ✅ اضافه کردن چک دسترسی
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_search_user"):
+        await update.message.reply_text("⛔ شما دسترسی به این بخش ندارید!")
+        return ConversationHandler.END
+    
     try:
-        user_id = int(update.message.text.strip())
-        user = get_user_info(user_id)
+        search_user_id = int(update.message.text.strip())
+        user = get_user_info(search_user_id)
         
         if not user:
             await update.message.reply_text("❌ کاربر یافت نشد!", reply_markup=back_to_admin_keyboard())
         else:
-            reminders = get_all_user_reminders(user_id)
+            reminders = get_all_user_reminders(search_user_id)
             active_reminders = len([r for r in reminders if r['is_active']])
             
             text = (
@@ -1374,9 +1454,9 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             keyboard = []
             if user['is_banned']:
-                keyboard.append([InlineKeyboardButton("🔓 آزادسازی", callback_data=f"admin_unban_{user_id}")])
+                keyboard.append([InlineKeyboardButton("🔓 آزادسازی", callback_data=f"admin_unban_{search_user_id}")])
             else:
-                keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{user_id}")])
+                keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{search_user_id}")])
             keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
             
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
