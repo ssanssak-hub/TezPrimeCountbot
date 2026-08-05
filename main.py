@@ -76,9 +76,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Button handler received: {data}")
     
-    # ⚠️ perm_ها رو مستقیم به handle_permission_toggle بفرست
+    # ⚠️ perm_ها و confirm/cancel ادمین
     if data.startswith("perm_"):
         await handle_permission_toggle(update, context)
+        return
+    
+    if data == "admin_confirm_add":
+        await confirm_add_admin(update, context)
+        return
+    
+    if data == "admin_cancel_add":
+        await cancel_add_admin(update, context)
         return
     
     user_id = update.effective_user.id
