@@ -88,19 +88,23 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return BROADCAST_TITLE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و پیام"""
+    """دریافت عنوان و پیام برای ارسال فوری"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
     message = update.message.text
+    broadcast_type = context.user_data.get('broadcast_type', 'now')
     step = context.user_data.get('broadcast_step', 'title')
     
+    # فقط برای ارسال فوری
     if step == 'title':
         context.user_data['broadcast']['title'] = message
         context.user_data['broadcast_step'] = 'message'
         
         await update.message.reply_text(
-            f"📝 عنوان: **{message}**\n\nحالا **متن پیام** را ارسال کنید:\n\n⚠️ این پیام به **همه کاربران** ارسال خواهد شد!",
+            f"📝 عنوان: **{message}**\n\n"
+            f"حالا **متن پیام** را ارسال کنید:\n\n"
+            f"⚠️ این پیام به **همه کاربران** ارسال خواهد شد!",
             reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
@@ -112,13 +116,18 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         users_count = get_total_users_count()
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ تایید ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
+            [InlineKeyboardButton("✅ تایید و ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
             [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
         ])
         
         await update.message.reply_text(
-            f"📢 **تایید نهایی**\n\n📌 عنوان: **{title}**\n📝 پیام: {message[:100]}...\n👥 گیرندگان: **{users_count}** کاربر\n\nآیا از ارسال اطمینان دارید؟",
-            reply_markup=keyboard, parse_mode='Markdown'
+            f"📢 **تایید نهایی**\n\n"
+            f"📌 عنوان: **{title}**\n"
+            f"📝 پیام: {message[:100]}...\n"
+            f"👥 گیرندگان: **{users_count}** کاربر\n\n"
+            f"آیا از ارسال اطمینان دارید؟",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
         )
         
         context.user_data.clear()
