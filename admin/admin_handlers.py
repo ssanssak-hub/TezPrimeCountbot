@@ -401,14 +401,12 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    # برنامه‌ریزی در scheduler
     from reminders.reminder_scheduler import scheduler
     from apscheduler.triggers.date import DateTrigger
     from datetime import datetime
     import pytz
     import asyncio
     
-    # زمان ارسال به UTC تبدیل کن
     tehran_tz = pytz.timezone('Asia/Tehran')
     run_date_tehran = datetime.strptime(
         f"{broadcast['send_date']} {broadcast['send_time']}:00",
@@ -417,9 +415,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     run_date_tehran = tehran_tz.localize(run_date_tehran)
     run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
-    # ⚠️ تابع sync برای scheduler
     def send_scheduled_broadcast_sync():
-        """تابع sync که داخلش async اجرا میشه"""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -437,21 +433,64 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
             loop.close()
     
     scheduler.add_job(
-        send_scheduled_broadcast_sync,  # ⚠️ تابع sync نه async
+        send_scheduled_broadcast_sync,
         trigger=DateTrigger(run_date=run_date_utc),
         id=f"broadcast_{broadcast_id}",
         replace_existing=True
     )
     
+    # ⚠️ نمایش تأیید با گرافیک
+    total_users = get_total_users_count()
+    
     await query.edit_message_text(
         f"✅ **پیام همگانی برنامه‌ریزی شد!**\n\n"
         f"📌 عنوان: **{broadcast['title']}**\n"
         f"📅 تاریخ: **{broadcast['send_date']}**\n"
-        f"🕐 ساعت تهران: **{broadcast['send_time']}**\n\n"
-        f"پیام در تاریخ و ساعت مشخص شده به همه کاربران ارسال خواهد شد.",
+        f"🕐 ساعت تهران: **{broadcast['send_time']}**\n"
+        f"👥 گیرندگان: **{total_users}** کاربر\n\n"
+        f"⏳ پیام در تاریخ مشخص شده ارسال خواهد شد.\n"
+        f"برای مشاهده وضعیت به **📋 پیام‌های همگانی** مراجعه کنید.",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
+async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_TYPE, broadcast_id: int):
+    """نمایش و آپدیت خودکار پیشرفت ارسال"""
+    import asyncio
+    
+    # ۳۰ بار چک کن (هر ۲ ثانیه = ۶۰ ثانیه)
+    for i in range(30):
+        progress_text = get_broadcast_progress_text(broadcast_id)
+        
+        # چک کن تموم شده یا نه
+        broadcasts = get_all_broadcasts()
+        for b in broadcasts:
+            if b['id'] == broadcast_id and b['total_users'] > 0:
+                total = b['total_users']
+                sent = b['sent_count']
+                failed = b['failed_count']
+                
+                if sent + failed >= total:
+                    # تموم شده - آخرین آپدیت
+                    final_text = get_broadcast_progress_text(broadcast_id)
+                    await update.effective_message.edit_text(
+                        final_text + "\n\n✅ **ارسال به پایان رسید!**",
+                        reply_markup=back_to_admin_keyboard(),
+                        parse_mode='Markdown'
+                    )
+                    return
+        
+        # آپدیت پیام
+        try:
+            await update.effective_message.edit_text(
+                progress_text,
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='Markdown'
+            )
+        except:
+            pass  # پیام تغییر نکرده
+        
+        await asyncio.sleep(2)
+        
 
 async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عملیات جاری را کنسل کن و به مدیریت پنل برگرد"""
@@ -485,7 +524,7 @@ async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("📋 **پیام‌های همگانی**", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='Markdown')
 
 async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """جزئیات پیام"""
+    """جزئیات پیام همگانی با گرافیک"""
     query = update.callback_query
     await query.answer()
     
@@ -500,8 +539,29 @@ async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if broadcast:
-        await query.edit_message_text(progress_text, reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']), parse_mode='Markdown')
-
+        # ⚠️ اگه در حال ارساله، آپدیت زنده کن
+        if not broadcast['is_sent'] and not broadcast['is_cancelled'] and broadcast['total_users'] > 0:
+            await query.edit_message_text(
+                progress_text + "\n\n⏳ **در حال ارسال...**",
+                reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
+                parse_mode='Markdown'
+            )
+            # شروع آپدیت خودکار
+            import asyncio
+            asyncio.create_task(show_broadcast_progress(update, context, broadcast_id))
+        else:
+            final_text = progress_text
+            if broadcast['is_sent']:
+                final_text += "\n\n✅ **ارسال به پایان رسید!**"
+            elif broadcast['is_cancelled']:
+                final_text += "\n\n⛔ **ارسال لغو شد!**"
+            
+            await query.edit_message_text(
+                final_text,
+                reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
+                parse_mode='Markdown'
+            )
+            
 async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو پیام"""
     query = update.callback_query
