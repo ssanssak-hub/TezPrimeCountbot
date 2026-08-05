@@ -58,24 +58,33 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
     # تابع ارسال پیام
     async def send_reminder():
         try:
-            # بررسی اینکه آیا امروز روز اعلان است
+            # لاگ برای دیباگ
             current_day = get_current_weekday()
+            logger.info(f"🔍 Reminder {reminder_id} triggered - Today: {current_day} ({get_weekday_name(current_day)}), Days: {days}")
+            
+            # بررسی اینکه آیا امروز روز اعلان است
             if current_day not in days:
+                logger.info(f"⏭️ Reminder {reminder_id} skipped - today ({current_day}) not in selected days {days}")
                 return
             
             # ارسال پیام
             day_name = get_weekday_name(current_day)
+            text = (
+                f"🔔 **یادآوری!**\n\n"
+                f"{message}\n\n"
+                f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}"
+            )
+            
+            logger.info(f"📤 Sending reminder {reminder_id} to user {user_id}")
             await bot.send_message(
                 chat_id=user_id,
-                text=f"🔔 **یادآوری!**\n\n"
-                     f"{message}\n\n"
-                     f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}",
+                text=text,
                 parse_mode='Markdown'
             )
             logger.info(f"✅ Reminder {reminder_id} sent to user {user_id}")
             
         except Exception as e:
-            logger.error(f"❌ Error sending reminder {reminder_id}: {e}")
+            logger.error(f"❌ Error sending reminder {reminder_id}: {e}", exc_info=True)
     
     # تبدیل ساعت تهران به UTC
     server_hour, server_minute = convert_to_server_time(hour, minute)
@@ -93,8 +102,9 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
             replace_existing=True
         )
         logger.info(f"✅ Reminder {reminder_id} scheduled for {server_hour:02d}:{server_minute:02d} UTC (Tehran: {hour:02d}:{minute:02d})")
+        logger.info(f"   Message: {message[:30]}... | Days: {days} | User: {user_id}")
     except Exception as e:
-        logger.error(f"❌ Error scheduling reminder {reminder_id}: {e}")
+        logger.error(f"❌ Error scheduling reminder {reminder_id}: {e}", exc_info=True)
 
 def remove_scheduled_reminder(reminder_id):
     """حذف یک اعلان از زمان‌بند"""
