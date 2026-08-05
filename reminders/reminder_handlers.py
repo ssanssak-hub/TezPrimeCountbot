@@ -535,19 +535,27 @@ async def activate_reminder_handler(update: Update, context: ContextTypes.DEFAUL
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بازگشت به منوی اصلی"""
+    import os
+    
     query = update.callback_query
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ⚠️ حالا user_id و admin_id رو پاس بده
+    keyboard = main_menu_keyboard(user_id=user_id, admin_id=admin_id)
+    
     if query:
         await query.answer()
         await query.edit_message_text(
             "🏠 **منوی اصلی**\n\n"
             "از دکمه‌های زیر استفاده کنید:",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=keyboard,
             parse_mode='Markdown'
         )
     else:
         await update.message.reply_text(
             "🏠 **منوی اصلی**",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=keyboard,
             parse_mode='Markdown'
         )
     
