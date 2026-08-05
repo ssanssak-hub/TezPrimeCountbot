@@ -525,20 +525,20 @@ async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def edit_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع ویرایش ادمین - نمایش لیست برای انتخاب"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    # ✅ اصلاح
+    # ✅ اصلاح: هم ادمین اصلی و هم دسترسی رو چک کن
     from database import check_admin_permission
     if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_edit_permissions"):
         await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
-        return
+        return  # ✅ اینجا نیازی به ConversationHandler.END نیست چون از کالبک اومده
     
     admins = get_all_admins()
-    # ... ادامه کد
     if not admins:
         await query.edit_message_text("📭 هیچ ادمین فرعی وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
@@ -810,9 +810,18 @@ async def confirm_delete_all(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_delete_all"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     delete_all_user_data()
     await query.edit_message_text("✅ همه داده‌ها حذف شد!", reply_markup=back_to_admin_keyboard())
-
+    
 # ---------- مدیریت ادمین‌ها ----------
 
 async def manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
