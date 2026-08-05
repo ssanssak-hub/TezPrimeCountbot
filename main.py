@@ -345,6 +345,10 @@ def main():
     init_reminder_db()
     init_admin_db()
     
+    # ⚠️ اول application رو بساز
+    application = Application.builder().token(TOKEN).build()
+    
+    # بعدش Handlerها رو اضافه کن
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -372,7 +376,6 @@ def main():
     )
     application.add_handler(admin_conv)
     
-    # ========== ConversationHandler برای ریمایندر ==========
     reminder_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
@@ -408,11 +411,9 @@ def main():
         await application.start()
         logger.info("✅ Application started")
         
-        # راه‌اندازی Scheduler
         from reminders.reminder_scheduler import start_scheduler
         start_scheduler()
         
-        # پرینت jobهای فعال
         from reminders.reminder_scheduler import scheduler
         jobs = scheduler.get_jobs()
         logger.info(f"📋 Active jobs: {len(jobs)}")
