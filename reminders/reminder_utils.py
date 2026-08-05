@@ -16,10 +16,11 @@ def get_weekday_name(day_num):
     return days[day_num]
 
 def convert_to_server_time(hour, minute):
-    """تبدیل ساعت تهران به ساعت سرور"""
-    # تهران ۹ صبح = سرور ۵:۱۰ صبح (تفاوت ۳:۵۰ ساعت)
-    # ساعت سرور = ساعت تهران - ۳:۵۰
-    total_minutes = (hour * 60 + minute) - (3 * 60 + 50)
+    """
+    تبدیل ساعت تهران به ساعت سرور (UTC)
+    تهران = UTC + 3:30
+    """
+    total_minutes = (hour * 60 + minute) - (3 * 60 + 30)  # کم کردن ۳:۳۰
     if total_minutes < 0:
         total_minutes += 24 * 60
     server_hour = total_minutes // 60
@@ -27,14 +28,17 @@ def convert_to_server_time(hour, minute):
     return server_hour, server_minute
 
 def convert_to_tehran_time(hour, minute):
-    """تبدیل ساعت سرور به ساعت تهران"""
-    total_minutes = (hour * 60 + minute) + (3 * 60 + 50)
+    """
+    تبدیل ساعت سرور (UTC) به ساعت تهران
+    تهران = UTC + 3:30
+    """
+    total_minutes = (hour * 60 + minute) + (3 * 60 + 30)  # اضافه کردن ۳:۳۰
     if total_minutes >= 24 * 60:
         total_minutes -= 24 * 60
     tehran_hour = total_minutes // 60
     tehran_minute = total_minutes % 60
     return tehran_hour, tehran_minute
-
+    
 def get_current_weekday():
     """گرفتن روز هفته فعلی (۰=شنبه)"""
     now = datetime.now(TEHRAN_TZ)
