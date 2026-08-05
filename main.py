@@ -332,7 +332,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}", exc_info=context.error)
     if update and update.effective_message:
         try:
-            await update.effective_message.reply_text("❌ خطایی رخ داد! لطفاً /start را بزنید.")
+            await update.effective_message.reply_text(
+                "❌ خطایی رخ داد! لطفاً /start را بزنید."
+                # ⚠️ parse_mode رو بردار
+            )
         except:
             pass
 
