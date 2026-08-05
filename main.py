@@ -16,8 +16,23 @@ from reminders.reminder_handlers import (
     REMINDER_MESSAGE, REMINDER_DAYS, REMINDER_TIME
 )
 
+# Import پنل ادمین
+from admin.admin_handlers import (
+    admin_panel, broadcast_now_start, broadcast_now_message, confirm_broadcast,
+    admin_stats, admin_bot_status_menu, toggle_bot, delete_all_data, confirm_delete_all,
+    manage_admins, add_admin_start, add_admin_execute,
+    remove_admin_start, remove_admin_execute, list_admins,
+    manage_users, ban_user_start, ban_user_execute,
+    unban_user_start, unban_user_execute, banned_list,
+    search_user_start, search_user_result,
+    broadcasts_list, broadcast_detail, cancel_broadcast, delete_broadcast_handler,
+    BROADCAST_TITLE, BROADCAST_MESSAGE,
+    BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
+)
+from admin.admin_database import init_admin_db
+
 # Import دیتابیس
-from database import init_db
+from database import init_db, is_user_admin, is_bot_active, is_user_banned as db_is_banned
 from reminders.reminder_database import init_reminder_db, get_all_user_reminders, get_user_reminders
 from reminders.reminder_keyboards import main_menu_keyboard, reminder_menu_keyboard
 
@@ -49,7 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from database import save_user
     save_user(user_id, user.username, user.first_name, user.last_name)
     
-    keyboard = main_menu_keyboard()
+    keyboard = main_menu_keyboard(user_id=user_id, admin_id=ADMIN_ID)
     
     await update.message.reply_text(
         f"سلام {user.first_name}! 👋\n"
@@ -65,6 +80,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Button handler received: {data}")
     
+    user_id = update.effective_user.id
+    is_admin, _ = is_user_admin(user_id, ADMIN_ID)
+    
+    # چک خاموش بودن ربات (فقط ادمین می‌تونه استفاده کنه)
+    if not is_bot_active() and not is_admin:
+        await query.edit_message_text("🔴 ربات در حال حاضر غیرفعال است. لطفاً بعداً مراجعه کنید.")
+        return
+    
+    # چک بن بودن کاربر
+    if not is_admin and db_is_banned(user_id):
+        await query.edit_message_text("🚫 شما از ربات بن شده‌اید!")
+        return
+    
+    # ---- دکمه‌های اصلی ----
     if data == "notifications":
         await reminder_menu(update, context)
     elif data == "set_reminder":
@@ -75,6 +104,66 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_delete_list(update, context)
     elif data == "cancel_reminder":
         await show_cancel_list(update, context)
+    
+    # ---- پنل ادمین ----
+    elif data == "admin_panel":
+        await admin_panel(update, context)
+    elif data == "admin_broadcast_now":
+        await broadcast_now_start(update, context)
+    elif data == "admin_broadcasts_list":
+        await broadcasts_list(update, context)
+    elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
+        await broadcast_detail(update, context)
+    elif data.startswith("admin_cancel_broadcast_"):
+        await cancel_broadcast(update, context)
+    elif data.startswith("admin_delete_broadcast_"):
+        await delete_broadcast_handler(update, context)
+    elif data.startswith("admin_confirm_broadcast_"):
+        await confirm_broadcast(update, context)
+    elif data == "admin_stats":
+        await admin_stats(update, context)
+    elif data == "admin_bot_status":
+        await admin_bot_status_menu(update, context)
+    elif data == "admin_toggle_bot":
+        await toggle_bot(update, context)
+    elif data == "admin_delete_all_data":
+        await delete_all_data(update, context)
+    elif data == "admin_confirm_delete":
+        await confirm_delete_all(update, context)
+    elif data == "admin_manage_admins":
+        await manage_admins(update, context)
+    elif data == "admin_add_admin":
+        await add_admin_start(update, context)
+    elif data.startswith("admin_remove_") and "broadcast" not in data:
+        await remove_admin_execute(update, context)
+    elif data == "admin_list_admins":
+        await list_admins(update, context)
+    elif data == "admin_manage_users":
+        await manage_users(update, context)
+    elif data == "admin_ban_user":
+        await ban_user_start(update, context)
+    elif data.startswith("admin_ban_"):
+        try:
+            user_id_to_ban = int(data.split("_")[-1])
+            from database import ban_user as db_ban
+            db_ban(user_id_to_ban)
+            await query.edit_message_text(f"🚫 کاربر `{user_id_to_ban}` بن شد!", parse_mode='Markdown',
+                                         reply_markup=InlineKeyboardMarkup([[
+                                             InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
+                                         ]]))
+        except Exception as e:
+            logger.error(f"Error banning user: {e}")
+            await query.edit_message_text("❌ خطا در بن کردن کاربر!")
+    elif data == "admin_unban_user":
+        await unban_user_start(update, context)
+    elif data.startswith("admin_unban_"):
+        await unban_user_execute(update, context)
+    elif data == "admin_banned_list":
+        await banned_list(update, context)
+    elif data == "admin_search_user":
+        await search_user_start(update, context)
+    
+    # ---- دکمه‌های اعلان ----
     elif data.startswith("view_"):
         try:
             reminder_id = int(data.split("_")[1])
@@ -103,10 +192,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (IndexError, ValueError) as e:
             logger.error(f"Invalid activate callback: {data}, error: {e}")
             await query.edit_message_text("❌ خطا در فعال‌سازی اعلان!")
+    
+    # ---- بازگشت‌ها ----
     elif data == "back_to_main":
         await back_to_main(update, context)
     elif data == "back_to_notifications":
         await back_to_notifications(update, context)
+    
     else:
         logger.warning(f"Unknown callback data: {data}")
 
@@ -144,7 +236,7 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست اعلان‌های فعال برای لغو"""
     query = update.callback_query
     user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)  # فقط فعال‌ها
+    reminders = get_user_reminders(user_id)
     
     if not reminders:
         await query.edit_message_text(
@@ -170,6 +262,18 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    is_admin, _ = is_user_admin(user_id, ADMIN_ID)
+    
+    # چک خاموش بودن
+    if not is_bot_active() and not is_admin:
+        return
+    
+    # چک بن
+    if db_is_banned(user_id):
+        await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
+        return
+    
     if context.user_data.get('awaiting_message'):
         await set_reminder_message(update, context)
     else:
@@ -233,10 +337,45 @@ def main():
     
     init_db()
     init_reminder_db()
+    init_admin_db()
     
     application = Application.builder().token(TOKEN).build()
     
-    conv_handler = ConversationHandler(
+    # ConversationHandler برای ارسال پیام همگانی
+    broadcast_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$")],
+        states={
+            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
+            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
+        },
+        fallbacks=[CallbackQueryHandler(admin_panel, pattern="^admin_panel$")],
+        name="broadcast_conversation",
+        per_message=False,
+        allow_reentry=True
+    )
+    application.add_handler(broadcast_conv)
+    
+    # ConversationHandler برای مدیریت ادمین
+    admin_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(ban_user_start, pattern="^admin_ban_user$"),
+            CallbackQueryHandler(add_admin_start, pattern="^admin_add_admin$"),
+            CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
+        ],
+        states={
+            BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
+            ADD_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute)],
+            SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
+        },
+        fallbacks=[CallbackQueryHandler(admin_panel, pattern="^admin_panel$")],
+        name="admin_conversation",
+        per_message=False,
+        allow_reentry=True
+    )
+    application.add_handler(admin_conv)
+    
+    # ConversationHandler برای ریمایندر
+    reminder_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
             REMINDER_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder_message)],
@@ -248,7 +387,7 @@ def main():
         per_message=False,
         allow_reentry=True
     )
-    application.add_handler(conv_handler)
+    application.add_handler(reminder_conv)
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
@@ -300,4 +439,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-
