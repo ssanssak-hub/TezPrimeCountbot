@@ -761,14 +761,14 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
         name = admin['first_name'] or 'ناشناس'
         keyboard.append([InlineKeyboardButton(
             f"👤 {name} ({admin['user_id']})", 
-            callback_data=f"admin_remove_{admin['user_id']}"  # ⚠️ این user_id واقعی رو می‌ده
+            callback_data=f"admin_remove_{admin['user_id']}"
         )])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_admins")])
     
     await query.edit_message_text(
-        "➖ **حذف ادمین**\n\nادمین مورد نظر را انتخاب کنید:",
+        "➖ <b>حذف ادمین</b>\n\nادمین مورد نظر را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        parse_mode='HTML'  # ⚠️ فقط اینو HTML کن
     )
 
 async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
