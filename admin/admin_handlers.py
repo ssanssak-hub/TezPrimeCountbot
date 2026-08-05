@@ -226,7 +226,7 @@ async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT
 # ---------- آمار ----------
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """آمار"""
+    """آمار و گزارشات"""
     query = update.callback_query
     await query.answer()
     
@@ -239,15 +239,23 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_users = get_total_users_count()
     active_users = len(get_all_active_users())
     banned_users = len(get_banned_users())
-    admins = len(get_all_admins())
+    sub_admins = get_all_admins()
     broadcasts = get_all_broadcasts()
     pending = len([b for b in broadcasts if not b['is_sent'] and not b['is_cancelled']])
     
     text = (
-        f"📊 **آمار و گزارشات**\n━━━━━━━━━━━━━━━━\n\n"
-        f"👥 کاربران: {total_users} (فعال: {active_users}, بن: {banned_users})\n"
-        f"👑 ادمین‌ها: {admins}\n"
-        f"📢 پیام‌ها: {len(broadcasts)} (در انتظار: {pending})\n"
+        f"📊 **آمار و گزارشات**\n"
+        f"━━━━━━━━━━━━━━━━\n\n"
+        f"👑 **ادمین‌ها:**\n"
+        f"   🔸 ادمین اصلی: ۱\n"
+        f"   🔹 ادمین فرعی: {len(sub_admins)}\n\n"
+        f"👥 **کاربران:**\n"
+        f"   کل: {total_users}\n"
+        f"   فعال: {active_users}\n"
+        f"   بن شده: {banned_users}\n\n"
+        f"📢 **پیام‌های همگانی:**\n"
+        f"   کل: {len(broadcasts)}\n"
+        f"   در انتظار: {pending}\n"
     )
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
