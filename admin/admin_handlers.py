@@ -42,7 +42,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    is_admin, admin_type = is_user_admin(user_id, admin_id)
+    is_admin, admin_type, _ = is_user_admin(user_id, admin_id)
     
     if not is_admin:
         if query:
@@ -58,10 +58,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"از منوی زیر استفاده کنید:"
     )
     
+    # ⚠️ کیبورد با user_id/admin_id
+    keyboard = admin_panel_keyboard(user_id=user_id, admin_id=admin_id)
+    
     if query:
-        await query.edit_message_text(text, reply_markup=admin_panel_keyboard(), parse_mode='HTML')
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
     else:
-        await update.message.reply_text(text, reply_markup=admin_panel_keyboard(), parse_mode='HTML')
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 # ---------- ارسال پیام همگانی فوری ----------
 
@@ -690,7 +693,7 @@ async def manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("👥 <b>مدیریت ادمین‌ها</b>", reply_markup=admin_manage_admins_keyboard(), parse_mode='HTML')
 
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """افزودن ادمین"""
+    """افزودن ادمین - مرحله ۱: دریافت user_id"""
     query = update.callback_query
     await query.answer()
     
@@ -701,36 +704,133 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     context.user_data['awaiting_message'] = True
-    context.user_data['awaiting_admin'] = True  # ⚠️ اینو اضافه کن
+    context.user_data['awaiting_admin'] = True
+    context.user_data['new_admin_permissions'] = []
+    context.user_data['new_admin_step'] = 'user_id'
     
     await query.edit_message_text(
-        "➕ <b>افزودن ادمین</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
+        "➕ <b>افزودن ادمین - مرحله ۱/۳</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
     return ADD_ADMIN_ID
 
 async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اجرای افزودن ادمین"""
+    """مرحله ۲: دریافت user_id و نمایش انتخاب دسترسی"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
     try:
-        user_id = int(update.message.text.strip())
-        db_add_admin(user_id)
+        new_admin_id = int(update.message.text.strip())
+        context.user_data['new_admin_id'] = new_admin_id
+        context.user_data['new_admin_step'] = 'permissions'
         
         await update.message.reply_text(
-            f"✅ کاربر <code>{user_id}</code> ادمین شد!",
-            parse_mode='HTML',
-            reply_markup=back_to_admin_keyboard()
+            f"➕ <b>افزودن ادمین - مرحله ۲/۳</b>\n\n"
+            f"🆔 کاربر: <code>{new_admin_id}</code>\n\n"
+            f"دسترسی‌های مورد نظر را انتخاب کنید:",
+            reply_markup=permissions_selection_keyboard([]),
+            parse_mode='HTML'
         )
+        return ADD_ADMIN_ID
     except ValueError:
         await update.message.reply_text(
-            "❌ شناسه نامعتبر!",
+            "❌ شناسه نامعتبر! دوباره تلاش کنید:",
             reply_markup=back_to_admin_keyboard()
         )
+        return ADD_ADMIN_ID
+
+async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تاگل دسترسی‌ها (شیشه‌ای)"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    selected = context.user_data.get('new_admin_permissions', [])
+    
+    if data == "perm_all":
+        # انتخاب همه
+        from admin.admin_keyboards import PERMISSION_BUTTONS
+        selected = [code for _, code in PERMISSION_BUTTONS]
+        context.user_data['new_admin_permissions'] = selected
+    elif data == "perm_none":
+        # حذف همه
+        selected = []
+        context.user_data['new_admin_permissions'] = []
+    elif data == "perm_done":
+        # رفتن به تأیید نهایی
+        new_admin_id = context.user_data.get('new_admin_id')
+        perms = context.user_data.get('new_admin_permissions', [])
+        
+        from admin.admin_keyboards import PERMISSION_BUTTONS, get_permission_name
+        perm_names = [get_permission_name(p) for p in perms]
+        perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
+        
+        await query.edit_message_text(
+            f"📢 <b>تایید نهایی - مرحله ۳/۳</b>\n\n"
+            f"🆔 کاربر: <code>{new_admin_id}</code>\n\n"
+            f"<b>دسترسی‌ها:</b>\n{perm_text}\n\n"
+            f"آیا تأیید می‌کنید؟",
+            reply_markup=admin_confirm_add_keyboard(),
+            parse_mode='HTML'
+        )
+        return ADD_ADMIN_ID
+    elif data.startswith("perm_toggle_"):
+        perm = data.replace("perm_toggle_", "")
+        if perm in selected:
+            selected.remove(perm)
+        else:
+            selected.append(perm)
+        context.user_data['new_admin_permissions'] = selected
+    
+    # آپدیت کیبورد
+    await query.edit_message_text(
+        f"➕ <b>افزودن ادمین - مرحله ۲/۳</b>\n\n"
+        f"🆔 کاربر: <code>{context.user_data.get('new_admin_id')}</code>\n\n"
+        f"دسترسی‌های انتخاب شده: {len(selected)} مورد\n"
+        f"دسترسی‌های مورد نظر را انتخاب کنید:",
+        reply_markup=permissions_selection_keyboard(selected),
+        parse_mode='HTML'
+    )
+    return ADD_ADMIN_ID
+
+
+async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تأیید نهایی و ذخیره ادمین"""
+    query = update.callback_query
+    await query.answer()
+    
+    new_admin_id = context.user_data.get('new_admin_id')
+    permissions = context.user_data.get('new_admin_permissions', [])
+    perms_str = ','.join(permissions) if permissions else ''
+    
+    db_add_admin(new_admin_id, perms_str)
+    
+    from admin.admin_keyboards import get_permission_name
+    perm_names = [get_permission_name(p) for p in permissions]
+    perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
+    
+    await query.edit_message_text(
+        f"✅ <b>ادمین با موفقیت افزوده شد!</b>\n\n"
+        f"🆔 کاربر: <code>{new_admin_id}</code>\n\n"
+        f"<b>دسترسی‌ها:</b>\n{perm_text}",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
     
     context.user_data.clear()
+    return ConversationHandler.END
+
+async def cancel_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو افزودن ادمین"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data.clear()
+    await query.edit_message_text(
+        "❌ افزودن ادمین لغو شد.",
+        reply_markup=back_to_admin_keyboard()
+    )
     return ConversationHandler.END
 
 async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -773,24 +873,35 @@ async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لیست ادمین‌ها"""
+    """لیست ادمین‌ها با دسترسی‌ها"""
     query = update.callback_query
     await query.answer()
     
     admins = get_all_admins()
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    text = f"👑 <b>لیست ادمین‌ها:</b>\n\n🔸 ادمین اصلی: <code>{admin_id}</code>\n\n"
+    text = f"👑 <b>لیست ادمین‌ها:</b>\n\n🔸 ادمین اصلی: <code>{admin_id}</code>\n🔹 دسترسی: همه موارد\n\n"
+    
     if admins:
         text += "<b>ادمین‌های فرعی:</b>\n"
         for admin in admins:
             name = admin['first_name'] or 'ناشناس'
+            permissions = admin['admin_permissions'] or ''
+            
+            if permissions == 'all' or permissions == '':
+                perm_text = "همه موارد"
+            else:
+                from admin.admin_keyboards import get_permission_name
+                perms = permissions.split(',')
+                perm_text = ', '.join([get_permission_name(p) for p in perms])
+            
             text += f"   👤 {name} (<code>{admin['user_id']}</code>)\n"
+            text += f"      🔹 {perm_text}\n"
     else:
         text += "📭 هیچ ادمین فرعی وجود ندارد"
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
-
+    
 # ---------- مدیریت کاربران ----------
 
 async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
