@@ -13,6 +13,13 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 bot = Bot(token=TOKEN)
 
+# ⚠️ افزایش connection pool
+request = HTTPXRequest(
+    connection_pool_size=20,  # حداکثر ۲۰ کانکشن همزمان
+    pool_timeout=30  # تایم‌اوت ۳۰ ثانیه
+)
+bot = Bot(token=TOKEN, request=request)
+
 logger = logging.getLogger(__name__)
 
 async def send_broadcast_now(broadcast_id, admin_id, title, message):
