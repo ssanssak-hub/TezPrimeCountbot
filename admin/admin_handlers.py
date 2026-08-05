@@ -818,6 +818,28 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
     
+    # ⚠️ ارسال پیام به کاربر جدید
+    try:
+        from telegram import Bot
+        import os
+        bot = Bot(token=os.getenv('TOKEN'))
+        
+        perm_names_text = "\n".join([f"🔹 {n}" for n in perm_names]) if perm_names else "🔹 دسترسی محدود"
+        
+        await bot.send_message(
+            chat_id=new_admin_id,
+            text=(
+                f"🎉 <b>تبریک! شما به عنوان ادمین منصوب شدید!</b>\n\n"
+                f"👑 <b>پنل مدیریت</b> به منوی اصلی شما اضافه شد.\n\n"
+                f"<b>دسترسی‌های شما:</b>\n{perm_names_text}\n\n"
+                f"برای مشاهده پنل، /start را بزنید."
+            ),
+            parse_mode='HTML'
+        )
+        logger.info(f"📩 Notification sent to new admin {new_admin_id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to notify new admin {new_admin_id}: {e}")
+    
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -871,6 +893,21 @@ async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYP
         parse_mode='HTML',
         reply_markup=back_to_admin_keyboard()
     )
+    
+    # ⚠️ ارسال پیام به کاربر حذف شده
+    try:
+        from telegram import Bot
+        import os
+        bot = Bot(token=os.getenv('TOKEN'))
+        await bot.send_message(
+            chat_id=user_id,
+            text="📢 <b>دسترسی ادمین شما لغو شد.</b>\n\nدیگر به پنل مدیریت دسترسی ندارید.",
+            parse_mode='HTML'
+        )
+        logger.info(f"📩 Notification sent to removed admin {user_id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to notify removed admin {user_id}: {e}")
+
     
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لیست ادمین‌ها با دسترسی‌ها"""
