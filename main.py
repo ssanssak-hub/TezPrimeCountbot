@@ -113,7 +113,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_broadcasts_list":
         await broadcasts_list(update, context)
     elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
-        await broadcast_detail(update, context)
+        if data.startswith("admin_broadcast_scheduled"):
+            await broadcast_scheduled_start(update, context)
+        elif data.startswith("admin_broadcast_now"):
+            pass  # توسط ConversationHandler مدیریت میشه
+        elif data.startswith("admin_cancel_broadcast_"):
+            await cancel_broadcast(update, context)
+        elif data.startswith("admin_delete_broadcast_"):
+            await delete_broadcast_handler(update, context)
+        elif data.startswith("admin_confirm_broadcast_"):
+            await confirm_broadcast(update, context)
+        else:
+            await broadcast_detail(update, context)
     elif data.startswith("admin_cancel_broadcast_"):
         await cancel_broadcast(update, context)
     elif data.startswith("admin_delete_broadcast_"):
