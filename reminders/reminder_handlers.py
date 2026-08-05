@@ -1,5 +1,5 @@
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from .reminder_keyboards import (
     reminder_menu_keyboard, days_keyboard, time_keyboard,
@@ -7,7 +7,8 @@ from .reminder_keyboards import (
     main_menu_keyboard
 )
 from .reminder_database import (
-    save_reminder, get_user_reminders, delete_reminder, cancel_reminder
+    save_reminder, get_user_reminders, get_all_user_reminders,
+    delete_reminder, cancel_reminder, activate_reminder
 )
 from .reminder_utils import get_weekday_name, get_persian_datetime
 from .reminder_scheduler import schedule_reminder
@@ -53,7 +54,7 @@ async def handle_reminder_buttons(update: Update, context: ContextTypes.DEFAULT_
         await show_cancel_reminders(update, context)
 
 async def set_reminder_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع فرآیند تنظیم اعلان"""
+    """شروع فرآیند تنظیم اعلان - مرحله ۱: عنوان"""
     query = update.callback_query
     await query.answer()
     
@@ -62,11 +63,16 @@ async def set_reminder_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['selected_days'] = []
     context.user_data['hour'] = None
     context.user_data['minute'] = None
+    context.user_data['step'] = 'title'
     
     await query.edit_message_text(
-        "📝 **تنظیم اعلان جدید**\n\n"
-        "لطفاً پیام یادآوری را ارسال کنید:\n"
-        "(مثلاً: جلسه ساعت ۱۰ صبح)",
+        "📝 **تنظیم اعلان جدید - مرحله ۱/۳**\n\n"
+        "لطفاً **عنوان** اعلان را ارسال کنید:\n"
+        "(مثلاً: جلسه هفتگی، کنکور، یادآوری دارو)\n\n"
+        "🔙 برای بازگشت /cancel را بزنید",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")
+        ]]),
         parse_mode='Markdown'
     )
     
@@ -74,21 +80,42 @@ async def set_reminder_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return REMINDER_MESSAGE
 
 async def set_reminder_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت پیام اعلان"""
+    """دریافت عنوان و پیام اعلان"""
     message = update.message.text
-    context.user_data['reminder']['message'] = message
-    context.user_data['awaiting_message'] = False
+    step = context.user_data.get('step', 'title')
     
-    # نمایش انتخاب روزهای هفته
-    await update.message.reply_text(
-        "📅 **انتخاب روزهای هفته**\n\n"
-        "روزهای مورد نظر را انتخاب کنید:\n"
-        f"📌 **راهنما:** {get_persian_datetime()}",
-        reply_markup=days_keyboard(),
-        parse_mode='Markdown'
-    )
+    if step == 'title':
+        # ذخیره عنوان و درخواست پیام
+        context.user_data['reminder']['title'] = message
+        context.user_data['step'] = 'message'
+        
+        await update.message.reply_text(
+            "📝 **تنظیم اعلان جدید - مرحله ۲/۳**\n\n"
+            f"عنوان: **{message}**\n\n"
+            "حالا لطفاً **متن پیام** یادآوری را ارسال کنید:\n"
+            "(مثلاً: جلسه امروز ساعت ۱۰ صبح در اتاق کنفرانس)\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return REMINDER_MESSAGE
     
-    return REMINDER_DAYS
+    elif step == 'message':
+        # ذخیره پیام و رفتن به انتخاب روزها
+        context.user_data['reminder']['message'] = message
+        context.user_data['awaiting_message'] = False
+        context.user_data['step'] = 'days'
+        
+        await update.message.reply_text(
+            "📅 **مرحله ۳/۳ - انتخاب روزهای هفته**\n\n"
+            "روزهای مورد نظر را انتخاب کنید:\n"
+            f"📌 **راهنما:** {get_persian_datetime()}",
+            reply_markup=days_keyboard(),
+            parse_mode='Markdown'
+        )
+        return REMINDER_DAYS
 
 async def set_reminder_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت انتخاب روزهای هفته"""
@@ -98,7 +125,6 @@ async def set_reminder_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if data == "days_done":
-        # بررسی اینکه حداقل یک روز انتخاب شده
         if not context.user_data.get('selected_days'):
             await query.edit_message_text(
                 "❌ لطفاً حداقل یک روز را انتخاب کنید!",
@@ -106,7 +132,6 @@ async def set_reminder_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return REMINDER_DAYS
         
-        # رفتن به مرحله انتخاب زمان
         await query.edit_message_text(
             "🕐 **انتخاب زمان**\n\n"
             "ساعت و دقیقه مورد نظر را انتخاب کنید:\n"
@@ -144,7 +169,6 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if data == "time_done":
-        # بررسی اینکه ساعت و دقیقه انتخاب شده
         hour = context.user_data.get('hour')
         minute = context.user_data.get('minute')
         
@@ -152,20 +176,22 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ لطفاً هم ساعت و هم دقیقه را انتخاب کنید!", show_alert=True)
             return REMINDER_TIME
         
-        # ذخیره اعلان در دیتابیس
         user_id = update.effective_user.id
+        title = context.user_data['reminder'].get('title', 'بدون عنوان')
         message = context.user_data['reminder']['message']
         days = context.user_data['selected_days']
         
-        reminder_id = save_reminder(user_id, message, days, hour, minute)
+        # ذخیره در دیتابیس
+        reminder_id = save_reminder(user_id, title, message, days, hour, minute)
         
         # برنامه‌ریزی تسک
-        await schedule_reminder(reminder_id, user_id, message, days, hour, minute)
+        await schedule_reminder(reminder_id, user_id, title, message, days, hour, minute)
         
         # نمایش پیام موفقیت
         days_text = ", ".join([get_weekday_name(d) for d in days])
         await query.edit_message_text(
             f"✅ **اعلان با موفقیت تنظیم شد!**\n\n"
+            f"📌 **عنوان:** {title}\n"
             f"📝 **پیام:** {message}\n"
             f"📅 **روزها:** {days_text}\n"
             f"🕐 **زمان:** {hour:02d}:{minute:02d}\n\n"
@@ -178,7 +204,6 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     elif data == "time_page_0":
-        # رفتن به صفحه انتخاب ساعت
         await query.edit_message_text(
             "🕐 **انتخاب ساعت**\n\n"
             "لطفاً ساعت مورد نظر را انتخاب کنید:",
@@ -192,7 +217,6 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return REMINDER_TIME
     
     elif data == "time_page_1":
-        # رفتن به صفحه انتخاب دقیقه
         hour = context.user_data.get('hour')
         if hour is None:
             await query.answer("❌ لطفاً اول ساعت را انتخاب کنید!", show_alert=True)
@@ -216,7 +240,6 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['hour'] = hour
         await query.answer(f"✅ ساعت {hour:02d} انتخاب شد")
         
-        # بروزرسانی کیبورد (هنوز در صفحه ساعت)
         await query.edit_message_text(
             f"🕐 **انتخاب ساعت**\n\n"
             f"ساعت انتخاب شده: {hour:02d}\n\n"
@@ -235,7 +258,6 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['minute'] = minute
         await query.answer(f"✅ دقیقه {minute:02d} انتخاب شد")
         
-        # بروزرسانی کیبورد (در صفحه دقیقه)
         await query.edit_message_text(
             f"🕐 **انتخاب دقیقه**\n\n"
             f"دقیقه انتخاب شده: {minute:02d}\n"
@@ -251,16 +273,15 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return REMINDER_TIME
     
     elif data == "noop":
-        # دکمه غیرفعال - هیچ کاری نکن
         return REMINDER_TIME
 
 async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست اعلان‌ها"""
+    """نمایش لیست همه اعلان‌ها (فعال و غیرفعال)"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
+    reminders = get_all_user_reminders(user_id)
     
     if not reminders:
         await query.edit_message_text(
@@ -274,9 +295,13 @@ async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "📋 **لیست اعلان‌های شما:**\n\n"
     for r in reminders:
         days = ", ".join([get_weekday_name(int(d)) for d in r['days_of_week'].split(',')])
-        text += f"🆔 {r['id']}: {r['message']}\n"
+        status = "✅ فعال" if r['is_active'] else "⛔ غیرفعال"
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        
+        text += f"🆔 {r['id']}: **{title}**\n"
+        text += f"   📝 {r['message'][:30]}...\n"
         text += f"   📅 {days} | 🕐 {r['hour']:02d}:{r['minute']:02d}\n"
-        text += f"   {'✅ فعال' if r['is_active'] else '❌ غیرفعال'}\n\n"
+        text += f"   📊 {status}\n\n"
     
     await query.edit_message_text(
         text,
@@ -284,14 +309,122 @@ async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def show_delete_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست اعلان‌ها برای حذف"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    reminders = get_all_user_reminders(user_id)
+    
+    if not reminders:
+        await query.edit_message_text(
+            "📭 هیچ اعلانی برای حذف وجود ندارد!",
+            reply_markup=reminder_menu_keyboard()
+        )
+        return
+    
+    keyboard = []
+    for r in reminders:
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        status = "✅" if r['is_active'] else "⛔"
+        text = f"{status} 🗑️ {title[:25]}..."
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"delete_{r['id']}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
+    
+    await query.edit_message_text(
+        "🗑️ **حذف اعلان**\n\n"
+        "⚠️ با حذف، اعلان کاملاً پاک می‌شود!\n"
+        "برای غیرفعال کردن موقت از گزینه لغو استفاده کنید.\n\n"
+        "اعلان مورد نظر برای حذف را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
 
-async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حذف اعلان"""
+async def show_cancel_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست اعلان‌ها برای لغو (غیرفعال کردن)"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    reminders = get_user_reminders(user_id)  # فقط فعال‌ها
+    
+    if not reminders:
+        await query.edit_message_text(
+            "📭 هیچ اعلان فعالی برای لغو وجود ندارد!",
+            reply_markup=reminder_menu_keyboard()
+        )
+        return
+    
+    keyboard = []
+    for r in reminders:
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        text = f"⛔ {title[:25]}..."
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"cancel_{r['id']}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
+    
+    await query.edit_message_text(
+        "⛔ **لغو اعلان**\n\n"
+        "اعلان غیرفعال می‌شود ولی پاک نمی‌شود.\n"
+        "بعداً می‌توانید دوباره فعالش کنید.\n\n"
+        "اعلان مورد نظر برای لغو را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def view_reminder_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش جزئیات یک اعلان خاص"""
     query = update.callback_query
     await query.answer()
     
     try:
-        # استخراج ID از callback_data
+        reminder_id = int(query.data.split("_")[1])
+        user_id = update.effective_user.id
+        
+        reminders = get_all_user_reminders(user_id)
+        reminder = None
+        
+        for r in reminders:
+            if r['id'] == reminder_id:
+                reminder = r
+                break
+        
+        if not reminder:
+            await query.edit_message_text(
+                "❌ اعلان مورد نظر یافت نشد!",
+                reply_markup=reminder_menu_keyboard()
+            )
+            return
+        
+        days = ", ".join([get_weekday_name(int(d)) for d in reminder['days_of_week'].split(',')])
+        status = "✅ فعال" if reminder['is_active'] else "⛔ غیرفعال"
+        title = reminder['title'] if reminder['title'] else 'بدون عنوان'
+        
+        text = (
+            f"📋 **جزئیات اعلان**\n\n"
+            f"🆔 شناسه: {reminder['id']}\n"
+            f"📌 عنوان: **{title}**\n"
+            f"📝 پیام: {reminder['message']}\n"
+            f"📅 روزها: {days}\n"
+            f"🕐 زمان: {reminder['hour']:02d}:{reminder['minute']:02d}\n"
+            f"📊 وضعیت: {status}\n"
+        )
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reminder_action_keyboard(reminder_id, reminder['is_active']),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error viewing reminder detail: {e}")
+        await query.edit_message_text(
+            "❌ خطا در نمایش جزئیات اعلان!",
+            reply_markup=reminder_menu_keyboard()
+        )
+
+async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حذف کامل اعلان"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
         data = query.data
         if not data.startswith("delete_"):
             await query.edit_message_text("❌ خطا در پردازش درخواست!")
@@ -300,8 +433,11 @@ async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reminder_id = int(data.split("_")[1])
         user_id = update.effective_user.id
         
-        from .reminder_database import delete_reminder as delete_reminder_db
-        delete_reminder_db(reminder_id, user_id)
+        delete_reminder(reminder_id, user_id)
+        
+        # حذف از scheduler
+        from .reminder_scheduler import remove_scheduled_reminder
+        remove_scheduled_reminder(reminder_id)
         
         await query.edit_message_text(
             "✅ **اعلان با موفقیت حذف شد!**",
@@ -317,12 +453,11 @@ async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لغو اعلان (غیرفعال کردن)"""
+    """غیرفعال کردن اعلان"""
     query = update.callback_query
     await query.answer()
     
     try:
-        # استخراج ID از callback_data
         data = query.data
         if not data.startswith("cancel_"):
             await query.edit_message_text("❌ خطا در پردازش درخواست!")
@@ -331,12 +466,15 @@ async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reminder_id = int(data.split("_")[1])
         user_id = update.effective_user.id
         
-        from .reminder_database import cancel_reminder as cancel_reminder_db
-        cancel_reminder_db(reminder_id, user_id)
+        cancel_reminder(reminder_id, user_id)
+        
+        # حذف از scheduler
+        from .reminder_scheduler import remove_scheduled_reminder
+        remove_scheduled_reminder(reminder_id)
         
         await query.edit_message_text(
-            "⛔ **اعلان با موفقیت لغو شد!**\n\n"
-            "برای فعال کردن مجدد، اعلان جدید تنظیم کنید.",
+            "⛔ **اعلان غیرفعال شد!**\n\n"
+            "اعلان پاک نشده و می‌توانید بعداً از طریق مشاهده اعلان‌ها دوباره فعالش کنید.",
             reply_markup=reminder_menu_keyboard(),
             parse_mode='Markdown'
         )
@@ -346,6 +484,42 @@ async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ خطا در لغو اعلان!",
             reply_markup=reminder_menu_keyboard(),
             parse_mode='Markdown'
+        )
+
+async def activate_reminder_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """فعال‌سازی مجدد اعلان"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        data = query.data
+        reminder_id = int(data.split("_")[1])
+        user_id = update.effective_user.id
+        
+        # فعال کردن در دیتابیس
+        activate_reminder(reminder_id, user_id)
+        
+        # دوباره به scheduler اضافه کن
+        reminders = get_all_user_reminders(user_id)
+        for r in reminders:
+            if r['id'] == reminder_id:
+                await schedule_reminder(
+                    r['id'], r['user_id'], r['title'], r['message'],
+                    [int(d) for d in r['days_of_week'].split(',')],
+                    r['hour'], r['minute']
+                )
+                break
+        
+        await query.edit_message_text(
+            "✅ **اعلان با موفقیت فعال شد!**",
+            reply_markup=reminder_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error activating reminder: {e}")
+        await query.edit_message_text(
+            "❌ خطا در فعال‌سازی اعلان!",
+            reply_markup=reminder_menu_keyboard()
         )
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -366,7 +540,6 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
     
-    # پاک کردن داده‌های کاربر
     context.user_data.clear()
 
 async def back_to_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -374,52 +547,3 @@ async def back_to_notifications(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     await reminder_menu(update, context)
-
-async def view_reminder_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش جزئیات یک اعلان خاص"""
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        reminder_id = int(query.data.split("_")[1])
-        user_id = update.effective_user.id
-        
-        reminders = get_user_reminders(user_id)
-        reminder = None
-        
-        for r in reminders:
-            if r['id'] == reminder_id:
-                reminder = r
-                break
-        
-        if not reminder:
-            await query.edit_message_text(
-                "❌ اعلان مورد نظر یافت نشد!",
-                reply_markup=reminder_menu_keyboard()
-            )
-            return
-        
-        days = ", ".join([get_weekday_name(int(d)) for d in reminder['days_of_week'].split(',')])
-        status = "✅ فعال" if reminder['is_active'] else "❌ غیرفعال"
-        
-        text = (
-            f"📋 **جزئیات اعلان**\n\n"
-            f"🆔 شناسه: {reminder['id']}\n"
-            f"📝 پیام: {reminder['message']}\n"
-            f"📅 روزها: {days}\n"
-            f"🕐 زمان: {reminder['hour']:02d}:{reminder['minute']:02d}\n"
-            f"📊 وضعیت: {status}\n"
-        )
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reminder_action_keyboard(reminder_id),
-            parse_mode='Markdown'
-        )
-        
-    except Exception as e:
-        logger.error(f"Error viewing reminder detail: {e}")
-        await query.edit_message_text(
-            "❌ خطا در نمایش جزئیات اعلان!",
-            reply_markup=reminder_menu_keyboard()
-        )
