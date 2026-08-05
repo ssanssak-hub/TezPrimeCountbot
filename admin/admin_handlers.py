@@ -155,7 +155,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- پیام همگانی زمان‌بندی شده ----------
 
 async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع زمان‌بندی"""
+    """شروع پیام همگانی زمان‌بندی شده - مرحله عنوان"""
     query = update.callback_query
     await query.answer()
     
@@ -163,12 +163,261 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     admin_id = int(os.getenv('ADMIN_ID'))
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
-        return
+        return ConversationHandler.END
+    
+    context.user_data['broadcast'] = {}
+    context.user_data['broadcast_type'] = 'scheduled'
+    context.user_data['broadcast_step'] = 'title'
+    context.user_data['awaiting_message'] = True
     
     await query.edit_message_text(
-        "⏰ **پیام همگانی زمان‌بندی شده**\n\n"
-        "⚠️ این قابلیت به زودی اضافه می‌شود.\n"
-        "فعلاً از ارسال فوری استفاده کنید.",
+        "📝 **پیام همگانی زمان‌بندی شده - مرحله ۱/۴**\n\n"
+        "لطفاً **عنوان** پیام را ارسال کنید:\n"
+        "(مثلاً: اطلاعیه مهم، تخفیف ویژه)",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='Markdown'
+    )
+    return BROADCAST_TITLE
+
+
+async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت عنوان و پیام برای زمان‌بندی"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
+    message = update.message.text
+    step = context.user_data.get('broadcast_step', 'title')
+    
+    if step == 'title':
+        context.user_data['broadcast']['title'] = message
+        context.user_data['broadcast_step'] = 'message'
+        
+        await update.message.reply_text(
+            f"📝 **مرحله ۲/۴**\n\n"
+            f"عنوان: **{message}**\n\n"
+            f"حالا لطفاً **متن پیام** را ارسال کنید:",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='Markdown'
+        )
+        return BROADCAST_MESSAGE
+    
+    elif step == 'message':
+        context.user_data['broadcast']['message'] = message
+        context.user_data['broadcast_step'] = 'date'
+        
+        # کیبورد انتخاب تاریخ (فردا تا ۷ روز آینده)
+        from datetime import datetime, timedelta
+        keyboard = []
+        today = datetime.now()
+        
+        for i in range(1, 8):
+            date = today + timedelta(days=i)
+            date_str = date.strftime("%Y-%m-%d")
+            persian_date = get_persian_datetime()  # از utils خودت استفاده کن
+            keyboard.append([InlineKeyboardButton(
+                f"📅 {date_str}",
+                callback_data=f"broadcast_date_{date_str}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
+        
+        await update.message.reply_text(
+            f"📅 **مرحله ۳/۴ - انتخاب تاریخ**\n\n"
+            f"عنوان: **{context.user_data['broadcast']['title']}**\n"
+            f"پیام: {message[:50]}...\n\n"
+            f"تاریخ ارسال را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return BROADCAST_DATE
+
+
+async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """انتخاب تاریخ و رفتن به انتخاب ساعت"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "admin_panel":
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    date_str = query.data.split("_")[-1]  # مثلاً 2026-08-06
+    context.user_data['broadcast']['date'] = date_str
+    context.user_data['broadcast_step'] = 'time'
+    
+    # کیبورد انتخاب ساعت (۰ تا ۲۳)
+    keyboard = []
+    hour_row = []
+    for h in range(24):
+        hour_row.append(InlineKeyboardButton(f"{h:02d}", callback_data=f"broadcast_hour_{h}"))
+        if len(hour_row) == 6:
+            keyboard.append(hour_row)
+            hour_row = []
+    if hour_row:
+        keyboard.append(hour_row)
+    
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
+    
+    await query.edit_message_text(
+        f"🕐 **مرحله ۴/۴ - انتخاب ساعت**\n\n"
+        f"📅 تاریخ: **{date_str}**\n\n"
+        f"لطفاً **ساعت** ارسال را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return BROADCAST_TIME
+
+
+async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """انتخاب ساعت و دقیقه و ثبت نهایی"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "admin_panel":
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    data = query.data
+    
+    if data.startswith("broadcast_hour_"):
+        hour = int(data.split("_")[-1])
+        context.user_data['broadcast']['hour'] = hour
+        
+        # کیبورد انتخاب دقیقه (۰ تا ۵۵ با گام ۵)
+        keyboard = []
+        minute_row = []
+        for m in range(0, 60, 5):
+            minute_row.append(InlineKeyboardButton(f"{m:02d}", callback_data=f"broadcast_minute_{m}"))
+            if len(minute_row) == 6:
+                keyboard.append(minute_row)
+                minute_row = []
+        if minute_row:
+            keyboard.append(minute_row)
+        
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت به انتخاب ساعت", callback_data="broadcast_back_to_hour")])
+        
+        await query.edit_message_text(
+            f"🕐 **انتخاب دقیقه**\n\n"
+            f"ساعت انتخاب شده: **{hour:02d}**\n\n"
+            f"لطفاً **دقیقه** را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return BROADCAST_TIME
+    
+    elif data.startswith("broadcast_minute_"):
+        minute = int(data.split("_")[-1])
+        
+        title = context.user_data['broadcast']['title']
+        message = context.user_data['broadcast']['message']
+        date = context.user_data['broadcast']['date']
+        hour = context.user_data['broadcast']['hour']
+        
+        # ذخیره در دیتابیس
+        broadcast_id = save_broadcast(update.effective_user.id, title, message, date, f"{hour:02d}:{minute:02d}")
+        
+        # زمان‌بندی
+        from apscheduler.triggers.date import DateTrigger
+        from datetime import datetime
+        from reminders.reminder_scheduler import scheduler
+        
+        run_date = datetime.strptime(f"{date} {hour:02d}:{minute:02d}:00", "%Y-%m-%d %H:%M:%S")
+        
+        scheduler.add_job(
+            lambda: None,  # جایگزین با تابع ارسال
+            trigger=DateTrigger(run_date=run_date),
+            id=f"broadcast_{broadcast_id}",
+            replace_existing=True
+        )
+        
+        # تایید نهایی
+        total_users = get_total_users_count()
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ تایید و برنامه‌ریزی", callback_data=f"admin_confirm_scheduled_{broadcast_id}")],
+            [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
+        ])
+        
+        await query.edit_message_text(
+            f"📢 **تایید نهایی**\n\n"
+            f"📌 عنوان: **{title}**\n"
+            f"📝 پیام: {message[:100]}...\n"
+            f"📅 تاریخ: **{date}**\n"
+            f"🕐 ساعت: **{hour:02d}:{minute:02d}**\n"
+            f"👥 گیرندگان: **{total_users}** کاربر\n\n"
+            f"آیا تأیید می‌کنید؟",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    elif data == "broadcast_back_to_hour":
+        # برگشت به انتخاب ساعت
+        keyboard = []
+        hour_row = []
+        for h in range(24):
+            hour_row.append(InlineKeyboardButton(f"{h:02d}", callback_data=f"broadcast_hour_{h}"))
+            if len(hour_row) == 6:
+                keyboard.append(hour_row)
+                hour_row = []
+        if hour_row:
+            keyboard.append(hour_row)
+        
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
+        
+        await query.edit_message_text(
+            "🕐 **انتخاب ساعت**\n\nلطفاً ساعت ارسال را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return BROADCAST_TIME
+
+
+async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تایید نهایی پیام زمان‌بندی شده"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    
+    broadcasts = get_all_broadcasts()
+    broadcast = None
+    for b in broadcasts:
+        if b['id'] == broadcast_id:
+            broadcast = b
+            break
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    # برنامه‌ریزی واقعی ارسال
+    from reminders.reminder_scheduler import scheduler
+    from apscheduler.triggers.date import DateTrigger
+    from datetime import datetime
+    
+    run_date = datetime.strptime(
+        f"{broadcast['send_date']} {broadcast['send_time']}:00",
+        "%Y-%m-%d %H:%M:%S"
+    )
+    
+    async def send_scheduled_broadcast():
+        await send_broadcast_now(broadcast_id, broadcast['admin_id'], broadcast['title'], broadcast['message'])
+    
+    scheduler.add_job(
+        send_scheduled_broadcast,
+        trigger=DateTrigger(run_date=run_date),
+        id=f"broadcast_{broadcast_id}",
+        replace_existing=True
+    )
+    
+    await query.edit_message_text(
+        f"✅ **پیام همگانی برنامه‌ریزی شد!**\n\n"
+        f"📌 عنوان: **{broadcast['title']}**\n"
+        f"📅 تاریخ: **{broadcast['send_date']}**\n"
+        f"🕐 ساعت: **{broadcast['send_time']}**\n\n"
+        f"پیام در تاریخ مشخص شده به همه کاربران ارسال خواهد شد.",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
