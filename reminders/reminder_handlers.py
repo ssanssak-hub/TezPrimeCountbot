@@ -7,8 +7,12 @@ from .reminder_keyboards import (
     main_menu_keyboard
 )
 from .reminder_database import (
-    save_reminder, get_user_reminders, get_all_user_reminders,
-    delete_reminder, cancel_reminder, activate_reminder
+    save_reminder as db_save_reminder,
+    get_user_reminders as db_get_user_reminders,
+    get_all_user_reminders as db_get_all_user_reminders,
+    delete_reminder as db_delete_reminder,
+    cancel_reminder as db_cancel_reminder,
+    activate_reminder as db_activate_reminder
 )
 from .reminder_utils import get_weekday_name, get_persian_datetime
 from .reminder_scheduler import schedule_reminder
@@ -182,7 +186,7 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         days = context.user_data['selected_days']
         
         # ذخیره در دیتابیس
-        reminder_id = save_reminder(user_id, title, message, days, hour, minute)
+        reminder_id = db_save_reminder(user_id, title, message, days, hour, minute)
         
         # برنامه‌ریزی تسک
         await schedule_reminder(reminder_id, user_id, title, message, days, hour, minute)
@@ -281,7 +285,7 @@ async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
-    reminders = get_all_user_reminders(user_id)
+    reminders = db_get_all_user_reminders(user_id)
     
     if not reminders:
         await query.edit_message_text(
@@ -313,7 +317,7 @@ async def show_delete_reminders(update: Update, context: ContextTypes.DEFAULT_TY
     """نمایش لیست اعلان‌ها برای حذف"""
     query = update.callback_query
     user_id = update.effective_user.id
-    reminders = get_all_user_reminders(user_id)
+    reminders = db_get_all_user_reminders(user_id)
     
     if not reminders:
         await query.edit_message_text(
@@ -343,7 +347,7 @@ async def show_cancel_reminders(update: Update, context: ContextTypes.DEFAULT_TY
     """نمایش لیست اعلان‌ها برای لغو (غیرفعال کردن)"""
     query = update.callback_query
     user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)  # فقط فعال‌ها
+    reminders = db_get_user_reminders(user_id)  # فقط فعال‌ها
     
     if not reminders:
         await query.edit_message_text(
@@ -377,7 +381,7 @@ async def view_reminder_detail(update: Update, context: ContextTypes.DEFAULT_TYP
         reminder_id = int(query.data.split("_")[1])
         user_id = update.effective_user.id
         
-        reminders = get_all_user_reminders(user_id)
+        reminders = db_get_all_user_reminders(user_id)
         reminder = None
         
         for r in reminders:
@@ -433,11 +437,14 @@ async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reminder_id = int(data.split("_")[1])
         user_id = update.effective_user.id
         
-        delete_reminder(reminder_id, user_id)
+        db_delete_reminder(reminder_id, user_id)
         
-        # حذف از scheduler
+        # حذف از scheduler (اگه خطا داد بی‌خیال شو)
         from .reminder_scheduler import remove_scheduled_reminder
-        remove_scheduled_reminder(reminder_id)
+        try:
+            remove_scheduled_reminder(reminder_id)
+        except Exception as e:
+            logger.warning(f"Scheduler removal warning (job may not exist): {e}")
         
         await query.edit_message_text(
             "✅ **اعلان با موفقیت حذف شد!**",
@@ -466,11 +473,15 @@ async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reminder_id = int(data.split("_")[1])
         user_id = update.effective_user.id
         
-        cancel_reminder(reminder_id, user_id)
+        # غیرفعال کردن در دیتابیس
+        db_cancel_reminder(reminder_id, user_id)
         
-        # حذف از scheduler
+        # حذف از scheduler (اگه خطا داد بی‌خیال شو - ممکنه job وجود نداشته باشه)
         from .reminder_scheduler import remove_scheduled_reminder
-        remove_scheduled_reminder(reminder_id)
+        try:
+            remove_scheduled_reminder(reminder_id)
+        except Exception as e:
+            logger.warning(f"Scheduler removal warning (job may not exist): {e}")
         
         await query.edit_message_text(
             "⛔ **اعلان غیرفعال شد!**\n\n"
@@ -497,10 +508,10 @@ async def activate_reminder_handler(update: Update, context: ContextTypes.DEFAUL
         user_id = update.effective_user.id
         
         # فعال کردن در دیتابیس
-        activate_reminder(reminder_id, user_id)
+        db_activate_reminder(reminder_id, user_id)
         
         # دوباره به scheduler اضافه کن
-        reminders = get_all_user_reminders(user_id)
+        reminders = db_get_all_user_reminders(user_id)
         for r in reminders:
             if r['id'] == reminder_id:
                 await schedule_reminder(
