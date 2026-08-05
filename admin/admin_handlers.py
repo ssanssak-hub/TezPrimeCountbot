@@ -457,39 +457,45 @@ async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_
     """نمایش و آپدیت خودکار پیشرفت ارسال"""
     import asyncio
     
-    # ۳۰ بار چک کن (هر ۲ ثانیه = ۶۰ ثانیه)
-    for i in range(30):
+    last_text = ""
+    
+    for i in range(60):  # حداکثر ۶۰ بار
         progress_text = get_broadcast_progress_text(broadcast_id)
         
-        # چک کن تموم شده یا نه
-        broadcasts = get_all_broadcasts()
-        for b in broadcasts:
-            if b['id'] == broadcast_id and b['total_users'] > 0:
-                total = b['total_users']
-                sent = b['sent_count']
-                failed = b['failed_count']
-                
-                if sent + failed >= total:
-                    # تموم شده - آخرین آپدیت
-                    final_text = get_broadcast_progress_text(broadcast_id)
-                    await update.effective_message.edit_text(
-                        final_text + "\n\n✅ **ارسال به پایان رسید!**",
-                        reply_markup=back_to_admin_keyboard(),
-                        parse_mode='Markdown'
-                    )
-                    return
+        # فقط اگه متن تغییر کرده آپدیت کن
+        if progress_text != last_text:
+            last_text = progress_text
+            
+            broadcasts = get_all_broadcasts()
+            for b in broadcasts:
+                if b['id'] == broadcast_id and b['total_users'] > 0:
+                    total = b['total_users']
+                    sent = b['sent_count']
+                    failed = b['failed_count']
+                    
+                    if sent + failed >= total:
+                        final_text = get_broadcast_progress_text(broadcast_id)
+                        try:
+                            await update.effective_message.edit_text(
+                                final_text + "\n\n✅ **ارسال به پایان رسید!**",
+                                reply_markup=back_to_admin_keyboard(),
+                                parse_mode='Markdown'
+                            )
+                        except:
+                            pass
+                        return
+            
+            try:
+                await update.effective_message.edit_text(
+                    progress_text,
+                    reply_markup=back_to_admin_keyboard(),
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
         
-        # آپدیت پیام
-        try:
-            await update.effective_message.edit_text(
-                progress_text,
-                reply_markup=back_to_admin_keyboard(),
-                parse_mode='Markdown'
-            )
-        except:
-            pass  # پیام تغییر نکرده
-        
-        await asyncio.sleep(2)
+        # ⚠️ هر ۱.۵ ثانیه چک کن (نه ۲ ثانیه)
+        await asyncio.sleep(1.5)
         
 
 async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
