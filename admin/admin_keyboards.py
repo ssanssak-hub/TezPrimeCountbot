@@ -57,7 +57,7 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="back_to_main")])
     return InlineKeyboardMarkup(keyboard)
 
-def permissions_selection_keyboard(selected_permissions):
+def permissions_selection_keyboard(selected_permissions, is_edit=False):
     """کیبورد انتخاب دسترسی‌ها (شیشه‌ای/toggle)"""
     keyboard = []
     
@@ -68,16 +68,19 @@ def permissions_selection_keyboard(selected_permissions):
             callback_data=f"perm_toggle_{code}"
         )])
     
-    # ردیف دکمه‌های کنترلی
     keyboard.append([
         InlineKeyboardButton("✅ دسترسی به همه", callback_data="perm_all"),
         InlineKeyboardButton("❌ حذف همه", callback_data="perm_none")
     ])
-    keyboard.append([InlineKeyboardButton("✅ ادامه", callback_data="perm_done")])
+    
+    if is_edit:
+        keyboard.append([InlineKeyboardButton("💾 ذخیره تغییرات", callback_data="admin_save_permissions")])
+    else:
+        keyboard.append([InlineKeyboardButton("✅ ادامه", callback_data="perm_done")])
+    
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_admins")])
     
     return InlineKeyboardMarkup(keyboard)
-
 
 def admin_confirm_add_keyboard():
     """کیبورد تأیید نهایی افزودن ادمین"""
@@ -94,6 +97,7 @@ def admin_manage_admins_keyboard():
     keyboard = [
         [InlineKeyboardButton("➕ افزودن ادمین", callback_data="admin_add_admin")],
         [InlineKeyboardButton("➖ حذف ادمین", callback_data="admin_remove_admin")],
+        [InlineKeyboardButton("✏️ ویرایش دسترسی ادمین", callback_data="admin_edit_admin")],
         [InlineKeyboardButton("📋 لیست ادمین‌ها", callback_data="admin_list_admins")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
