@@ -20,7 +20,9 @@ from reminders.reminder_handlers import (
 from admin.admin_handlers import (
     admin_panel, 
     broadcast_now_start, broadcast_now_message, confirm_broadcast,
-    broadcast_scheduled_start, broadcast_scheduled_message, broadcast_scheduled_date, broadcast_scheduled_time, confirm_scheduled_broadcast,
+    broadcast_scheduled_start, broadcast_scheduled_message, 
+    broadcast_scheduled_date, broadcast_scheduled_time, confirm_scheduled_broadcast,
+    admin_cancel,  # ⚠️ اینو اضافه کن
     admin_stats, admin_bot_status_menu, toggle_bot, delete_all_data, confirm_delete_all,
     manage_admins, add_admin_start, add_admin_execute,
     remove_admin_start, remove_admin_execute, list_admins,
@@ -348,7 +350,6 @@ def main():
     # ⚠️ اول application رو بساز
     application = Application.builder().token(TOKEN).build()
     
-    # بعدش Handlerها رو اضافه کن
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -358,7 +359,10 @@ def main():
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
-            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
+            BROADCAST_TITLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),  # ⚠️ اینو اضافه کن
+            ],
             BROADCAST_MESSAGE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
@@ -369,7 +373,10 @@ def main():
             ADD_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute)],
             SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
         },
-        fallbacks=[CallbackQueryHandler(admin_panel, pattern="^admin_panel$")],
+        fallbacks=[
+            CommandHandler("cancel", admin_cancel),  # ⚠️ اضافه کن
+            CallbackQueryHandler(admin_panel, pattern="^admin_panel$"),
+        ],
         name="admin_conversation",
         per_message=False,
         allow_reentry=True
