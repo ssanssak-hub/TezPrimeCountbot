@@ -11,7 +11,7 @@ from reminders.reminder_handlers import (
     reminder_menu, handle_reminder_buttons, 
     set_reminder_start, set_reminder_message,
     set_reminder_days, set_reminder_time,
-    view_reminders, delete_reminder, cancel_reminder,
+    view_reminders, view_reminder_detail, delete_reminder, cancel_reminder,
     back_to_main, back_to_notifications,
     REMINDER_MESSAGE, REMINDER_DAYS, REMINDER_TIME
 )
