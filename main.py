@@ -216,10 +216,6 @@ def main():
     init_db()
     init_reminder_db()
     
-    # ⚠️ راه‌اندازی Scheduler - این خط رو اضافه کن!
-    from reminders.reminder_scheduler import start_scheduler
-    start_scheduler()
-    
     application = Application.builder().token(TOKEN).build()
     
     conv_handler = ConversationHandler(
@@ -256,6 +252,18 @@ def main():
         await application.initialize()
         await application.start()
         logger.info("✅ Application started")
+        
+        # ⚠️ راه‌اندازی Scheduler - اینجا که event loop آماده است!
+        from reminders.reminder_scheduler import start_scheduler
+        start_scheduler()
+        
+        # پرینت jobهای فعال
+        from reminders.reminder_scheduler import scheduler
+        jobs = scheduler.get_jobs()
+        logger.info(f"📋 Active jobs: {len(jobs)}")
+        for job in jobs:
+            logger.info(f"  - Job: {job.id}, Next run: {job.next_run_time}")
+        
         await asyncio.Event().wait()
     
     import threading
@@ -271,6 +279,6 @@ def main():
     logger.info(f"🚀 Starting Flask server on port {port}")
     
     flask_app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
-
+    
 if __name__ == "__main__":
     main()
