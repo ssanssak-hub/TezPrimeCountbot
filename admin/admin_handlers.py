@@ -617,13 +617,22 @@ async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     broadcasts = get_all_broadcasts()
     if not broadcasts:
         await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
     
     await query.edit_message_text("📋 <b>پیام‌های همگانی</b>", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='HTML')
-
+    
 async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """جزئیات پیام همگانی با گرافیک"""
     query = update.callback_query
@@ -689,13 +698,10 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی!")
-        return
-    
+    # ✅ اصلاح: هم ادمین اصلی و هم دسترسی رو چک کن
     from database import check_admin_permission
-    if not check_admin_permission(user_id, admin_id, "perm_stats"):
-        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_stats"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
         return
     
     total_users = get_total_users_count()
@@ -762,13 +768,22 @@ async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text(text, reply_markup=admin_bot_status_keyboard(is_active), parse_mode='HTML')
 
 async def toggle_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تغییر وضعیت"""
+    """تغییر وضعیت ربات"""
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_bot_status"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     new_status = toggle_bot_status()
     await query.edit_message_text(f"🤖 ربات {'🟢 روشن' if new_status else '🔴 خاموش'} شد!", reply_markup=back_to_admin_keyboard())
-
+    
 async def delete_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -822,8 +837,11 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی!")
+    
+    # ✅ اصلاح: هم ادمین اصلی و هم دسترسی رو چک کن
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
         return ConversationHandler.END
     
     context.user_data['awaiting_message'] = True
@@ -1000,6 +1018,15 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     admins = get_all_admins()
     if not admins:
         await query.edit_message_text("📭 هیچ ادمین فرعی وجود ندارد!", reply_markup=back_to_admin_keyboard())
@@ -1103,8 +1130,18 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی کاربران"""
     query = update.callback_query
     await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     await query.edit_message_text("🚫 <b>مدیریت کاربران</b>", reply_markup=admin_manage_users_keyboard(), parse_mode='HTML')
-
+    
 async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع بن"""
     query = update.callback_query
