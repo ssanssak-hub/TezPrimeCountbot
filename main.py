@@ -357,8 +357,14 @@ def main():
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
-            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message)],
-            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message)],
+            BROADCAST_TITLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
+            ],
+            BROADCAST_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
+            ],
             BROADCAST_DATE: [CallbackQueryHandler(broadcast_scheduled_date, pattern="^broadcast_date_")],
             BROADCAST_TIME: [CallbackQueryHandler(broadcast_scheduled_time, pattern="^broadcast_")],
             BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
