@@ -415,17 +415,27 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     run_date_tehran = tehran_tz.localize(run_date_tehran)
     run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
+    # ⚠️ ذخیره chat_id ادمین برای ارسال گزارش
+    admin_chat_id = update.effective_user.id
+    
     def send_scheduled_broadcast_sync():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(
+            # ارسال پیام همگانی
+            result = loop.run_until_complete(
                 send_broadcast_now(
                     broadcast_id, 
                     broadcast['admin_id'], 
                     broadcast['title'], 
                     broadcast['message']
                 )
+            )
+            sent, failed, total = result
+            
+            # ⚠️ ارسال گزارش به ادمین
+            loop.run_until_complete(
+                send_broadcast_report(admin_chat_id, broadcast['title'], sent, failed, total)
             )
         except Exception as e:
             logger.error(f"❌ Scheduled broadcast error: {e}", exc_info=True)
@@ -439,7 +449,6 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         replace_existing=True
     )
     
-    # ⚠️ نمایش تأیید با گرافیک
     total_users = get_total_users_count()
     
     await query.edit_message_text(
@@ -449,10 +458,12 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         f"🕐 ساعت تهران: **{broadcast['send_time']}**\n"
         f"👥 گیرندگان: **{total_users}** کاربر\n\n"
         f"⏳ پیام در تاریخ مشخص شده ارسال خواهد شد.\n"
-        f"برای مشاهده وضعیت به **📋 پیام‌های همگانی** مراجعه کنید.",
+        f"📊 گزارش ارسال برای شما فرستاده می‌شود.",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
+
+
 async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_TYPE, broadcast_id: int):
     """نمایش و آپدیت خودکار پیشرفت ارسال"""
     import asyncio
