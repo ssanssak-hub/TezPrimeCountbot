@@ -740,145 +740,56 @@ async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ADD_ADMIN_ID
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تاگل دسترسی‌ها (شیشه‌ای)"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
-    logger.info(f"Button handler received: {data}")
+    selected = context.user_data.get('new_admin_permissions', [])
     
-    # ⚠️ perm_ها رو مستقیم به handle_permission_toggle بفرست
-    if data.startswith("perm_"):
-        await handle_permission_toggle(update, context)
-        return
+    if data == "perm_all":
+        from admin.admin_keyboards import PERMISSION_BUTTONS
+        selected = [code for _, code in PERMISSION_BUTTONS]
+        context.user_data['new_admin_permissions'] = selected
+    elif data == "perm_none":
+        selected = []
+        context.user_data['new_admin_permissions'] = []
+    elif data == "perm_done":
+        new_admin_id = context.user_data.get('new_admin_id')
+        perms = context.user_data.get('new_admin_permissions', [])
+        
+        from admin.admin_keyboards import PERMISSION_BUTTONS, get_permission_name
+        perm_names = [get_permission_name(p) for p in perms]
+        perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
+        
+        await query.edit_message_text(
+            f"📢 <b>تایید نهایی - مرحله ۳/۳</b>\n\n"
+            f"🆔 کاربر: <code>{new_admin_id}</code>\n\n"
+            f"<b>دسترسی‌ها:</b>\n{perm_text}\n\n"
+            f"آیا تأیید می‌کنید؟",
+            reply_markup=admin_confirm_add_keyboard(),
+            parse_mode='HTML'
+        )
+        return ADD_ADMIN_ID
+    elif data.startswith("perm_toggle_"):
+        perm = data.replace("perm_toggle_", "")
+        if perm in selected:
+            selected.remove(perm)
+        else:
+            selected.append(perm)
+        context.user_data['new_admin_permissions'] = selected
     
-    user_id = update.effective_user.id
-    is_admin, _ = is_user_admin(user_id, ADMIN_ID)
-    
-    if not is_bot_active() and not is_admin:
-        await query.edit_message_text("🔴 ربات در حال حاضر غیرفعال است. لطفاً بعداً مراجعه کنید.")
-        return
-    
-    if not is_admin and db_is_banned(user_id):
-        await query.edit_message_text("🚫 شما از ربات بن شده‌اید!")
-        return
-    
-    # ---- دکمه‌های اصلی ----
-    if data == "notifications":
-        await reminder_menu(update, context)
-    elif data == "set_reminder":
-        await set_reminder_start(update, context)
-    elif data == "view_reminders":
-        await view_reminders(update, context)
-    elif data == "delete_reminder":
-        await show_delete_list(update, context)
-    elif data == "cancel_reminder":
-        await show_cancel_list(update, context)
-    
-    # ---- پنل ادمین ----
-    elif data == "admin_panel":
-        await admin_panel(update, context)
-    elif data == "admin_broadcast_now":
-        await broadcast_now_start(update, context)
-    elif data == "admin_broadcast_scheduled":
-        await broadcast_scheduled_start(update, context)
-    elif data == "admin_broadcasts_list":
-        await broadcasts_list(update, context)
-    elif data.startswith("admin_confirm_scheduled_"):
-        await confirm_scheduled_broadcast(update, context)
-    elif data.startswith("admin_cancel_broadcast_"):
-        await cancel_broadcast(update, context)
-    elif data.startswith("admin_delete_broadcast_"):
-        await delete_broadcast_handler(update, context)
-    elif data.startswith("admin_confirm_broadcast_"):
-        await confirm_broadcast(update, context)
-    elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
-        await broadcast_detail(update, context)
-    elif data == "admin_stats":
-        await admin_stats(update, context)
-    elif data == "admin_bot_status":
-        await admin_bot_status_menu(update, context)
-    elif data == "admin_toggle_bot":
-        await toggle_bot(update, context)
-    elif data == "admin_delete_all_data":
-        await delete_all_data(update, context)
-    elif data == "admin_confirm_delete":
-        await confirm_delete_all(update, context)
-    elif data == "admin_manage_admins":
-        await manage_admins(update, context)
-    elif data == "admin_add_admin":
-        await add_admin_start(update, context)
-    elif data == "admin_remove_admin":
-        await remove_admin_start(update, context)
-    elif data.startswith("admin_remove_") and data != "admin_remove_admin":
-        await remove_admin_execute(update, context)
-    elif data == "admin_list_admins":
-        await list_admins(update, context)
-    elif data == "admin_manage_users":
-        await manage_users(update, context)
-    elif data == "admin_ban_user":
-        await ban_user_start(update, context)
-    elif data.startswith("admin_ban_"):
-        try:
-            user_id_to_ban = int(data.split("_")[-1])
-            from database import ban_user as db_ban
-            db_ban(user_id_to_ban)
-            await query.edit_message_text(
-                f"🚫 کاربر <code>{user_id_to_ban}</code> بن شد!",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
-                ]])
-            )
-        except Exception as e:
-            logger.error(f"Error banning user: {e}")
-            await query.edit_message_text("❌ خطا در بن کردن کاربر!")
-    elif data == "admin_unban_user":
-        await unban_user_start(update, context)
-    elif data.startswith("admin_unban_"):
-        await unban_user_execute(update, context)
-    elif data == "admin_banned_list":
-        await banned_list(update, context)
-    elif data == "admin_search_user":
-        await search_user_start(update, context)
-    
-    # ---- دکمه‌های اعلان ----
-    elif data.startswith("view_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await view_reminder_detail(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid view callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در نمایش اعلان!")
-    elif data.startswith("delete_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await delete_reminder(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid delete callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در حذف اعلان!")
-    elif data.startswith("cancel_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await cancel_reminder(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid cancel callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در لغو اعلان!")
-    elif data.startswith("activate_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await activate_reminder_handler(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid activate callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در فعال‌سازی اعلان!")
-    
-    elif data == "back_to_main":
-        await back_to_main(update, context)
-    elif data == "back_to_notifications":
-        await back_to_notifications(update, context)
-    
-    else:
-        logger.warning(f"Unknown callback data: {data}")
+    # آپدیت کیبورد
+    await query.edit_message_text(
+        f"➕ <b>افزودن ادمین - مرحله ۲/۳</b>\n\n"
+        f"🆔 کاربر: <code>{context.user_data.get('new_admin_id')}</code>\n\n"
+        f"دسترسی‌های انتخاب شده: {len(selected)} مورد\n"
+        f"دسترسی‌های مورد نظر را انتخاب کنید:",
+        reply_markup=permissions_selection_keyboard(selected),
+        parse_mode='HTML'
+    )
+    return ADD_ADMIN_ID
 
 async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تأیید نهایی و ذخیره ادمین"""
