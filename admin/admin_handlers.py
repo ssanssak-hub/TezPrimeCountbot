@@ -9,7 +9,8 @@ from database import (
     get_banned_users, is_user_banned, get_user_info,
     add_admin as db_add_admin, remove_admin as db_remove_admin,
     get_all_admins, get_bot_status, toggle_bot_status,
-    delete_all_user_data, is_user_admin
+    delete_all_user_data, is_user_admin,
+    check_admin_permission
 )
 from reminders.reminder_database import get_all_user_reminders
 from admin.admin_keyboards import (
@@ -18,7 +19,7 @@ from admin.admin_keyboards import (
     admin_broadcasts_list_keyboard, broadcast_action_keyboard,
     back_to_admin_keyboard, permissions_selection_keyboard,   
     admin_confirm_add_keyboard,
-    get_permission_name 
+    get_permission_name
 )
 from admin.admin_database import (
     init_admin_db, save_broadcast, get_all_broadcasts,
@@ -179,16 +180,15 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    # بررسی دسترسی ادمین اصلی
-    if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی!")
-        return ConversationHandler.END
-    
-    # بررسی مجوز دسترسی به broadcast زمان‌بندی شده
+    # ✅ اصلاح: اول دسترسی رو چک کن، بعد ادمین اصلی بودن
     from database import check_admin_permission
-    if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
-        await query.edit_message_text("⛔ شما دسترسی ندارید!")
-        return ConversationHandler.END
+    
+    # اگه ادمین اصلی نیست، چک کن دسترسی داره یا نه
+    if user_id != admin_id:
+        if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
+            await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+            return ConversationHandler.END
+    # اگه ادمین اصلی هست، نیازی به چک دسترسی نیست
     
     context.user_data['broadcast'] = {}
     context.user_data['broadcast_type'] = 'scheduled'
@@ -525,11 +525,20 @@ async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def edit_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع ویرایش ادمین - نمایش لیست برای انتخاب"""
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اصلاح
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_edit_permissions"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     admins = get_all_admins()
+    # ... ادامه کد
     if not admins:
         await query.edit_message_text("📭 هیچ ادمین فرعی وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
@@ -716,22 +725,20 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- وضعیت ربات ----------
 
 async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """وضعیت ربات"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی!")
-        return
-
+    
+    # ✅ اصلاح
     from database import check_admin_permission
-    if not check_admin_permission(user_id, admin_id, "perm_bot_status"):
-        await query.edit_message_text("⛔ شما دسترسی ندارید!")
-        return    
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_bot_status"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
     
     status = get_bot_status()
+    # ... ادامه کد
     is_active = status['is_active'] if status else True
     
     try:
@@ -763,14 +770,23 @@ async def toggle_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(f"🤖 ربات {'🟢 روشن' if new_status else '🔴 خاموش'} شد!", reply_markup=back_to_admin_keyboard())
 
 async def delete_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تایید حذف داده‌ها"""
     query = update.callback_query
     await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اصلاح
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_delete_all"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("⚠️ تأیید حذف", callback_data="admin_confirm_delete")],
         [InlineKeyboardButton("🔙 انصراف", callback_data="admin_bot_status")]
     ])
+    # ... ادامه کد
     
     await query.edit_message_text("⚠️ <b>هشدار!</b>\n\nهمه داده‌های کاربران حذف می‌شود!\nاین عملیات قابل بازگشت نیست!\n\nمطمئن هستید؟", reply_markup=keyboard, parse_mode='HTML')
 
@@ -785,11 +801,20 @@ async def confirm_delete_all(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ---------- مدیریت ادمین‌ها ----------
 
 async def manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """منوی ادمین‌ها"""
     query = update.callback_query
     await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اصلاح: هم ادمین اصلی و هم دسترسی رو چک کن
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
     await query.edit_message_text("👥 <b>مدیریت ادمین‌ها</b>", reply_markup=admin_manage_admins_keyboard(), parse_mode='HTML')
-
+    
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """افزودن ادمین - مرحله ۱: دریافت user_id"""
     query = update.callback_query
@@ -910,10 +935,11 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     db_add_admin(new_admin_id, perms_str)
     
-    from admin.admin_keyboards import get_permission_name
+    
     perm_names = [get_permission_name(p) for p in permissions]
     perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
     
+    # ✅ اول پیام تایید به خودت بفرست
     await query.edit_message_text(
         f"✅ <b>ادمین با موفقیت افزوده شد!</b>\n\n"
         f"🆔 کاربر: <code>{new_admin_id}</code>\n\n"
@@ -922,7 +948,7 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
     
-    # ⚠️ ارسال پیام به کاربر جدید
+    # ✅ بعدش سعی کن به ادمین جدید پیام بدی (با try/except)
     try:
         from telegram import Bot
         import os
@@ -930,19 +956,29 @@ async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         perm_names_text = "\n".join([f"🔹 {n}" for n in perm_names]) if perm_names else "🔹 دسترسی محدود"
         
-        await bot.send_message(
-            chat_id=new_admin_id,
-            text=(
-                f"🎉 <b>تبریک! شما به عنوان ادمین منصوب شدید!</b>\n\n"
-                f"👑 <b>پنل مدیریت</b> به منوی اصلی شما اضافه شد.\n\n"
-                f"<b>دسترسی‌های شما:</b>\n{perm_names_text}\n\n"
-                f"برای مشاهده پنل، /start را بزنید."
-            ),
-            parse_mode='HTML'
-        )
-        logger.info(f"📩 Notification sent to new admin {new_admin_id}")
+        # ✅ چک کن که new_admin_id خالی نباشه
+        if new_admin_id:
+            await bot.send_message(
+                chat_id=new_admin_id,
+                text=(
+                    f"🎉 <b>تبریک! شما به عنوان ادمین منصوب شدید!</b>\n\n"
+                    f"👑 <b>پنل مدیریت</b> به منوی اصلی شما اضافه شد.\n\n"
+                    f"<b>دسترسی‌های شما:</b>\n{perm_names_text}\n\n"
+                    f"برای مشاهده پنل، /start را بزنید."
+                ),
+                parse_mode='HTML'
+            )
+            logger.info(f"📩 Notification sent to new admin {new_admin_id}")
+        else:
+            logger.warning("⚠️ new_admin_id is empty! Cannot send notification.")
     except Exception as e:
         logger.error(f"❌ Failed to notify new admin {new_admin_id}: {e}")
+        # ✅ اینجا به خودت پیام بده که کاربر ربات رو استارت نکرده
+        await update.effective_message.reply_text(
+            f"⚠️ کاربر <code>{new_admin_id}</code> ربات رو استارت نکرده یا بلاک کرده.\n"
+            f"دسترسی‌ها ذخیره شد ولی پیام تایید براش ارسال نشد.",
+            parse_mode='HTML'
+        )
     
     context.user_data.clear()
     return ConversationHandler.END
@@ -992,34 +1028,52 @@ async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = int(query.data.split("_")[-1])
     db_remove_admin(user_id)
     
+    # ✅ اول پیام تایید به خودت بفرست
     await query.edit_message_text(
         f"✅ کاربر <code>{user_id}</code> از ادمین‌ها حذف شد!",
         parse_mode='HTML',
         reply_markup=back_to_admin_keyboard()
     )
     
-    # ⚠️ ارسال پیام به کاربر حذف شده
+    # ✅ بعدش سعی کن به کاربر حذف شده پیام بدی
     try:
         from telegram import Bot
         import os
         bot = Bot(token=os.getenv('TOKEN'))
-        await bot.send_message(
-            chat_id=user_id,
-            text="📢 <b>دسترسی ادمین شما لغو شد.</b>\n\nدیگر به پنل مدیریت دسترسی ندارید.",
-            parse_mode='HTML'
-        )
-        logger.info(f"📩 Notification sent to removed admin {user_id}")
+        
+        if user_id:  # ✅ چک کن خالی نباشه
+            await bot.send_message(
+                chat_id=user_id,
+                text="📢 <b>دسترسی ادمین شما لغو شد.</b>\n\nدیگر به پنل مدیریت دسترسی ندارید.",
+                parse_mode='HTML'
+            )
+            logger.info(f"📩 Notification sent to removed admin {user_id}")
+        else:
+            logger.warning("⚠️ user_id is empty! Cannot send notification.")
     except Exception as e:
         logger.error(f"❌ Failed to notify removed admin {user_id}: {e}")
-
+        # ✅ به خودت پیام بده که کاربر ربات رو استارت نکرده
+        await update.effective_message.reply_text(
+            f"⚠️ کاربر <code>{user_id}</code> ربات رو استارت نکرده یا بلاک کرده.\n"
+            f"دسترسی‌ها حذف شد ولی پیام اطلاع‌رسانی براش ارسال نشد.",
+            parse_mode='HTML'
+        )
     
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لیست ادمین‌ها با دسترسی‌ها"""
     query = update.callback_query
     await query.answer()
     
-    admins = get_all_admins()
+    user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ اضافه کردن چک دسترسی
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_list_admins"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
+    admins = get_all_admins()
+    # ... ادامه کد
     
     text = f"👑 <b>لیست ادمین‌ها:</b>\n\n🔸 ادمین اصلی: <code>{admin_id}</code>\n🔹 دسترسی: همه موارد\n\n"
     
