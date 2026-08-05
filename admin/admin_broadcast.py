@@ -3,7 +3,7 @@ import asyncio
 from telegram import Bot
 import os
 from dotenv import load_dotenv
-from ..database import get_all_active_users
+from database import get_all_active_users
 from .admin_database import (
     add_broadcast_log, update_broadcast_count,
     mark_broadcast_sent, get_broadcast_stats
