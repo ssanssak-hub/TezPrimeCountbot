@@ -46,52 +46,40 @@ def days_keyboard(selected_days=None):
     return InlineKeyboardMarkup(keyboard)
 
 def time_keyboard(selected_hour=None, selected_minute=None, page=0):
-    """
-    کیبورد انتخاب زمان با تفکیک ساعت و دقیقه
-    page: 0 = انتخاب ساعت, 1 = انتخاب دقیقه
-    """
+    """کیبورد انتخاب زمان با تفکیک ساعت و دقیقه"""
     keyboard = []
     
     if page == 0:
-        # 📌 بخش انتخاب ساعت
         keyboard.append([InlineKeyboardButton("🕐 انتخاب ساعت (کلیک کنید) 🕐", callback_data="noop")])
         
-        # ۲۴ ساعت در ۴ ردیف ۶ تایی
         hour_rows = []
         for h in range(24):
             text = f"✅ {h:02d}" if selected_hour == h else f"{h:02d}"
             callback = f"time_h_{h}"
             hour_rows.append(InlineKeyboardButton(text, callback_data=callback))
         
-        # تقسیم به ردیف‌های ۶ تایی
         for i in range(0, 24, 6):
             keyboard.append(hour_rows[i:i+6])
         
-        # دکمه رفتن به انتخاب دقیقه
         if selected_hour is not None:
             keyboard.append([InlineKeyboardButton("⏬ برو به انتخاب دقیقه ⏬", callback_data="time_page_1")])
         else:
             keyboard.append([InlineKeyboardButton("⚠️ اول یک ساعت انتخاب کن", callback_data="noop")])
     
     elif page == 1:
-        # 📌 بخش انتخاب دقیقه
         keyboard.append([InlineKeyboardButton("🕐 انتخاب دقیقه (کلیک کنید) 🕐", callback_data="noop")])
         
-        # ۶۰ دقیقه در ۶ ردیف ۱۰ تایی
         minute_rows = []
         for m in range(60):
             text = f"✅ {m:02d}" if selected_minute == m else f"{m:02d}"
             callback = f"time_m_{m}"
             minute_rows.append(InlineKeyboardButton(text, callback_data=callback))
         
-        # تقسیم به ردیف‌های ۶ تایی (۱۰ ردیف)
         for i in range(0, 60, 6):
             keyboard.append(minute_rows[i:i+6])
         
-        # دکمه بازگشت به انتخاب ساعت
         keyboard.append([InlineKeyboardButton("🔼 بازگشت به انتخاب ساعت", callback_data="time_page_0")])
     
-    # نمایش وضعیت انتخاب شده
     status_text = ""
     if selected_hour is not None:
         status_text += f"ساعت: {selected_hour:02d}"
@@ -105,7 +93,6 @@ def time_keyboard(selected_hour=None, selected_minute=None, page=0):
     
     keyboard.append([InlineKeyboardButton(f"📌 {status_text}", callback_data="noop")])
     
-    # دکمه تایید نهایی (فقط وقتی هر دو انتخاب شدن)
     if selected_hour is not None and selected_minute is not None:
         keyboard.append([InlineKeyboardButton("✅ ثبت نهایی زمان", callback_data="time_done")])
     else:
@@ -121,12 +108,15 @@ def reminders_list_keyboard(reminders):
     for reminder in reminders:
         if isinstance(reminder, dict):
             reminder_id = reminder['id']
-            message = reminder['message']
+            title = reminder.get('title', 'بدون عنوان')
+            is_active = reminder['is_active']
         else:
             reminder_id = reminder['id']
-            message = reminder['message']
+            title = reminder['title'] if reminder['title'] else 'بدون عنوان'
+            is_active = reminder['is_active']
         
-        text = f"📌 {message[:20]}..."
+        status_emoji = "✅" if is_active else "⛔"
+        text = f"{status_emoji} {title[:25]}..."
         callback = f"view_{reminder_id}"
         keyboard.append([InlineKeyboardButton(text, callback_data=callback)])
     
@@ -134,10 +124,16 @@ def reminders_list_keyboard(reminders):
     
     return InlineKeyboardMarkup(keyboard)
 
-def reminder_action_keyboard(reminder_id):
-    keyboard = [
-        [InlineKeyboardButton("🗑️ حذف", callback_data=f"delete_{reminder_id}")],
-        [InlineKeyboardButton("⛔ لغو", callback_data=f"cancel_{reminder_id}")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")]
-    ]
+def reminder_action_keyboard(reminder_id, is_active=True):
+    keyboard = []
+    
+    keyboard.append([InlineKeyboardButton("🗑️ حذف", callback_data=f"delete_{reminder_id}")])
+    
+    if is_active:
+        keyboard.append([InlineKeyboardButton("⛔ غیرفعال کردن", callback_data=f"cancel_{reminder_id}")])
+    else:
+        keyboard.append([InlineKeyboardButton("✅ فعال کردن مجدد", callback_data=f"activate_{reminder_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
+    
     return InlineKeyboardMarkup(keyboard)
