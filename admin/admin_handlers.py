@@ -12,14 +12,13 @@ from database import (
     delete_all_user_data, is_user_admin
 )
 from reminders.reminder_database import get_all_user_reminders
-from ..reminders.reminder_database import get_all_user_reminders
-from .admin_keyboards import (
+from admin.admin_keyboards import (
     admin_panel_keyboard, admin_manage_admins_keyboard,
     admin_manage_users_keyboard, admin_bot_status_keyboard,
     admin_broadcasts_list_keyboard, broadcast_action_keyboard,
     back_to_admin_keyboard
 )
-from .admin_database import (
+from admin.admin_database import (
     init_admin_db, save_broadcast, get_all_broadcasts,
     mark_broadcast_cancelled, delete_broadcast, get_broadcast_stats,
     get_broadcast_progress
