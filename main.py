@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from flask import Flask, request, jsonify
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import os
 from dotenv import load_dotenv
@@ -18,7 +18,10 @@ from reminders.reminder_handlers import (
 
 # Import دیتابیس
 from database import init_db
-from reminders.reminder_database import init_reminder_db
+from reminders.reminder_database import init_reminder_db, get_user_reminders
+
+# ⚠️ این import مهم رو اضافه کن:
+from reminders.reminder_keyboards import main_menu_keyboard, reminder_menu_keyboard
 
 # Load environment variables
 load_dotenv()
@@ -50,7 +53,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(user_id, user.username, user.first_name, user.last_name)
     
     # ساخت کیبورد منوی اصلی
-    from reminders.reminder_keyboards import main_menu_keyboard
     keyboard = main_menu_keyboard()
     
     await update.message.reply_text(
@@ -77,10 +79,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "view_reminders":
         await view_reminders(update, context)
     elif data == "delete_reminder":
-        # نمایش اعلان‌ها برای انتخاب حذف
         await show_delete_list(update, context)
     elif data == "cancel_reminder":
-        # نمایش اعلان‌ها برای انتخاب لغو
         await show_cancel_list(update, context)
     
     # مدیریت حذف و لغو مستقیم
@@ -113,7 +113,6 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست اعلان‌ها برای حذف"""
     query = update.callback_query
     user_id = update.effective_user.id
-    from reminders.reminder_database import get_user_reminders
     reminders = get_user_reminders(user_id)
     
     if not reminders:
@@ -124,7 +123,6 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # ساخت کیبورد با دکمه‌های delete_
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     keyboard = []
     for r in reminders:
         text = f"🗑️ {r['message'][:30]}..."
@@ -142,7 +140,6 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست اعلان‌ها برای لغو"""
     query = update.callback_query
     user_id = update.effective_user.id
-    from reminders.reminder_database import get_user_reminders
     reminders = get_user_reminders(user_id)
     
     if not reminders:
@@ -153,7 +150,6 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # ساخت کیبورد با دکمه‌های cancel_
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     keyboard = []
     for r in reminders:
         text = f"⛔ {r['message'][:30]}..."
@@ -181,37 +177,31 @@ def process_update(update_json):
     global application, loop
     
     try:
-        # اگر loop وجود نداره، یک loop جدید بساز
         if loop is None or loop.is_closed():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        # ایجاد آبجکت Update
         update = Update.de_json(update_json, application.bot)
         
-        # اجرای پردازش در event loop
         future = asyncio.run_coroutine_threadsafe(
             application.process_update(update),
             loop
         )
-        future.result(timeout=10)  # منتظر حداکثر ۱۰ ثانیه
+        future.result(timeout=10)
         
         return True
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return False
 
-# مسیر اصلی Webhook
 @flask_app.route('/', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'POST':
         try:
-            # دریافت داده JSON
             json_data = request.get_json(force=True)
             if not json_data:
                 return jsonify({'status': 'error', 'message': 'No data'}), 400
             
-            # پردازش درخواست
             success = process_update(json_data)
             if success:
                 return jsonify({'status': 'ok'}), 200
@@ -222,7 +212,6 @@ def webhook():
             logger.error(f"Webhook exception: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
     
-    # پاسخ به درخواست GET
     return "TezPrimeCountbot is running! 🚀", 200
 
 @flask_app.route('/health', methods=['GET'])
@@ -240,16 +229,12 @@ def info():
 def main():
     global application, loop
     
-    # مقداردهی اولیه دیتابیس
     init_db()
     init_reminder_db()
     
-    # ساخت اپلیکیشن
     application = Application.builder().token(TOKEN).build()
     
-    # ⚠️ ترتیب Handlerها خیلی مهمه!
-    
-    # 1. اول ConversationHandler برای تنظیم اعلان
+    # 1. ConversationHandler برای تنظیم اعلان
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
@@ -264,38 +249,33 @@ def main():
     )
     application.add_handler(conv_handler)
     
-    # 2. بعدش CommandHandler
+    # 2. CommandHandler
     application.add_handler(CommandHandler("start", start))
     
-    # 3. بعدش CallbackQueryHandler عمومی (برای همه دکمه‌های دیگه)
+    # 3. CallbackQueryHandler عمومی
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # 4. در آخر MessageHandler
+    # 4. MessageHandler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     
-    # راه‌اندازی Event Loop جدید
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # تنظیم Webhook
     async def setup_webhook():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
         return True
     
-    # اجرای تنظیم Webhook
     success = loop.run_until_complete(setup_webhook())
     if not success:
         logger.error("❌ Failed to set webhook")
     
-    # شروع به کار Application در پس‌زمینه
     async def run_application():
         await application.initialize()
         await application.start()
         logger.info("✅ Application started")
         await asyncio.Event().wait()
     
-    # اجرای Application در پس‌زمینه
     import threading
     def run_bot():
         loop.run_until_complete(run_application())
@@ -305,7 +285,6 @@ def main():
     
     logger.info("✅ Bot is ready to receive updates")
     
-    # راه‌اندازی Flask
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"🚀 Starting Flask server on port {port}")
     
