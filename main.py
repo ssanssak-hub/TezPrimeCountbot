@@ -29,9 +29,12 @@ from admin.admin_handlers import (
     search_user_start, search_user_result,
     handle_permission_toggle, confirm_add_admin, cancel_add_admin,
     broadcasts_list, broadcast_detail, cancel_broadcast, delete_broadcast_handler,
+    save_admin_permissions, 
+    edit_admin_start, edit_admin_permissions, 
     BROADCAST_TITLE, BROADCAST_MESSAGE, BROADCAST_DATE, BROADCAST_TIME,
     BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
 )
+
 from admin.admin_database import init_admin_db
 
 from database import init_db, is_user_admin, is_bot_active, is_user_banned as db_is_banned
@@ -151,8 +154,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_admin_execute(update, context)
     elif data == "admin_edit_admin":
         await edit_admin_start(update, context) 
-    elif data == "admin_edit_admin":
-        await edit_admin_start(update, context)
     elif data.startswith("admin_edit_") and data != "admin_edit_admin":
         await edit_admin_permissions(update, context)
     elif data == "admin_save_permissions":
