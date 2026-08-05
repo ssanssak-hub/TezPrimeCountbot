@@ -24,7 +24,7 @@ from .admin_database import (
     mark_broadcast_cancelled, delete_broadcast, get_broadcast_stats,
     get_broadcast_progress
 )
-from .admin_broadcast import send_broadcast_now, get_broadcast_progress_text
+from admin.admin_broadcast import send_broadcast_now, get_broadcast_progress_text
 
 logger = logging.getLogger(__name__)
 
