@@ -406,6 +406,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     from apscheduler.triggers.date import DateTrigger
     from datetime import datetime
     import pytz
+    import asyncio
     
     # زمان ارسال به UTC تبدیل کن
     tehran_tz = pytz.timezone('Asia/Tehran')
@@ -416,11 +417,27 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     run_date_tehran = tehran_tz.localize(run_date_tehran)
     run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
-    async def send_scheduled_broadcast():
-        await send_broadcast_now(broadcast_id, broadcast['admin_id'], broadcast['title'], broadcast['message'])
+    # ⚠️ تابع sync برای scheduler
+    def send_scheduled_broadcast_sync():
+        """تابع sync که داخلش async اجرا میشه"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(
+                send_broadcast_now(
+                    broadcast_id, 
+                    broadcast['admin_id'], 
+                    broadcast['title'], 
+                    broadcast['message']
+                )
+            )
+        except Exception as e:
+            logger.error(f"❌ Scheduled broadcast error: {e}", exc_info=True)
+        finally:
+            loop.close()
     
     scheduler.add_job(
-        send_scheduled_broadcast,
+        send_scheduled_broadcast_sync,  # ⚠️ تابع sync نه async
         trigger=DateTrigger(run_date=run_date_utc),
         id=f"broadcast_{broadcast_id}",
         replace_existing=True
