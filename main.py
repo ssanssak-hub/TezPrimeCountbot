@@ -273,39 +273,57 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
+    # چک خاموش بودن ربات
     if not is_bot_active() and not is_admin:
         return
     
+    # چک بن بودن
     if db_is_banned(user_id):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ⚠️ برای broadcast زمان‌بندی
-    if context.user_data.get('awaiting_message') and context.user_data.get('broadcast_type') == 'scheduled':
-        await broadcast_scheduled_message(update, context)
-        return
+    # چک awaiting_message
+    if context.user_data.get('awaiting_message'):
+        # برای broadcast فوری
+        if context.user_data.get('broadcast_type') == 'now':
+            await broadcast_now_message(update, context)
+            return
+        
+        # برای broadcast زمان‌بندی
+        if context.user_data.get('broadcast_type') == 'scheduled':
+            await broadcast_scheduled_message(update, context)
+            return
+        
+        # برای ریمایندر
+        if context.user_data.get('step') in ['title', 'message']:
+            await set_reminder_message(update, context)
+            return
+        
+        # برای بن کاربر
+        if context.user_data.get('awaiting_ban'):
+            await ban_user_execute(update, context)
+            return
+        
+        # برای افزودن ادمین
+        if context.user_data.get('awaiting_admin'):
+            await add_admin_execute(update, context)
+            return
+        
+        # برای جستجوی کاربر
+        if context.user_data.get('awaiting_search'):
+            await search_user_result(update, context)
+            return
     
-    # ⚠️ برای broadcast فوری
-    if context.user_data.get('awaiting_message') and context.user_data.get('broadcast_type') == 'now':
-        await broadcast_now_message(update, context)
-        return
-    
-    # ⚠️ برای ریمایندر
-    if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
-        await set_reminder_message(update, context)
-        return
-    
-    # ⚠️ برای تاریخ broadcast
+    # چک broadcast_step (برای تاریخ و ساعت زمان‌بندی)
     if context.user_data.get('broadcast_step') == 'date':
         await broadcast_scheduled_date(update, context)
         return
     
-    # ⚠️ برای ساعت broadcast
     if context.user_data.get('broadcast_step') == 'time':
         await broadcast_scheduled_time(update, context)
         return
     
-    # هیچکدوم نبود - پیام پیش‌فرض
+    # هیچکدوم نبود
     await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -391,7 +409,7 @@ def main():
         states={
             BROADCAST_TITLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),  # ⚠️ اینو اضافه کن
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
             ],
             BROADCAST_MESSAGE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
@@ -404,11 +422,11 @@ def main():
             SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
         },
         fallbacks=[
-            CommandHandler("cancel", admin_cancel),  # ⚠️ اضافه کن
+            CommandHandler("cancel", admin_cancel),
             CallbackQueryHandler(admin_panel, pattern="^admin_panel$"),
         ],
         name="admin_conversation",
-        per_message=False,
+        per_message=True,  # ⚠️ True کن
         allow_reentry=True
     )
     application.add_handler(admin_conv)
@@ -422,7 +440,7 @@ def main():
         },
         fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
         name="reminder_conversation",
-        per_message=False,
+        per_message=True,
         allow_reentry=True
     )
     application.add_handler(reminder_conv)
