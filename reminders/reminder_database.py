@@ -25,6 +25,7 @@ def init_reminder_db():
         CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            title TEXT DEFAULT '',
             message TEXT,
             days_of_week TEXT,
             hour INTEGER,
@@ -34,20 +35,28 @@ def init_reminder_db():
         )
     ''')
     
+    # اضافه کردن ستون title به دیتابیس قدیمی (اگه وجود نداشته باشه)
+    try:
+        cursor.execute('ALTER TABLE reminders ADD COLUMN title TEXT DEFAULT ""')
+        logger.info("✅ Added title column to reminders table")
+    except sqlite3.OperationalError:
+        pass  # ستون از قبل وجود داره
+    
     conn.commit()
     conn.close()
     logger.info("✅ Reminder database initialized successfully")
 
-def save_reminder(user_id, message, days, hour, minute):
+def save_reminder(user_id, title, message, days, hour, minute):
+    """ذخیره اعلان جدید با عنوان"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
     days_str = ','.join(map(str, days))
     
     cursor.execute('''
-        INSERT INTO reminders (user_id, message, days_of_week, hour, minute)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, message, days_str, hour, minute))
+        INSERT INTO reminders (user_id, title, message, days_of_week, hour, minute)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, title, message, days_str, hour, minute))
     
     conn.commit()
     reminder_id = cursor.lastrowid
@@ -57,6 +66,7 @@ def save_reminder(user_id, message, days, hour, minute):
     return reminder_id
 
 def get_user_reminders(user_id):
+    """دریافت اعلان‌های فعال کاربر"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
@@ -79,7 +89,7 @@ def get_all_user_reminders(user_id):
     cursor.execute('''
         SELECT * FROM reminders 
         WHERE user_id = ?
-        ORDER BY created_at DESC
+        ORDER BY is_active DESC, created_at DESC
     ''', (user_id,))
     
     reminders = cursor.fetchall()
@@ -88,6 +98,7 @@ def get_all_user_reminders(user_id):
     return reminders
 
 def delete_reminder(reminder_id, user_id):
+    """حذف کامل اعلان از دیتابیس"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
@@ -101,6 +112,7 @@ def delete_reminder(reminder_id, user_id):
     logger.info(f"🗑️ Reminder {reminder_id} deleted for user {user_id}")
 
 def cancel_reminder(reminder_id, user_id):
+    """غیرفعال کردن اعلان (پاک نمیشه، فقط غیرفعال میشه)"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
@@ -114,7 +126,23 @@ def cancel_reminder(reminder_id, user_id):
     conn.close()
     logger.info(f"⛔ Reminder {reminder_id} cancelled for user {user_id}")
 
+def activate_reminder(reminder_id, user_id):
+    """فعال کردن مجدد اعلان"""
+    conn = get_reminder_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE reminders 
+        SET is_active = 1 
+        WHERE id = ? AND user_id = ?
+    ''', (reminder_id, user_id))
+    
+    conn.commit()
+    conn.close()
+    logger.info(f"✅ Reminder {reminder_id} activated for user {user_id}")
+
 def get_all_active_reminders():
+    """دریافت همه اعلان‌های فعال (برای scheduler)"""
     conn = get_reminder_db_connection()
     cursor = conn.cursor()
     
