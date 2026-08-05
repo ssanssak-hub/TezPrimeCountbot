@@ -24,7 +24,6 @@ from admin.admin_database import (
     get_broadcast_progress
 )
 from admin.admin_broadcast import send_broadcast_now, get_broadcast_progress_text, send_broadcast_report
-
 from reminders.reminder_utils import get_weekday_name, get_persian_datetime
 
 logger = logging.getLogger(__name__)
@@ -53,16 +52,16 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
     text = (
-        f"👑 **پنل مدیریت**\n\n"
+        f"👑 <b>پنل مدیریت</b>\n\n"
         f"🎭 سطح دسترسی: {'ادمین اصلی' if admin_type == 'main_admin' else 'ادمین فرعی'}\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"از منوی زیر استفاده کنید:"
     )
     
     if query:
-        await query.edit_message_text(text, reply_markup=admin_panel_keyboard(), parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=admin_panel_keyboard(), parse_mode='HTML')
     else:
-        await update.message.reply_text(text, reply_markup=admin_panel_keyboard(), parse_mode='Markdown')
+        await update.message.reply_text(text, reply_markup=admin_panel_keyboard(), parse_mode='HTML')
 
 # ---------- ارسال پیام همگانی فوری ----------
 
@@ -78,14 +77,14 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
-    context.user_data['broadcast_type'] = 'now'  # ⚠️ این خط رو اضافه کن
+    context.user_data['broadcast_type'] = 'now'
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
     
     await query.edit_message_text(
-        "📝 **ارسال پیام همگانی فوری**\n\nلطفاً **عنوان** پیام را ارسال کنید:",
+        "📝 <b>ارسال پیام همگانی فوری</b>\n\nلطفاً <b>عنوان</b> پیام را ارسال کنید:",
         reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     return BROADCAST_TITLE
 
@@ -94,7 +93,6 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
-    # ⚠️ فقط برای ارسال فوری
     if context.user_data.get('broadcast_type') != 'now':
         return ConversationHandler.END
     
@@ -106,11 +104,11 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data['broadcast_step'] = 'message'
         
         await update.message.reply_text(
-            f"📝 عنوان: **{message}**\n\n"
-            f"حالا **متن پیام** را ارسال کنید:\n\n"
-            f"⚠️ این پیام به **همه کاربران** ارسال خواهد شد!",
+            f"📝 عنوان: <b>{message}</b>\n\n"
+            f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
+            f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_MESSAGE
     
@@ -125,13 +123,13 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         ])
         
         await update.message.reply_text(
-            f"📢 **تایید نهایی**\n\n"
-            f"📌 عنوان: **{title}**\n"
+            f"📢 <b>تایید نهایی</b>\n\n"
+            f"📌 عنوان: <b>{title}</b>\n"
             f"📝 پیام: {message[:100]}...\n"
-            f"👥 گیرندگان: **{users_count}** کاربر\n\n"
+            f"👥 گیرندگان: <b>{users_count}</b> کاربر\n\n"
             f"آیا از ارسال اطمینان دارید؟",
             reply_markup=keyboard,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
         context.user_data.clear()
@@ -155,7 +153,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    await query.edit_message_text("⏳ **در حال ارسال پیام همگانی...**", parse_mode='Markdown')
+    await query.edit_message_text("⏳ <b>در حال ارسال پیام همگانی...</b>", parse_mode='HTML')
     
     import asyncio
     asyncio.create_task(
@@ -164,7 +162,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await asyncio.sleep(2)
     progress_text = get_broadcast_progress_text(broadcast_id)
-    await query.edit_message_text(progress_text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text(progress_text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
 
 # ---------- پیام همگانی زمان‌بندی شده ----------
 
@@ -185,12 +183,12 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     context.user_data['awaiting_message'] = True
     
     await query.edit_message_text(
-        "📝 **پیام همگانی زمان‌بندی شده - مرحله ۱/۴**\n\n"
-        "لطفاً **عنوان** پیام را ارسال کنید:\n"
+        "📝 <b>پیام همگانی زمان‌بندی شده - مرحله ۱/۴</b>\n\n"
+        "لطفاً <b>عنوان</b> پیام را ارسال کنید:\n"
         "(مثلاً: اطلاعیه مهم، تخفیف ویژه)\n\n"
         "🔙 برای بازگشت /cancel را بزنید",
         reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     return BROADCAST_TITLE 
 
@@ -210,12 +208,12 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         context.user_data['broadcast_step'] = 'message'
         
         await update.message.reply_text(
-            f"📝 **مرحله ۲/۴**\n\n"
-            f"عنوان: **{message}**\n\n"
-            f"حالا لطفاً **متن پیام** را ارسال کنید:\n\n"
+            f"📝 <b>مرحله ۲/۴</b>\n\n"
+            f"عنوان: <b>{message}</b>\n\n"
+            f"حالا لطفاً <b>متن پیام</b> را ارسال کنید:\n\n"
             f"🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_MESSAGE
     
@@ -224,26 +222,22 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         context.user_data['broadcast_step'] = 'date'
         
         await update.message.reply_text(
-            f"📅 **مرحله ۳/۴ - انتخاب تاریخ**\n\n"
-            f"عنوان: **{context.user_data['broadcast']['title']}**\n"
+            f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
+            f"عنوان: <b>{context.user_data['broadcast']['title']}</b>\n"
             f"پیام: {message[:50]}...\n\n"
-            f"لطفاً **تاریخ** را به صورت شمسی وارد کنید:\n"
-            f"📌 فرمت: **YYYY/MM/DD**\n"
-            f"📌 مثال: **1405/05/15**\n\n"
+            f"لطفاً <b>تاریخ</b> را به صورت شمسی وارد کنید:\n"
+            f"📌 فرمت: <b>YYYY/MM/DD</b>\n"
+            f"📌 مثال: <b>1405/05/15</b>\n\n"
             f"⚠️ تاریخ باید امروز یا بعد از امروز باشد.\n\n"
             f"🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_DATE
 
 
 async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت تاریخ شمسی و اعتبارسنجی"""
-    # ⚠️ این چک رو بردار - از echo ممکنه صدا زده بشه
-    # if not context.user_data.get('awaiting_message'):
-    #     return ConversationHandler.END
-    
     date_input = update.message.text.strip()
     
     try:
@@ -259,12 +253,12 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
         today = jdatetime.date.today()
         if persian_date < today:
             await update.message.reply_text(
-                f"❌ **خطا!**\n\n"
+                f"❌ <b>خطا!</b>\n\n"
                 f"تاریخ وارد شده ({date_input}) مربوط به گذشته است!\n"
-                f"📌 امروز: **{today.strftime('%Y/%m/%d')}**\n\n"
-                f"لطفاً یک تاریخ **امروز یا بعد از امروز** وارد کنید:",
+                f"📌 امروز: <b>{today.strftime('%Y/%m/%d')}</b>\n\n"
+                f"لطفاً یک تاریخ <b>امروز یا بعد از امروز</b> وارد کنید:",
                 reply_markup=back_to_admin_keyboard(),
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             return BROADCAST_DATE
         
@@ -273,37 +267,33 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
         context.user_data['broadcast_step'] = 'time'
         
         await update.message.reply_text(
-            f"🕐 **مرحله ۴/۴ - انتخاب ساعت**\n\n"
-            f"📅 تاریخ: **{date_input}**\n\n"
-            f"لطفاً **ساعت** را به صورت تهران وارد کنید:\n"
-            f"📌 فرمت: **HH:MM** (۲۴ ساعته)\n"
-            f"📌 مثال: **14:30** یا **09:00**\n\n"
+            f"🕐 <b>مرحله ۴/۴ - انتخاب ساعت</b>\n\n"
+            f"📅 تاریخ: <b>{date_input}</b>\n\n"
+            f"لطفاً <b>ساعت</b> را به صورت تهران وارد کنید:\n"
+            f"📌 فرمت: <b>HH:MM</b> (۲۴ ساعته)\n"
+            f"📌 مثال: <b>14:30</b> یا <b>09:00</b>\n\n"
             f"⚠️ اگر تاریخ امروز است، ساعت باید بعد از الان باشد.\n\n"
             f"🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_TIME
         
     except Exception as e:
         logger.error(f"Date validation error: {e}")
         await update.message.reply_text(
-            f"❌ **فرمت تاریخ اشتباه است!**\n\n"
-            f"لطفاً تاریخ را به صورت **YYYY/MM/DD** وارد کنید.\n"
-            f"مثال: **1405/05/15**\n\n"
+            f"❌ <b>فرمت تاریخ اشتباه است!</b>\n\n"
+            f"لطفاً تاریخ را به صورت <b>YYYY/MM/DD</b> وارد کنید.\n"
+            f"مثال: <b>1405/05/15</b>\n\n"
             f"دوباره تلاش کنید:",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_DATE
 
 
 async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت ساعت تهران و ثبت نهایی"""
-    # ⚠️ این چک رو بردار
-    # if not context.user_data.get('awaiting_message'):
-    #     return ConversationHandler.END
-    
     time_input = update.message.text.strip()
     
     try:
@@ -329,12 +319,12 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
             
             if scheduled_time <= now_tehran:
                 await update.message.reply_text(
-                    f"❌ **خطا!**\n\n"
+                    f"❌ <b>خطا!</b>\n\n"
                     f"ساعت وارد شده ({time_input}) مربوط به گذشته است!\n"
-                    f"📌 الان ساعت: **{now_tehran.strftime('%H:%M')}**\n\n"
-                    f"لطفاً یک ساعت **بعد از الان** وارد کنید:",
+                    f"📌 الان ساعت: <b>{now_tehran.strftime('%H:%M')}</b>\n\n"
+                    f"لطفاً یک ساعت <b>بعد از الان</b> وارد کنید:",
                     reply_markup=back_to_admin_keyboard(),
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
                 return BROADCAST_TIME
         
@@ -357,15 +347,15 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         ])
         
         await update.message.reply_text(
-            f"📢 **تایید نهایی**\n\n"
-            f"📌 عنوان: **{title}**\n"
+            f"📢 <b>تایید نهایی</b>\n\n"
+            f"📌 عنوان: <b>{title}</b>\n"
             f"📝 پیام: {message[:100]}...\n"
-            f"📅 تاریخ: **{persian_date_str}** (شمسی)\n"
-            f"🕐 ساعت: **{hour:02d}:{minute:02d}** (تهران)\n"
-            f"👥 گیرندگان: **{total_users}** کاربر\n\n"
+            f"📅 تاریخ: <b>{persian_date_str}</b> (شمسی)\n"
+            f"🕐 ساعت: <b>{hour:02d}:{minute:02d}</b> (تهران)\n"
+            f"👥 گیرندگان: <b>{total_users}</b> کاربر\n\n"
             f"آیا تأیید می‌کنید؟",
             reply_markup=keyboard,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
         context.user_data.clear()
@@ -374,12 +364,12 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
     except Exception as e:
         logger.error(f"Time validation error: {e}")
         await update.message.reply_text(
-            f"❌ **فرمت ساعت اشتباه است!**\n\n"
-            f"لطفاً ساعت را به صورت **HH:MM** (۲۴ ساعته) وارد کنید.\n"
-            f"مثال: **14:30** یا **09:00**\n\n"
+            f"❌ <b>فرمت ساعت اشتباه است!</b>\n\n"
+            f"لطفاً ساعت را به صورت <b>HH:MM</b> (۲۴ ساعته) وارد کنید.\n"
+            f"مثال: <b>14:30</b> یا <b>09:00</b>\n\n"
             f"دوباره تلاش کنید:",
             reply_markup=back_to_admin_keyboard(),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return BROADCAST_TIME
 
@@ -416,14 +406,12 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     run_date_tehran = tehran_tz.localize(run_date_tehran)
     run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
-    # ⚠️ ذخیره chat_id ادمین برای ارسال گزارش
     admin_chat_id = update.effective_user.id
     
     def send_scheduled_broadcast_sync():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            # ارسال پیام همگانی
             result = loop.run_until_complete(
                 send_broadcast_now(
                     broadcast_id, 
@@ -433,8 +421,6 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
                 )
             )
             sent, failed, total = result
-            
-            # ⚠️ ارسال گزارش به ادمین
             loop.run_until_complete(
                 send_broadcast_report(admin_chat_id, broadcast['title'], sent, failed, total)
             )
@@ -453,15 +439,15 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     total_users = get_total_users_count()
     
     await query.edit_message_text(
-        f"✅ **پیام همگانی برنامه‌ریزی شد!**\n\n"
-        f"📌 عنوان: **{broadcast['title']}**\n"
-        f"📅 تاریخ: **{broadcast['send_date']}**\n"
-        f"🕐 ساعت تهران: **{broadcast['send_time']}**\n"
-        f"👥 گیرندگان: **{total_users}** کاربر\n\n"
+        f"✅ <b>پیام همگانی برنامه‌ریزی شد!</b>\n\n"
+        f"📌 عنوان: <b>{broadcast['title']}</b>\n"
+        f"📅 تاریخ: <b>{broadcast['send_date']}</b>\n"
+        f"🕐 ساعت تهران: <b>{broadcast['send_time']}</b>\n"
+        f"👥 گیرندگان: <b>{total_users}</b> کاربر\n\n"
         f"⏳ پیام در تاریخ مشخص شده ارسال خواهد شد.\n"
         f"📊 گزارش ارسال برای شما فرستاده می‌شود.",
         reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
 
 
@@ -471,10 +457,9 @@ async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_
     
     last_text = ""
     
-    for i in range(60):  # حداکثر ۶۰ بار
+    for i in range(60):
         progress_text = get_broadcast_progress_text(broadcast_id)
         
-        # فقط اگه متن تغییر کرده آپدیت کن
         if progress_text != last_text:
             last_text = progress_text
             
@@ -489,9 +474,9 @@ async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_
                         final_text = get_broadcast_progress_text(broadcast_id)
                         try:
                             await update.effective_message.edit_text(
-                                final_text + "\n\n✅ **ارسال به پایان رسید!**",
+                                final_text + "\n\n✅ <b>ارسال به پایان رسید!</b>",
                                 reply_markup=back_to_admin_keyboard(),
-                                parse_mode='Markdown'
+                                parse_mode='HTML'
                             )
                         except:
                             pass
@@ -501,12 +486,11 @@ async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_
                 await update.effective_message.edit_text(
                     progress_text,
                     reply_markup=back_to_admin_keyboard(),
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
             except:
                 pass
         
-        # ⚠️ هر ۱.۵ ثانیه چک کن (نه ۲ ثانیه)
         await asyncio.sleep(1.5)
         
 
@@ -539,7 +523,7 @@ async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
     
-    await query.edit_message_text("📋 **پیام‌های همگانی**", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='Markdown')
+    await query.edit_message_text("📋 <b>پیام‌های همگانی</b>", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='HTML')
 
 async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """جزئیات پیام همگانی با گرافیک"""
@@ -557,27 +541,25 @@ async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if broadcast:
-        # ⚠️ اگه در حال ارساله، آپدیت زنده کن
         if not broadcast['is_sent'] and not broadcast['is_cancelled'] and broadcast['total_users'] > 0:
             await query.edit_message_text(
-                progress_text + "\n\n⏳ **در حال ارسال...**",
+                progress_text + "\n\n⏳ <b>در حال ارسال...</b>",
                 reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
-            # شروع آپدیت خودکار
             import asyncio
             asyncio.create_task(show_broadcast_progress(update, context, broadcast_id))
         else:
             final_text = progress_text
             if broadcast['is_sent']:
-                final_text += "\n\n✅ **ارسال به پایان رسید!**"
+                final_text += "\n\n✅ <b>ارسال به پایان رسید!</b>"
             elif broadcast['is_cancelled']:
-                final_text += "\n\n⛔ **ارسال لغو شد!**"
+                final_text += "\n\n⛔ <b>ارسال لغو شد!</b>"
             
             await query.edit_message_text(
                 final_text,
                 reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             
 async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -619,21 +601,21 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending = len([b for b in broadcasts if not b['is_sent'] and not b['is_cancelled']])
     
     text = (
-        f"📊 **آمار و گزارشات**\n"
+        f"📊 <b>آمار و گزارشات</b>\n"
         f"━━━━━━━━━━━━━━━━\n\n"
-        f"👑 **ادمین‌ها:**\n"
+        f"👑 <b>ادمین‌ها:</b>\n"
         f"   🔸 ادمین اصلی: ۱\n"
         f"   🔹 ادمین فرعی: {len(sub_admins)}\n\n"
-        f"👥 **کاربران:**\n"
+        f"👥 <b>کاربران:</b>\n"
         f"   کل: {total_users}\n"
         f"   فعال: {active_users}\n"
         f"   بن شده: {banned_users}\n\n"
-        f"📢 **پیام‌های همگانی:**\n"
+        f"📢 <b>پیام‌های همگانی:</b>\n"
         f"   کل: {len(broadcasts)}\n"
         f"   در انتظار: {pending}\n"
     )
     
-    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
 
 # ---------- وضعیت ربات ----------
 
@@ -661,15 +643,15 @@ async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TY
         cpu, mem, disk_used_mb, disk_total_mb = 0, type('obj', (object,), {'percent': 0})(), 0, 1
     
     text = (
-        f"⚙️ **وضعیت ربات**\n━━━━━━━━━━━━━━━━\n\n"
+        f"⚙️ <b>وضعیت ربات</b>\n━━━━━━━━━━━━━━━━\n\n"
         f"🤖 ربات: {'🟢 فعال' if is_active else '🔴 غیرفعال'}\n\n"
-        f"📈 **سرور:**\n"
+        f"📈 <b>سرور:</b>\n"
         f"   CPU: {cpu}%\n"
         f"   RAM: {mem.percent}%\n"
         f"   Disk: {disk.percent}% ({disk_used_mb}MB / {disk_total_mb}MB)\n"
     )
     
-    await query.edit_message_text(text, reply_markup=admin_bot_status_keyboard(is_active), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=admin_bot_status_keyboard(is_active), parse_mode='HTML')
 
 async def toggle_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تغییر وضعیت"""
@@ -689,7 +671,7 @@ async def delete_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔙 انصراف", callback_data="admin_bot_status")]
     ])
     
-    await query.edit_message_text("⚠️ **هشدار!**\n\nهمه داده‌های کاربران حذف می‌شود!\nاین عملیات قابل بازگشت نیست!\n\nمطمئن هستید؟", reply_markup=keyboard, parse_mode='Markdown')
+    await query.edit_message_text("⚠️ <b>هشدار!</b>\n\nهمه داده‌های کاربران حذف می‌شود!\nاین عملیات قابل بازگشت نیست!\n\nمطمئن هستید؟", reply_markup=keyboard, parse_mode='HTML')
 
 async def confirm_delete_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حذف همه داده‌ها"""
@@ -705,7 +687,7 @@ async def manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی ادمین‌ها"""
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("👥 **مدیریت ادمین‌ها**", reply_markup=admin_manage_admins_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text("👥 <b>مدیریت ادمین‌ها</b>", reply_markup=admin_manage_admins_keyboard(), parse_mode='HTML')
 
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """افزودن ادمین"""
@@ -719,7 +701,7 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("➕ **افزودن ادمین**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text("➕ <b>افزودن ادمین</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
     return ADD_ADMIN_ID
 
 async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -731,7 +713,6 @@ async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = int(update.message.text.strip())
         db_add_admin(user_id)
         
-        # ⚠️ بدون parse_mode - یا با HTML
         await update.message.reply_text(
             f"✅ کاربر <code>{user_id}</code> ادمین شد!",
             parse_mode='HTML',
@@ -768,7 +749,7 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text(
         "➖ <b>حذف ادمین</b>\n\nادمین مورد نظر را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='HTML'  # ⚠️ فقط اینو HTML کن
+        parse_mode='HTML'
     )
 
 async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -793,16 +774,16 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admins = get_all_admins()
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    text = f"👑 **لیست ادمین‌ها:**\n\n🔸 ادمین اصلی: `{admin_id}`\n\n"
+    text = f"👑 <b>لیست ادمین‌ها:</b>\n\n🔸 ادمین اصلی: <code>{admin_id}</code>\n\n"
     if admins:
-        text += "**ادمین‌های فرعی:**\n"
+        text += "<b>ادمین‌های فرعی:</b>\n"
         for admin in admins:
             name = admin['first_name'] or 'ناشناس'
-            text += f"   👤 {name} (`{admin['user_id']}`)\n"
+            text += f"   👤 {name} (<code>{admin['user_id']}</code>)\n"
     else:
         text += "📭 هیچ ادمین فرعی وجود ندارد"
     
-    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
 
 # ---------- مدیریت کاربران ----------
 
@@ -810,7 +791,7 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی کاربران"""
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("🚫 **مدیریت کاربران**", reply_markup=admin_manage_users_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text("🚫 <b>مدیریت کاربران</b>", reply_markup=admin_manage_users_keyboard(), parse_mode='HTML')
 
 async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع بن"""
@@ -818,7 +799,7 @@ async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("🔨 **بن کردن کاربر**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text("🔨 <b>بن کردن کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
     return BAN_USER_ID
 
 async def ban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -860,7 +841,7 @@ async def unban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton(f"🔓 {name} ({user['user_id']})", callback_data=f"admin_unban_{user['user_id']}")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_users")])
     
-    await query.edit_message_text("🔓 **آزادسازی کاربر**\n\nکاربر مورد نظر را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await query.edit_message_text("🔓 <b>آزادسازی کاربر</b>\n\nکاربر مورد نظر را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 async def unban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اجرای آزادسازی"""
@@ -887,12 +868,12 @@ async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("📭 هیچ کاربر بن شده‌ای وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
     
-    text = "🚫 **لیست کاربران بن شده:**\n\n"
+    text = "🚫 <b>لیست کاربران بن شده:</b>\n\n"
     for user in banned:
         name = user['first_name'] or 'ناشناس'
-        text += f"🔴 {name} (`{user['user_id']}`)\n"
+        text += f"🔴 {name} (<code>{user['user_id']}</code>)\n"
     
-    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
 
 # ---------- جستجوی کاربر ----------
 
@@ -902,7 +883,7 @@ async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("🔍 **جستجوی کاربر**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
+    await query.edit_message_text("🔍 <b>جستجوی کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
     return SEARCH_USER_ID
 
 async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -921,8 +902,8 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             active_reminders = len([r for r in reminders if r['is_active']])
             
             text = (
-                f"🔍 **اطلاعات کاربر**\n\n"
-                f"🆔 شناسه: `{user['user_id']}`\n"
+                f"🔍 <b>اطلاعات کاربر</b>\n\n"
+                f"🆔 شناسه: <code>{user['user_id']}</code>\n"
                 f"👤 نام: {user['first_name'] or 'ندارد'}\n"
                 f"📝 یوزرنیم: @{user['username'] or 'ندارد'}\n"
                 f"👑 ادمین: {'✅' if user['is_admin'] else '❌'}\n"
@@ -937,7 +918,7 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{user_id}")])
             keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
             
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
     
     except ValueError:
         await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
