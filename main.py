@@ -76,6 +76,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Button handler received: {data}")
     
+    # ⚠️ perm_ها رو نادیده بگیر - ConversationHandler مدیریت می‌کنه
+    if data.startswith("perm_"):
+        return
+    
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
