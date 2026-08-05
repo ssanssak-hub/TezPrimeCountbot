@@ -723,16 +723,25 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ADD_ADMIN_ID
 
 async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اجرای افزودن"""
+    """اجرای افزودن ادمین"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
     try:
         user_id = int(update.message.text.strip())
         db_add_admin(user_id)
-        await update.message.reply_text(f"✅ کاربر `{user_id}` ادمین شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
+        
+        # ⚠️ بدون parse_mode - یا با HTML
+        await update.message.reply_text(
+            f"✅ کاربر <code>{user_id}</code> ادمین شد!",
+            parse_mode='HTML',
+            reply_markup=back_to_admin_keyboard()
+        )
     except ValueError:
-        await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text(
+            "❌ شناسه نامعتبر!",
+            reply_markup=back_to_admin_keyboard()
+        )
     
     context.user_data.clear()
     return ConversationHandler.END
@@ -763,14 +772,19 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اجرای حذف"""
+    """اجرای حذف ادمین"""
     query = update.callback_query
     await query.answer()
     
     user_id = int(query.data.split("_")[-1])
     db_remove_admin(user_id)
-    await query.edit_message_text(f"✅ کاربر `{user_id}` از ادمین‌ها حذف شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
-
+    
+    await query.edit_message_text(
+        f"✅ کاربر <code>{user_id}</code> از ادمین‌ها حذف شد!",
+        parse_mode='HTML',
+        reply_markup=back_to_admin_keyboard()
+    )
+    
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لیست ادمین‌ها"""
     query = update.callback_query
@@ -815,13 +829,21 @@ async def ban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = int(update.message.text.strip())
         db_ban_user(user_id)
-        await update.message.reply_text(f"🚫 کاربر `{user_id}` بن شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
+        
+        await update.message.reply_text(
+            f"🚫 کاربر <code>{user_id}</code> بن شد!",
+            parse_mode='HTML',
+            reply_markup=back_to_admin_keyboard()
+        )
     except ValueError:
-        await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text(
+            "❌ شناسه نامعتبر!",
+            reply_markup=back_to_admin_keyboard()
+        )
     
     context.user_data.clear()
     return ConversationHandler.END
-
+    
 async def unban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع آزادسازی"""
     query = update.callback_query
@@ -847,7 +869,13 @@ async def unban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     user_id = int(query.data.split("_")[-1])
     db_unban_user(user_id)
-    await query.edit_message_text(f"✅ کاربر `{user_id}` آزاد شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
+    
+    await query.edit_message_text(
+        f"✅ کاربر <code>{user_id}</code> آزاد شد!",
+        parse_mode='HTML',
+        reply_markup=back_to_admin_keyboard()
+    )
+
 
 async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لیست بن شده‌ها"""
