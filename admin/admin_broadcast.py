@@ -29,10 +29,9 @@ async def send_broadcast_now(broadcast_id, admin_id, title, message):
     sent = 0
     failed = 0
     
-    # بروزرسانی اولیه
     mark_broadcast_sent(broadcast_id, total)
     
-    for user in users:
+    for i, user in enumerate(users):
         try:
             text = f"📢 **پیام همگانی**\n\n📌 **{title}**\n\n{message}"
             await bot.send_message(
@@ -48,11 +47,11 @@ async def send_broadcast_now(broadcast_id, admin_id, title, message):
             failed += 1
             logger.error(f"❌ Failed to send to {user['user_id']}: {e}")
         
-        # بروزرسانی تدریجی
+        # بروزرسانی
         update_broadcast_count(broadcast_id, sent, failed)
         
-        # وقفه کوتاه برای جلوگیری از rate limit
-        await asyncio.sleep(0.05)
+        # ⚠️ تاخیر بیشتر بین ارسال‌ها (تلگرام محدودیت ۳۰ پیام در ثانیه داره)
+        await asyncio.sleep(0.1)  # ۱۰۰ میلی‌ثانیه = ۱۰ پیام در ثانیه
     
     logger.info(f"✅ Broadcast {broadcast_id} completed: {sent}/{total} sent, {failed} failed")
     return sent, failed, total
