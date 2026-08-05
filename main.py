@@ -12,13 +12,13 @@ from reminders.reminder_handlers import (
     set_reminder_start, set_reminder_message,
     set_reminder_days, set_reminder_time,
     view_reminders, view_reminder_detail, delete_reminder, cancel_reminder,
-    back_to_main, back_to_notifications,
+    activate_reminder_handler, back_to_main, back_to_notifications,
     REMINDER_MESSAGE, REMINDER_DAYS, REMINDER_TIME
 )
 
 # Import دیتابیس
 from database import init_db
-from reminders.reminder_database import init_reminder_db, get_user_reminders
+from reminders.reminder_database import init_reminder_db, get_all_user_reminders, get_user_reminders
 from reminders.reminder_keyboards import main_menu_keyboard, reminder_menu_keyboard
 
 # Load environment variables
@@ -96,6 +96,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (IndexError, ValueError) as e:
             logger.error(f"Invalid cancel callback: {data}, error: {e}")
             await query.edit_message_text("❌ خطا در لغو اعلان!")
+    elif data.startswith("activate_"):
+        try:
+            reminder_id = int(data.split("_")[1])
+            await activate_reminder_handler(update, context)
+        except (IndexError, ValueError) as e:
+            logger.error(f"Invalid activate callback: {data}, error: {e}")
+            await query.edit_message_text("❌ خطا در فعال‌سازی اعلان!")
     elif data == "back_to_main":
         await back_to_main(update, context)
     elif data == "back_to_notifications":
@@ -104,9 +111,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning(f"Unknown callback data: {data}")
 
 async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست اعلان‌ها برای حذف"""
     query = update.callback_query
     user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
+    reminders = get_all_user_reminders(user_id)
     
     if not reminders:
         await query.edit_message_text(
@@ -117,36 +125,46 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = []
     for r in reminders:
-        text = f"🗑️ {r['message'][:30]}..."
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        status = "✅" if r['is_active'] else "⛔"
+        text = f"{status} 🗑️ {title[:25]}..."
         keyboard.append([InlineKeyboardButton(text, callback_data=f"delete_{r['id']}")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "🗑️ **حذف اعلان**\n\nاعلان مورد نظر برای حذف را انتخاب کنید:",
+        "🗑️ **حذف اعلان**\n\n"
+        "⚠️ با حذف، اعلان کاملاً پاک می‌شود!\n"
+        "برای غیرفعال کردن موقت از گزینه لغو استفاده کنید.\n\n"
+        "اعلان مورد نظر برای حذف را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
 async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست اعلان‌های فعال برای لغو"""
     query = update.callback_query
     user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
+    reminders = get_user_reminders(user_id)  # فقط فعال‌ها
     
     if not reminders:
         await query.edit_message_text(
-            "📭 هیچ اعلانی برای لغو وجود ندارد!",
+            "📭 هیچ اعلان فعالی برای لغو وجود ندارد!",
             reply_markup=reminder_menu_keyboard()
         )
         return
     
     keyboard = []
     for r in reminders:
-        text = f"⛔ {r['message'][:30]}..."
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        text = f"⛔ {title[:25]}..."
         keyboard.append([InlineKeyboardButton(text, callback_data=f"cancel_{r['id']}")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "⛔ **لغو اعلان**\n\nاعلان مورد نظر برای لغو را انتخاب کنید:",
+        "⛔ **لغو اعلان**\n\n"
+        "اعلان غیرفعال می‌شود ولی پاک نمی‌شود.\n"
+        "بعداً می‌توانید دوباره فعالش کنید.\n\n"
+        "اعلان مورد نظر برای لغو را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -253,7 +271,7 @@ def main():
         await application.start()
         logger.info("✅ Application started")
         
-        # ⚠️ راه‌اندازی Scheduler - اینجا که event loop آماده است!
+        # راه‌اندازی Scheduler
         from reminders.reminder_scheduler import start_scheduler
         start_scheduler()
         
