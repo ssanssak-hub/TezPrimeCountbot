@@ -149,6 +149,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_admin_start(update, context)
     elif data.startswith("admin_remove_") and data != "admin_remove_admin":
         await remove_admin_execute(update, context)
+    elif data == "admin_edit_admin":
+        await edit_admin_start(update, context) 
+    elif data == "admin_edit_admin":
+        await edit_admin_start(update, context)
+    elif data.startswith("admin_edit_") and data != "admin_edit_admin":
+        await edit_admin_permissions(update, context)
+    elif data == "admin_save_permissions":
+        await save_admin_permissions(update, context)
     elif data == "admin_list_admins":
         await list_admins(update, context)
     elif data == "admin_manage_users":
@@ -346,6 +354,7 @@ def main():
     application = Application.builder().token(TOKEN).build()
     
     # ⚠️ admin_conv با states کامل
+
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -371,6 +380,7 @@ def main():
                 CallbackQueryHandler(handle_permission_toggle, pattern="^perm_"),
                 CallbackQueryHandler(confirm_add_admin, pattern="^admin_confirm_add$"),
                 CallbackQueryHandler(cancel_add_admin, pattern="^admin_cancel_add$"),
+                CallbackQueryHandler(save_admin_permissions, pattern="^admin_save_permissions$"),  # ⚠️ اینجا
             ],
             SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
         },
@@ -383,7 +393,7 @@ def main():
         per_message=True,
         allow_reentry=True
     )
-    application.add_handler(admin_conv)
+    application.add_handler(admin_conv)    
     
     reminder_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
