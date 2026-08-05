@@ -257,14 +257,28 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ریمایندر
+    # ====== افزودن ادمین ======
+    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_admin'):
+        await add_admin_execute(update, context)
+        return
+    
+    # ====== بن کاربر ======
+    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_ban'):
+        await ban_user_execute(update, context)
+        return
+    
+    # ====== جستجوی کاربر ======
+    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_search'):
+        await search_user_result(update, context)
+        return
+    
+    # ====== ریمایندر ======
     if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
         await set_reminder_message(update, context)
         return
     
-    # پیام پیش‌فرض
+    # ====== هیچکدوم نبود ======
     await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
-    
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}", exc_info=context.error)
     if update and update.effective_message:
