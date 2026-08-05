@@ -341,28 +341,17 @@ def main():
     
     application = Application.builder().token(TOKEN).build()
     
-    # ConversationHandler برای ارسال پیام همگانی
-    broadcast_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$")],
-        states={
-            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
-            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
-        },
-        fallbacks=[CallbackQueryHandler(admin_panel, pattern="^admin_panel$")],
-        name="broadcast_conversation",
-        per_message=False,
-        allow_reentry=True
-    )
-    application.add_handler(broadcast_conv)
-    
-    # ConversationHandler برای مدیریت ادمین
+    # ========== ConversationHandler واحد برای همه admin ==========
     admin_conv = ConversationHandler(
         entry_points=[
+            CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
             CallbackQueryHandler(ban_user_start, pattern="^admin_ban_user$"),
             CallbackQueryHandler(add_admin_start, pattern="^admin_add_admin$"),
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
+            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
+            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
             BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
             ADD_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute)],
             SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
@@ -374,7 +363,7 @@ def main():
     )
     application.add_handler(admin_conv)
     
-    # ConversationHandler برای ریمایندر
+    # ========== ConversationHandler برای ریمایندر ==========
     reminder_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
