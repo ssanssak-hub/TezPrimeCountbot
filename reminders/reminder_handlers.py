@@ -145,19 +145,17 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "time_done":
         # بررسی اینکه ساعت و دقیقه انتخاب شده
-        if context.user_data.get('hour') is None or context.user_data.get('minute') is None:
-            await query.edit_message_text(
-                "❌ لطفاً ساعت و دقیقه را انتخاب کنید!",
-                reply_markup=time_keyboard()
-            )
+        hour = context.user_data.get('hour')
+        minute = context.user_data.get('minute')
+        
+        if hour is None or minute is None:
+            await query.answer("❌ لطفاً هم ساعت و هم دقیقه را انتخاب کنید!", show_alert=True)
             return REMINDER_TIME
         
         # ذخیره اعلان در دیتابیس
         user_id = update.effective_user.id
         message = context.user_data['reminder']['message']
         days = context.user_data['selected_days']
-        hour = context.user_data['hour']
-        minute = context.user_data['minute']
         
         reminder_id = save_reminder(user_id, message, days, hour, minute)
         
@@ -179,16 +177,81 @@ async def set_reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         return ConversationHandler.END
     
+    elif data == "time_page_0":
+        # رفتن به صفحه انتخاب ساعت
+        await query.edit_message_text(
+            "🕐 **انتخاب ساعت**\n\n"
+            "لطفاً ساعت مورد نظر را انتخاب کنید:",
+            reply_markup=time_keyboard(
+                selected_hour=context.user_data.get('hour'),
+                selected_minute=context.user_data.get('minute'),
+                page=0
+            ),
+            parse_mode='Markdown'
+        )
+        return REMINDER_TIME
+    
+    elif data == "time_page_1":
+        # رفتن به صفحه انتخاب دقیقه
+        hour = context.user_data.get('hour')
+        if hour is None:
+            await query.answer("❌ لطفاً اول ساعت را انتخاب کنید!", show_alert=True)
+            return REMINDER_TIME
+        
+        await query.edit_message_text(
+            "🕐 **انتخاب دقیقه**\n\n"
+            f"ساعت انتخاب شده: {hour:02d}\n"
+            "لطفاً دقیقه مورد نظر را انتخاب کنید:",
+            reply_markup=time_keyboard(
+                selected_hour=hour,
+                selected_minute=context.user_data.get('minute'),
+                page=1
+            ),
+            parse_mode='Markdown'
+        )
+        return REMINDER_TIME
+    
     elif data.startswith("time_h_"):
         hour = int(data.split("_")[2])
         context.user_data['hour'] = hour
-        await query.answer(f"ساعت {hour} انتخاب شد")
+        await query.answer(f"✅ ساعت {hour:02d} انتخاب شد")
+        
+        # بروزرسانی کیبورد (هنوز در صفحه ساعت)
+        await query.edit_message_text(
+            f"🕐 **انتخاب ساعت**\n\n"
+            f"ساعت انتخاب شده: {hour:02d}\n\n"
+            f"حالا می‌توانید به انتخاب دقیقه بروید:",
+            reply_markup=time_keyboard(
+                selected_hour=hour,
+                selected_minute=context.user_data.get('minute'),
+                page=0
+            ),
+            parse_mode='Markdown'
+        )
         return REMINDER_TIME
     
     elif data.startswith("time_m_"):
         minute = int(data.split("_")[2])
         context.user_data['minute'] = minute
-        await query.answer(f"دقیقه {minute} انتخاب شد")
+        await query.answer(f"✅ دقیقه {minute:02d} انتخاب شد")
+        
+        # بروزرسانی کیبورد (در صفحه دقیقه)
+        await query.edit_message_text(
+            f"🕐 **انتخاب دقیقه**\n\n"
+            f"دقیقه انتخاب شده: {minute:02d}\n"
+            f"ساعت: {context.user_data.get('hour', '?')}:{minute:02d}\n\n"
+            f"می‌توانید ثبت نهایی کنید یا ساعت را تغییر دهید:",
+            reply_markup=time_keyboard(
+                selected_hour=context.user_data.get('hour'),
+                selected_minute=minute,
+                page=1
+            ),
+            parse_mode='Markdown'
+        )
+        return REMINDER_TIME
+    
+    elif data == "noop":
+        # دکمه غیرفعال - هیچ کاری نکن
         return REMINDER_TIME
 
 async def view_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
