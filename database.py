@@ -81,8 +81,9 @@ def save_user(user_id, username, first_name, last_name):
     conn.commit()
     conn.close()
 
-def is_user_admin(user_id, admin_id):
-    """چک کردن ادمین بودن کاربر (ادمین اصلی یا فرعی)"""
+# ⚠️ تابع اصلی - ۳ خروجی
+def _is_user_admin_full(user_id, admin_id):
+    """اطلاعات کامل ادمین"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -99,10 +100,21 @@ def is_user_admin(user_id, admin_id):
     
     return False, None, ''
 
+# ⚠️ تابع سازگار با کد قدیمی - ۲ خروجی
+def is_user_admin(user_id, admin_id):
+    """چک ادمین - ۲ خروجی (سازگار با کد قدیم)"""
+    is_admin, admin_type, _ = _is_user_admin_full(user_id, admin_id)
+    return is_admin, admin_type
+
+# ⚠️ تابع جدید - ۳ خروجی برای جاهایی که permissions لازمه
+def get_admin_info(user_id, admin_id):
+    """اطلاعات کامل ادمین - ۳ خروجی"""
+    return _is_user_admin_full(user_id, admin_id)
+
 # ⚠️ تابع جدید: چک دسترسی ادمین فرعی
 def check_admin_permission(user_id, admin_id, permission):
     """چک اینکه ادمین فرعی به یه بخش خاص دسترسی داره یا نه"""
-    is_admin, admin_type, permissions = is_user_admin(user_id, admin_id)
+    is_admin, admin_type, permissions = get_admin_info(user_id, admin_id)
     
     if not is_admin:
         return False
@@ -111,7 +123,7 @@ def check_admin_permission(user_id, admin_id, permission):
         return True
     
     if permission == "admin_panel":
-        return True  # همه ادمین‌ها پنل رو می‌بینن
+        return True
     
     if permissions == "all":
         return True
@@ -182,7 +194,6 @@ def get_user_info(user_id):
     conn.close()
     return user
 
-# ⚠️ تغییر کرد - حالا permissions هم ذخیره میشه
 def add_admin(user_id, permissions="all"):
     """اضافه کردن ادمین فرعی با دسترسی‌های مشخص"""
     conn = get_db_connection()
