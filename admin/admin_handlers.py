@@ -191,8 +191,7 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
-    return BROADCAST_TITLE
-
+    return BROADCAST_TITLE 
 
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای زمان‌بندی"""
@@ -240,12 +239,12 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
 
 async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت تاریخ شمسی و اعتبارسنجی"""
-    if not context.user_data.get('awaiting_message'):
-        return ConversationHandler.END
+    # ⚠️ این چک رو بردار - از echo ممکنه صدا زده بشه
+    # if not context.user_data.get('awaiting_message'):
+    #     return ConversationHandler.END
     
     date_input = update.message.text.strip()
     
-    # اعتبارسنجی فرمت تاریخ
     try:
         import jdatetime
         parts = date_input.split('/')
@@ -254,11 +253,8 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
         
         year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
         persian_date = jdatetime.date(year, month, day)
-        
-        # تبدیل به میلادی
         gregorian_date = persian_date.togregorian()
         
-        # چک اینکه تاریخ گذشته نباشه
         today = jdatetime.date.today()
         if persian_date < today:
             await update.message.reply_text(
@@ -271,7 +267,6 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
             )
             return BROADCAST_DATE
         
-        # ذخیره تاریخ
         context.user_data['broadcast']['date'] = gregorian_date.strftime("%Y-%m-%d")
         context.user_data['broadcast']['persian_date'] = date_input
         context.user_data['broadcast_step'] = 'time'
@@ -304,12 +299,12 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
 
 async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت ساعت تهران و ثبت نهایی"""
-    if not context.user_data.get('awaiting_message'):
-        return ConversationHandler.END
+    # ⚠️ این چک رو بردار
+    # if not context.user_data.get('awaiting_message'):
+    #     return ConversationHandler.END
     
     time_input = update.message.text.strip()
     
-    # اعتبارسنجی فرمت ساعت
     try:
         parts = time_input.split(':')
         if len(parts) != 2:
@@ -320,16 +315,14 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         if hour < 0 or hour > 23 or minute < 0 or minute > 59:
             raise ValueError("ساعت یا دقیقه نامعتبر")
         
-        # چک اینکه برای امروز، ساعت گذشته نباشه
         import jdatetime
-        from datetime import datetime, timedelta
+        from datetime import datetime
         import pytz
         
         persian_date_str = context.user_data['broadcast']['persian_date']
         today = jdatetime.date.today()
         
         if persian_date_str == today.strftime('%Y/%m/%d'):
-            # تاریخ امروزه - چک کن ساعت گذشته نباشه
             now_tehran = datetime.now(pytz.timezone('Asia/Tehran'))
             scheduled_time = now_tehran.replace(hour=hour, minute=minute, second=0, microsecond=0)
             
@@ -344,14 +337,12 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
                 )
                 return BROADCAST_TIME
         
-        # همه چی درسته - ثبت نهایی
         context.user_data['broadcast']['time'] = f"{hour:02d}:{minute:02d}"
         
         title = context.user_data['broadcast']['title']
         message = context.user_data['broadcast']['message']
         date_miladi = context.user_data['broadcast']['date']
         
-        # ذخیره در دیتابیس
         broadcast_id = save_broadcast(
             update.effective_user.id, title, message,
             date_miladi, f"{hour:02d}:{minute:02d}"
