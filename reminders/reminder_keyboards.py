@@ -5,10 +5,10 @@ def main_menu_keyboard(user_id=None, admin_id=None):
         [InlineKeyboardButton("🔔 اعلان‌ها", callback_data="notifications")]
     ]
     
-    # دکمه پنل مدیریت فقط برای ادمین‌ها
+    # دکمه پنل مدیریت برای همه ادمین‌ها
     if user_id and admin_id:
         from database import is_user_admin
-        is_admin, _ = is_user_admin(user_id, admin_id)
+        is_admin, _ = is_user_admin(user_id, admin_id)  # ⚠️ این هم main_admin رو چک می‌کنه هم sub_admin
         if is_admin:
             keyboard.append([InlineKeyboardButton("👑 پنل مدیریت", callback_data="admin_panel")])
     
