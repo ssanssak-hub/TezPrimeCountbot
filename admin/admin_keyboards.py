@@ -26,24 +26,23 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
     keyboard = []
     
     if user_id and admin_id:
-        if check_admin_permission(user_id, admin_id, "admin_broadcast_now"):
+        if check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
             keyboard.append([InlineKeyboardButton("📢 ارسال پیام همگانی فوری", callback_data="admin_broadcast_now")])
-        if check_admin_permission(user_id, admin_id, "admin_broadcast_scheduled"):
+        if check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
             keyboard.append([InlineKeyboardButton("⏰ پیام همگانی زمان‌بندی شده", callback_data="admin_broadcast_scheduled")])
-        if check_admin_permission(user_id, admin_id, "broadcasts_list"):
+        if check_admin_permission(user_id, admin_id, "perm_broadcasts_list"):
             keyboard.append([InlineKeyboardButton("📋 پیام‌های همگانی", callback_data="admin_broadcasts_list")])
-        if check_admin_permission(user_id, admin_id, "manage_admins"):
+        if check_admin_permission(user_id, admin_id, "perm_manage_admins"):
             keyboard.append([InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data="admin_manage_admins")])
-        if check_admin_permission(user_id, admin_id, "manage_users"):
+        if check_admin_permission(user_id, admin_id, "perm_manage_users"):
             keyboard.append([InlineKeyboardButton("🚫 مدیریت کاربران", callback_data="admin_manage_users")])
-        if check_admin_permission(user_id, admin_id, "search_user"):
+        if check_admin_permission(user_id, admin_id, "perm_search_user"):
             keyboard.append([InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="admin_search_user")])
-        if check_admin_permission(user_id, admin_id, "stats"):
+        if check_admin_permission(user_id, admin_id, "perm_stats"):
             keyboard.append([InlineKeyboardButton("📊 آمار و گزارشات", callback_data="admin_stats")])
-        if check_admin_permission(user_id, admin_id, "bot_status"):
+        if check_admin_permission(user_id, admin_id, "perm_bot_status"):
             keyboard.append([InlineKeyboardButton("⚙️ وضعیت ربات", callback_data="admin_bot_status")])
     else:
-        # حالت پیش‌فرض - همه دکمه‌ها
         keyboard = [
             [InlineKeyboardButton("📢 ارسال پیام همگانی فوری", callback_data="admin_broadcast_now")],
             [InlineKeyboardButton("⏰ پیام همگانی زمان‌بندی شده", callback_data="admin_broadcast_scheduled")],
@@ -57,7 +56,6 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="back_to_main")])
     return InlineKeyboardMarkup(keyboard)
-
 
 def permissions_selection_keyboard(selected_permissions):
     """کیبورد انتخاب دسترسی‌ها (شیشه‌ای/toggle)"""
