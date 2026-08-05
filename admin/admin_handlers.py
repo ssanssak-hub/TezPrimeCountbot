@@ -505,4 +505,74 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if user['is_banned']:
                 keyboard.append([InlineKeyboardButton("🔓 آزادسازی کاربر", callback_data=f"admin_unban_{user_id}")])
             else:
-                keyboard.append([InlineKeyboard
+                keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{user_id}")])
+            keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
+            
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    except ValueError:
+        await update.message.reply_text("❌ شناسه کاربر نامعتبر!", reply_markup=back_to_admin_keyboard())
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+# ---------- مشاهده پیام‌های همگانی ----------
+
+async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لیست پیام‌های همگانی"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcasts = get_all_broadcasts()
+    if not broadcasts:
+        await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    await query.edit_message_text(
+        "📋 **پیام‌های همگانی**",
+        reply_markup=admin_broadcasts_list_keyboard(broadcasts),
+        parse_mode='Markdown'
+    )
+
+async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """جزئیات پیام همگانی"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    progress_text = get_broadcast_progress_text(broadcast_id)
+    
+    broadcasts = get_all_broadcasts()
+    broadcast = None
+    for b in broadcasts:
+        if b['id'] == broadcast_id:
+            broadcast = b
+            break
+    
+    if broadcast:
+        await query.edit_message_text(
+            progress_text,
+            reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
+            parse_mode='Markdown'
+        )
+
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو پیام همگانی"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    mark_broadcast_cancelled(broadcast_id)
+    
+    await query.edit_message_text("⛔ پیام همگانی لغو شد!", reply_markup=back_to_admin_keyboard())
+
+async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حذف پیام همگانی"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    delete_broadcast(broadcast_id)
+    
+    await query.edit_message_text("🗑️ پیام همگانی حذف شد!", reply_markup=back_to_admin_keyboard())
+
