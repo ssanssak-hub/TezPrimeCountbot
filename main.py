@@ -282,50 +282,49 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # چک awaiting_message
-    if context.user_data.get('awaiting_message'):
-        # برای broadcast فوری
-        if context.user_data.get('broadcast_type') == 'now':
-            await broadcast_now_message(update, context)
-            return
-        
-        # برای broadcast زمان‌بندی
-        if context.user_data.get('broadcast_type') == 'scheduled':
-            await broadcast_scheduled_message(update, context)
-            return
-        
-        # برای ریمایندر
-        if context.user_data.get('step') in ['title', 'message']:
-            await set_reminder_message(update, context)
-            return
-        
-        # برای بن کاربر
-        if context.user_data.get('awaiting_ban'):
-            await ban_user_execute(update, context)
-            return
-        
-        # برای افزودن ادمین
-        if context.user_data.get('awaiting_admin'):
-            await add_admin_execute(update, context)
-            return
-        
-        # برای جستجوی کاربر
-        if context.user_data.get('awaiting_search'):
-            await search_user_result(update, context)
-            return
+    # ====== Broadcast فوری ======
+    if context.user_data.get('broadcast_type') == 'now' and context.user_data.get('broadcast_step') in ['title', 'message']:
+        await broadcast_now_message(update, context)
+        return
     
-    # چک broadcast_step (برای تاریخ و ساعت زمان‌بندی)
+    # ====== Broadcast زمان‌بندی - عنوان و پیام ======
+    if context.user_data.get('broadcast_type') == 'scheduled' and context.user_data.get('broadcast_step') in ['title', 'message']:
+        await broadcast_scheduled_message(update, context)
+        return
+    
+    # ====== Broadcast - تاریخ ======
     if context.user_data.get('broadcast_step') == 'date':
         await broadcast_scheduled_date(update, context)
         return
     
+    # ====== Broadcast - ساعت ======
     if context.user_data.get('broadcast_step') == 'time':
         await broadcast_scheduled_time(update, context)
         return
     
-    # هیچکدوم نبود
+    # ====== ریمایندر ======
+    if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
+        await set_reminder_message(update, context)
+        return
+    
+    # ====== بن کاربر ======
+    if context.user_data.get('awaiting_ban'):
+        await ban_user_execute(update, context)
+        return
+    
+    # ====== افزودن ادمین ======
+    if context.user_data.get('awaiting_admin'):
+        await add_admin_execute(update, context)
+        return
+    
+    # ====== جستجوی کاربر ======
+    if context.user_data.get('awaiting_search'):
+        await search_user_result(update, context)
+        return
+    
+    # ====== هیچکدوم نبود ======
     await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
-
+    
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای ربات"""
     logger.error(f"Error: {context.error}", exc_info=context.error)
@@ -407,26 +406,15 @@ def main():
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
-            BROADCAST_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
-            ],
-            BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
-            ],
-            BROADCAST_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_date)],
-            BROADCAST_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_time)],
-            BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
-            ADD_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute)],
-            SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
+            # ⚠️ همه MessageHandlerها رو بردار - echo مدیریت می‌کنه
         },
         fallbacks=[
             CommandHandler("cancel", admin_cancel),
             CallbackQueryHandler(admin_panel, pattern="^admin_panel$"),
+            CallbackQueryHandler(back_to_main, pattern="^back_to_main$"),
         ],
         name="admin_conversation",
-        per_message=True,  # ⚠️ True کن
+        per_message=True,
         allow_reentry=True
     )
     application.add_handler(admin_conv)
