@@ -701,7 +701,13 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("➕ <b>افزودن ادمین</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
+    context.user_data['awaiting_admin'] = True  # ⚠️ اینو اضافه کن
+    
+    await query.edit_message_text(
+        "➕ <b>افزودن ادمین</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
     return ADD_ADMIN_ID
 
 async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -799,7 +805,13 @@ async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("🔨 <b>بن کردن کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
+    context.user_data['awaiting_ban'] = True  # ⚠️ اینو اضافه کن
+    
+    await query.edit_message_text(
+        "🔨 <b>بن کردن کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
     return BAN_USER_ID
 
 async def ban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -883,7 +895,13 @@ async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     context.user_data['awaiting_message'] = True
-    await query.edit_message_text("🔍 <b>جستجوی کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
+    context.user_data['awaiting_search'] = True  # ⚠️ اینو اضافه کن
+    
+    await query.edit_message_text(
+        "🔍 <b>جستجوی کاربر</b>\n\nلطفاً <b>user_id</b> را ارسال کنید:",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
     return SEARCH_USER_ID
 
 async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
