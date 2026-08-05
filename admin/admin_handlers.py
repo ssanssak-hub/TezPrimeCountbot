@@ -730,6 +730,97 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 # ---------- وضعیت ربات ----------
 
+async def admin_server_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش وضعیت سرور"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # ✅ چک دسترسی
+    from database import check_admin_permission
+    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_bot_status"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return
+    
+    try:
+        import psutil
+        import platform
+        import time
+        
+        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_count = psutil.cpu_count()
+        cpu_freq = psutil.cpu_freq()
+        
+        memory = psutil.virtual_memory()
+        memory_used_gb = memory.used / (1024**3)
+        memory_total_gb = memory.total / (1024**3)
+        memory_percent = memory.percent
+        
+        disk = psutil.disk_usage('/')
+        disk_used_gb = disk.used / (1024**3)
+        disk_total_gb = disk.total / (1024**3)
+        disk_percent = disk.percent
+        
+        system = platform.system()
+        release = platform.release()
+        uptime_seconds = time.time() - psutil.boot_time()
+        uptime_days = int(uptime_seconds // 86400)
+        uptime_hours = int((uptime_seconds % 86400) // 3600)
+        uptime_minutes = int((uptime_seconds % 3600) // 60)
+        
+        text = (
+            f"🖥️ <b>وضعیت سرور</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>💻 سیستم:</b>\n"
+            f"   سیستم‌عامل: {system} {release}\n"
+            f"   هسته‌های CPU: {cpu_count}\n"
+            f"   فرکانس CPU: {cpu_freq.current:.0f} MHz\n"
+            f"   زمان روشنایی: {uptime_days} روز {uptime_hours} ساعت {uptime_minutes} دقیقه\n\n"
+            f"<b>📊 منابع:</b>\n"
+            f"   🔹 CPU: {cpu_percent}%\n"
+            f"   🔸 RAM: {memory_percent}% ({memory_used_gb:.1f}GB / {memory_total_gb:.1f}GB)\n"
+            f"   🔹 Disk: {disk_percent}% ({disk_used_gb:.1f}GB / {disk_total_gb:.1f}GB)\n"
+        )
+        
+        # نوار وضعیت گرافیکی
+        def progress_bar(percent, length=10):
+            filled = int(length * percent / 100)
+            bar = "█" * filled + "░" * (length - filled)
+            return bar
+        
+        text += f"\n<b>📈 نمودار وضعیت:</b>\n"
+        text += f"   CPU  [{progress_bar(cpu_percent)}] {cpu_percent}%\n"
+        text += f"   RAM  [{progress_bar(memory_percent)}] {memory_percent}%\n"
+        text += f"   Disk [{progress_bar(disk_percent)}] {disk_percent}%\n"
+        
+        warnings = []
+        if cpu_percent > 80:
+            warnings.append("⚠️ CPU بالاست!")
+        if memory_percent > 80:
+            warnings.append("⚠️ RAM بالاست!")
+        if disk_percent > 80:
+            warnings.append("⚠️ Disk پر شده!")
+        
+        if warnings:
+            text += f"\n<b>⚠️ هشدارها:</b>\n"
+            for warning in warnings:
+                text += f"   {warning}\n"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting server status: {e}")
+        await query.edit_message_text(
+            "❌ خطا در دریافت وضعیت سرور!",
+            reply_markup=back_to_admin_keyboard()
+        )
+
 async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
