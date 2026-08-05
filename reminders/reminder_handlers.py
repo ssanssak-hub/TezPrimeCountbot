@@ -374,3 +374,52 @@ async def back_to_notifications(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     await reminder_menu(update, context)
+
+async def view_reminder_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش جزئیات یک اعلان خاص"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        reminder_id = int(query.data.split("_")[1])
+        user_id = update.effective_user.id
+        
+        reminders = get_user_reminders(user_id)
+        reminder = None
+        
+        for r in reminders:
+            if r['id'] == reminder_id:
+                reminder = r
+                break
+        
+        if not reminder:
+            await query.edit_message_text(
+                "❌ اعلان مورد نظر یافت نشد!",
+                reply_markup=reminder_menu_keyboard()
+            )
+            return
+        
+        days = ", ".join([get_weekday_name(int(d)) for d in reminder['days_of_week'].split(',')])
+        status = "✅ فعال" if reminder['is_active'] else "❌ غیرفعال"
+        
+        text = (
+            f"📋 **جزئیات اعلان**\n\n"
+            f"🆔 شناسه: {reminder['id']}\n"
+            f"📝 پیام: {reminder['message']}\n"
+            f"📅 روزها: {days}\n"
+            f"🕐 زمان: {reminder['hour']:02d}:{reminder['minute']:02d}\n"
+            f"📊 وضعیت: {status}\n"
+        )
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reminder_action_keyboard(reminder_id),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error viewing reminder detail: {e}")
+        await query.edit_message_text(
+            "❌ خطا در نمایش جزئیات اعلان!",
+            reply_markup=reminder_menu_keyboard()
+        )
