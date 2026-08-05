@@ -83,6 +83,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cancel_reminder":
         await show_cancel_list(update, context)
     
+    # مدیریت مشاهده جزئیات اعلان
+    elif data.startswith("view_"):
+        try:
+            reminder_id = int(data.split("_")[1])
+            await view_reminder_detail(update, context)
+        except (IndexError, ValueError) as e:
+            logger.error(f"Invalid view callback: {data}, error: {e}")
+            await query.edit_message_text("❌ خطا در نمایش اعلان!")
+    
     # مدیریت حذف و لغو مستقیم
     elif data.startswith("delete_"):
         try:
