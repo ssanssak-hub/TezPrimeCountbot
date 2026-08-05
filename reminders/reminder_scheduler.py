@@ -14,7 +14,16 @@ TOKEN = os.getenv('TOKEN')
 bot = Bot(token=TOKEN)
 
 logger = logging.getLogger(__name__)
-scheduler = AsyncIOScheduler(timezone='Asia/Tehran')
+
+# ⚠️ event loop موجود رو استفاده کن
+import asyncio
+try:
+    loop = asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+scheduler = AsyncIOScheduler(event_loop=loop, timezone='Asia/Tehran')
 
 def start_scheduler():
     """راه‌اندازی زمان‌بند"""
@@ -31,8 +40,11 @@ def start_scheduler():
             reminder['minute']
         )
     
-    scheduler.start()
-    logger.info("Scheduler started successfully")
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("✅ Scheduler started successfully")
+    else:
+        logger.info("Scheduler already running")
 
 async def schedule_reminder(reminder_id, user_id, message, days, hour, minute):
     """برنامه‌ریزی یک اعلان جدید"""
@@ -57,34 +69,37 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
                 chat_id=user_id,
                 text=f"🔔 **یادآوری!**\n\n"
                      f"{message}\n\n"
-                     f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}"
+                     f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}",
+                parse_mode='Markdown'
             )
-            logger.info(f"Reminder {reminder_id} sent to user {user_id}")
+            logger.info(f"✅ Reminder {reminder_id} sent to user {user_id}")
             
         except Exception as e:
-            logger.error(f"Error sending reminder {reminder_id}: {e}")
+            logger.error(f"❌ Error sending reminder {reminder_id}: {e}")
     
-    # اضافه کردن به برنامه زمان‌بندی با زمان سرور
+    # تبدیل ساعت تهران به UTC
     server_hour, server_minute = convert_to_server_time(hour, minute)
     
-    # تنظیم کرون جاب برای هر روز
-    scheduler.add_job(
-        send_reminder,
-        trigger=CronTrigger(
-            hour=server_hour,
-            minute=server_minute,
-            timezone='UTC'
-        ),
-        id=f"reminder_{reminder_id}",
-        replace_existing=True
-    )
-    
-    logger.info(f"Reminder {reminder_id} scheduled for {server_hour:02d}:{server_minute:02d} UTC")
+    # اضافه کردن job
+    try:
+        scheduler.add_job(
+            send_reminder,
+            trigger=CronTrigger(
+                hour=server_hour,
+                minute=server_minute,
+                timezone='UTC'
+            ),
+            id=f"reminder_{reminder_id}",
+            replace_existing=True
+        )
+        logger.info(f"✅ Reminder {reminder_id} scheduled for {server_hour:02d}:{server_minute:02d} UTC (Tehran: {hour:02d}:{minute:02d})")
+    except Exception as e:
+        logger.error(f"❌ Error scheduling reminder {reminder_id}: {e}")
 
 def remove_scheduled_reminder(reminder_id):
     """حذف یک اعلان از زمان‌بند"""
     try:
         scheduler.remove_job(f"reminder_{reminder_id}")
-        logger.info(f"Reminder {reminder_id} removed from scheduler")
+        logger.info(f"✅ Reminder {reminder_id} removed from scheduler")
     except Exception as e:
-        logger.error(f"Error removing reminder {reminder_id}: {e}")
+        logger.error(f"❌ Error removing reminder {reminder_id}: {e}")
