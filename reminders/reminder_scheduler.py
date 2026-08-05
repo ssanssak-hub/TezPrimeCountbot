@@ -15,18 +15,17 @@ bot = Bot(token=TOKEN)
 
 logger = logging.getLogger(__name__)
 
-# ⚠️ از BackgroundScheduler استفاده کن (نه AsyncIOScheduler)
 scheduler = BackgroundScheduler(timezone='UTC')
 
 def start_scheduler():
     """راه‌اندازی زمان‌بند"""
-    # بارگذاری همه اعلان‌های فعال
     reminders = get_all_active_reminders()
     
     for reminder in reminders:
         schedule_reminder_sync(
             reminder['id'],
             reminder['user_id'],
+            reminder['title'] if reminder['title'] else 'بدون عنوان',
             reminder['message'],
             reminder['days_of_week'],
             reminder['hour'],
@@ -39,16 +38,15 @@ def start_scheduler():
     else:
         logger.info("Scheduler already running")
 
-async def schedule_reminder(reminder_id, user_id, message, days, hour, minute):
+async def schedule_reminder(reminder_id, user_id, title, message, days, hour, minute):
     """برنامه‌ریزی یک اعلان جدید"""
     days_str = ','.join(map(str, days))
-    schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute)
+    schedule_reminder_sync(reminder_id, user_id, title, message, days_str, hour, minute)
 
-def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute):
+def schedule_reminder_sync(reminder_id, user_id, title, message, days_str, hour, minute):
     """برنامه‌ریزی هم‌زمان اعلان"""
     days = [int(d) for d in days_str.split(',')]
     
-    # تابع ارسال پیام (غیر async برای BackgroundScheduler)
     def send_reminder():
         try:
             import asyncio
@@ -58,7 +56,6 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
             current_day = get_current_weekday()
             logger.info(f"🔍 Reminder {reminder_id} triggered - Today: {current_day} ({get_weekday_name(current_day)}), Days: {days}")
             
-            # بررسی اینکه آیا امروز روز اعلان است
             if current_day not in days:
                 logger.info(f"⏭️ Reminder {reminder_id} skipped - today ({current_day}) not in selected days {days}")
                 loop.close()
@@ -68,7 +65,7 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
                 try:
                     day_name = get_weekday_name(current_day)
                     text = (
-                        f"🔔 **یادآوری!**\n\n"
+                        f"🔔 **{title}**\n\n"
                         f"{message}\n\n"
                         f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}"
                     )
@@ -89,10 +86,8 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
         except Exception as e:
             logger.error(f"❌ Error in send_reminder {reminder_id}: {e}", exc_info=True)
     
-    # تبدیل ساعت تهران به UTC
     server_hour, server_minute = convert_to_server_time(hour, minute)
     
-    # اضافه کردن job
     try:
         scheduler.add_job(
             send_reminder,
@@ -105,7 +100,7 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
             replace_existing=True
         )
         logger.info(f"✅ Reminder {reminder_id} scheduled for {server_hour:02d}:{server_minute:02d} UTC (Tehran: {hour:02d}:{minute:02d})")
-        logger.info(f"   Message: {message[:30]}... | Days: {days} | User: {user_id}")
+        logger.info(f"   Title: {title[:20]}... | Days: {days} | User: {user_id}")
     except Exception as e:
         logger.error(f"❌ Error scheduling reminder {reminder_id}: {e}", exc_info=True)
 
