@@ -19,8 +19,6 @@ from reminders.reminder_handlers import (
 # Import دیتابیس
 from database import init_db
 from reminders.reminder_database import init_reminder_db, get_user_reminders
-
-# ⚠️ این import مهم رو اضافه کن:
 from reminders.reminder_keyboards import main_menu_keyboard, reminder_menu_keyboard
 
 # Load environment variables
@@ -48,11 +46,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # ذخیره کاربر در دیتابیس
     from database import save_user
     save_user(user_id, user.username, user.first_name, user.last_name)
     
-    # ساخت کیبورد منوی اصلی
     keyboard = main_menu_keyboard()
     
     await update.message.reply_text(
@@ -69,11 +65,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Button handler received: {data}")
     
-    # مدیریت دکمه‌های اصلی
     if data == "notifications":
         await reminder_menu(update, context)
-    
-    # مدیریت دکمه‌های منوی اعلان‌ها (فقط دکمه‌هایی که Conversation نیستند)
     elif data == "set_reminder":
         await set_reminder_start(update, context)
     elif data == "view_reminders":
@@ -82,8 +75,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_delete_list(update, context)
     elif data == "cancel_reminder":
         await show_cancel_list(update, context)
-    
-    # مدیریت مشاهده جزئیات اعلان
     elif data.startswith("view_"):
         try:
             reminder_id = int(data.split("_")[1])
@@ -91,8 +82,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (IndexError, ValueError) as e:
             logger.error(f"Invalid view callback: {data}, error: {e}")
             await query.edit_message_text("❌ خطا در نمایش اعلان!")
-    
-    # مدیریت حذف و لغو مستقیم
     elif data.startswith("delete_"):
         try:
             reminder_id = int(data.split("_")[1])
@@ -107,19 +96,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (IndexError, ValueError) as e:
             logger.error(f"Invalid cancel callback: {data}, error: {e}")
             await query.edit_message_text("❌ خطا در لغو اعلان!")
-    
-    # مدیریت بازگشت‌ها
     elif data == "back_to_main":
         await back_to_main(update, context)
     elif data == "back_to_notifications":
         await back_to_notifications(update, context)
-    
-    # لاگ برای callback_dataهای ناشناخته
     else:
         logger.warning(f"Unknown callback data: {data}")
 
 async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست اعلان‌ها برای حذف"""
     query = update.callback_query
     user_id = update.effective_user.id
     reminders = get_user_reminders(user_id)
@@ -131,7 +115,6 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # ساخت کیبورد با دکمه‌های delete_
     keyboard = []
     for r in reminders:
         text = f"🗑️ {r['message'][:30]}..."
@@ -139,14 +122,12 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "🗑️ **حذف اعلان**\n\n"
-        "اعلان مورد نظر برای حذف را انتخاب کنید:",
+        "🗑️ **حذف اعلان**\n\nاعلان مورد نظر برای حذف را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
 async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست اعلان‌ها برای لغو"""
     query = update.callback_query
     user_id = update.effective_user.id
     reminders = get_user_reminders(user_id)
@@ -158,7 +139,6 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # ساخت کیبورد با دکمه‌های cancel_
     keyboard = []
     for r in reminders:
         text = f"⛔ {r['message'][:30]}..."
@@ -166,22 +146,17 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "⛔ **لغو اعلان**\n\n"
-        "اعلان مورد نظر برای لغو را انتخاب کنید:",
+        "⛔ **لغو اعلان**\n\nاعلان مورد نظر برای لغو را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # برای دریافت پیام متنی در طول تنظیم اعلان
     if context.user_data.get('awaiting_message'):
         await set_reminder_message(update, context)
     else:
-        await update.message.reply_text(
-            "لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید."
-        )
+        await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
 
-# تابع پردازش Webhook با مدیریت Event Loop
 def process_update(update_json):
     global application, loop
     
@@ -241,9 +216,12 @@ def main():
     init_db()
     init_reminder_db()
     
+    # ⚠️ راه‌اندازی Scheduler - این خط رو اضافه کن!
+    from reminders.reminder_scheduler import start_scheduler
+    start_scheduler()
+    
     application = Application.builder().token(TOKEN).build()
     
-    # 1. ConversationHandler برای تنظیم اعلان
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
         states={
@@ -258,13 +236,8 @@ def main():
     )
     application.add_handler(conv_handler)
     
-    # 2. CommandHandler
     application.add_handler(CommandHandler("start", start))
-    
-    # 3. CallbackQueryHandler عمومی
     application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # 4. MessageHandler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     
     loop = asyncio.new_event_loop()
