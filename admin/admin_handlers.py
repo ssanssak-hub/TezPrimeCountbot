@@ -39,7 +39,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         await query.answer()
     
-    # چک ادمین
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     is_admin, admin_type = is_user_admin(user_id, admin_id)
@@ -48,6 +47,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query:
             await query.edit_message_text("⛔ شما دسترسی به پنل مدیریت ندارید!")
         return
+    
+    context.user_data.clear()
     
     text = (
         f"👑 **پنل مدیریت**\n\n"
@@ -64,30 +65,32 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- ارسال پیام همگانی فوری ----------
 
 async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع فرآیند ارسال فوری - مرحله عنوان"""
+    """شروع ارسال فوری"""
     query = update.callback_query
     await query.answer()
     
-    # چک ادمین اصلی بودن
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی می‌تواند پیام همگانی ارسال کند!")
-        return
+        await query.edit_message_text("⛔ فقط ادمین اصلی!")
+        return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
+    context.user_data['broadcast_step'] = 'title'
+    context.user_data['awaiting_message'] = True
     
     await query.edit_message_text(
-        "📝 **ارسال پیام همگانی فوری**\n\n"
-        "لطفاً **عنوان** پیام را ارسال کنید:",
+        "📝 **ارسال پیام همگانی فوری**\n\nلطفاً **عنوان** پیام را ارسال کنید:",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
-    context.user_data['awaiting_message'] = True
     return BROADCAST_TITLE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و درخواست پیام"""
+    """دریافت عنوان و پیام"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
     message = update.message.text
     step = context.user_data.get('broadcast_step', 'title')
     
@@ -96,50 +99,37 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data['broadcast_step'] = 'message'
         
         await update.message.reply_text(
-            "📝 **ارسال پیام همگانی فوری**\n\n"
-            f"عنوان: **{message}**\n\n"
-            "حالا لطفاً **متن پیام** را ارسال کنید:\n\n"
-            "⚠️ این پیام به **همه کاربران** ارسال خواهد شد!",
+            f"📝 عنوان: **{message}**\n\nحالا **متن پیام** را ارسال کنید:\n\n⚠️ این پیام به **همه کاربران** ارسال خواهد شد!",
             reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
         return BROADCAST_MESSAGE
     
     elif step == 'message':
-        context.user_data['broadcast']['message'] = message
         title = context.user_data['broadcast']['title']
-        
-        # ذخیره در دیتابیس
         broadcast_id = save_broadcast(update.effective_user.id, title, message)
-        
-        # ارسال تایید
         users_count = get_total_users_count()
+        
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ تایید ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
             [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
         ])
         
         await update.message.reply_text(
-            f"📢 **تایید نهایی**\n\n"
-            f"📌 عنوان: **{title}**\n"
-            f"📝 پیام: {message[:100]}...\n"
-            f"👥 تعداد گیرندگان: **{users_count}** کاربر\n\n"
-            f"آیا از ارسال اطمینان دارید؟",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            f"📢 **تایید نهایی**\n\n📌 عنوان: **{title}**\n📝 پیام: {message[:100]}...\n👥 گیرندگان: **{users_count}** کاربر\n\nآیا از ارسال اطمینان دارید؟",
+            reply_markup=keyboard, parse_mode='Markdown'
         )
         
         context.user_data.clear()
         return ConversationHandler.END
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تایید و ارسال پیام همگانی"""
+    """تایید و ارسال"""
     query = update.callback_query
     await query.answer()
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    from .admin_database import get_all_broadcasts
     broadcasts = get_all_broadcasts()
     broadcast = None
     for b in broadcasts:
@@ -148,11 +138,10 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not broadcast:
-        await query.edit_message_text("❌ پیام یافت نشد!")
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    # شروع ارسال (در background)
-    await query.edit_message_text("⏳ **در حال ارسال پیام همگانی...**\n\nلطفاً شکیبا باشید...", parse_mode='Markdown')
+    await query.edit_message_text("⏳ **در حال ارسال پیام همگانی...**", parse_mode='Markdown')
     
     import asyncio
     asyncio.create_task(
@@ -160,20 +149,89 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await asyncio.sleep(2)
-    
     progress_text = get_broadcast_progress_text(broadcast_id)
     await query.edit_message_text(progress_text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
 
-# ---------- آمار و گزارشات ----------
+# ---------- پیام همگانی زمان‌بندی شده ----------
 
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش آمار و گزارشات"""
+async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع زمان‌بندی"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
+    if user_id != admin_id:
+        await query.edit_message_text("⛔ فقط ادمین اصلی!")
+        return
     
+    await query.edit_message_text(
+        "⏰ **پیام همگانی زمان‌بندی شده**\n\n"
+        "⚠️ این قابلیت به زودی اضافه می‌شود.\n"
+        "فعلاً از ارسال فوری استفاده کنید.",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='Markdown'
+    )
+
+# ---------- لیست پیام‌های همگانی ----------
+
+async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لیست پیام‌ها"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcasts = get_all_broadcasts()
+    if not broadcasts:
+        await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    await query.edit_message_text("📋 **پیام‌های همگانی**", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='Markdown')
+
+async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """جزئیات پیام"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    progress_text = get_broadcast_progress_text(broadcast_id)
+    
+    broadcasts = get_all_broadcasts()
+    broadcast = None
+    for b in broadcasts:
+        if b['id'] == broadcast_id:
+            broadcast = b
+            break
+    
+    if broadcast:
+        await query.edit_message_text(progress_text, reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']), parse_mode='Markdown')
+
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو پیام"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    mark_broadcast_cancelled(broadcast_id)
+    await query.edit_message_text("⛔ پیام همگانی لغو شد!", reply_markup=back_to_admin_keyboard())
+
+async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حذف پیام"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    delete_broadcast(broadcast_id)
+    await query.edit_message_text("🗑️ پیام همگانی حذف شد!", reply_markup=back_to_admin_keyboard())
+
+# ---------- آمار ----------
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """آمار"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
         return
@@ -182,22 +240,14 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_users = len(get_all_active_users())
     banned_users = len(get_banned_users())
     admins = len(get_all_admins())
-    
     broadcasts = get_all_broadcasts()
-    total_broadcasts = len(broadcasts)
     pending = len([b for b in broadcasts if not b['is_sent'] and not b['is_cancelled']])
     
     text = (
-        f"📊 **آمار و گزارشات**\n"
-        f"━━━━━━━━━━━━━━━━\n\n"
-        f"👥 **کاربران:**\n"
-        f"   کل: {total_users}\n"
-        f"   فعال: {active_users}\n"
-        f"   بن شده: {banned_users}\n\n"
-        f"👑 **ادمین‌ها:** {admins}\n\n"
-        f"📢 **پیام‌های همگانی:**\n"
-        f"   کل: {total_broadcasts}\n"
-        f"   در انتظار: {pending}\n"
+        f"📊 **آمار و گزارشات**\n━━━━━━━━━━━━━━━━\n\n"
+        f"👥 کاربران: {total_users} (فعال: {active_users}, بن: {banned_users})\n"
+        f"👑 ادمین‌ها: {admins}\n"
+        f"📢 پیام‌ها: {len(broadcasts)} (در انتظار: {pending})\n"
     )
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
@@ -205,13 +255,12 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- وضعیت ربات ----------
 
 async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """منوی وضعیت ربات"""
+    """وضعیت ربات"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
         return
@@ -219,113 +268,94 @@ async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TY
     status = get_bot_status()
     is_active = status['is_active'] if status else True
     
-    # وضعیت سرور
     try:
         cpu = psutil.cpu_percent(interval=1)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
+        disk_used_mb = disk.used // (1024**2)
+        disk_total_mb = disk.total // (1024**2)
     except:
-        cpu, mem, disk = 0, type('obj', (object,), {'percent': 0})(), type('obj', (object,), {'percent': 0, 'used': 0, 'total': 1})()
+        cpu, mem, disk_used_mb, disk_total_mb = 0, type('obj', (object,), {'percent': 0})(), 0, 1
     
     text = (
-        f"⚙️ **وضعیت ربات**\n"
-        f"━━━━━━━━━━━━━━━━\n\n"
+        f"⚙️ **وضعیت ربات**\n━━━━━━━━━━━━━━━━\n\n"
         f"🤖 ربات: {'🟢 فعال' if is_active else '🔴 غیرفعال'}\n\n"
-        f"📈 **وضعیت سرور:**\n"
+        f"📈 **سرور:**\n"
         f"   CPU: {cpu}%\n"
         f"   RAM: {mem.percent}%\n"
-        f"   Disk: {disk.percent}% ({disk.used // (1024**2)}MB / {disk.total // (1024**2)}MB)\n"
+        f"   Disk: {disk.percent}% ({disk_used_mb}MB / {disk_total_mb}MB)\n"
     )
     
-    await query.edit_message_text(
-        text,
-        reply_markup=admin_bot_status_keyboard(is_active),
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text(text, reply_markup=admin_bot_status_keyboard(is_active), parse_mode='Markdown')
 
 async def toggle_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تغییر وضعیت ربات"""
+    """تغییر وضعیت"""
     query = update.callback_query
     await query.answer()
     
     new_status = toggle_bot_status()
-    await query.edit_message_text(
-        f"🤖 ربات {'🟢 روشن' if new_status else '🔴 خاموش'} شد!",
-        reply_markup=back_to_admin_keyboard()
-    )
+    await query.edit_message_text(f"🤖 ربات {'🟢 روشن' if new_status else '🔴 خاموش'} شد!", reply_markup=back_to_admin_keyboard())
 
 async def delete_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حذف همه داده‌ها"""
+    """تایید حذف داده‌ها"""
     query = update.callback_query
     await query.answer()
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚠️ تأیید حذف همه داده‌ها", callback_data="admin_confirm_delete")],
+        [InlineKeyboardButton("⚠️ تأیید حذف", callback_data="admin_confirm_delete")],
         [InlineKeyboardButton("🔙 انصراف", callback_data="admin_bot_status")]
     ])
     
-    await query.edit_message_text(
-        "⚠️ **هشدار!**\n\n"
-        "با این کار همه داده‌های کاربران حذف می‌شود!\n"
-        "این عملیات قابل بازگشت نیست!\n\n"
-        "آیا مطمئن هستید؟",
-        reply_markup=keyboard,
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("⚠️ **هشدار!**\n\nهمه داده‌های کاربران حذف می‌شود!\nاین عملیات قابل بازگشت نیست!\n\nمطمئن هستید؟", reply_markup=keyboard, parse_mode='Markdown')
 
 async def confirm_delete_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تأیید حذف همه داده‌ها"""
+    """حذف همه داده‌ها"""
     query = update.callback_query
     await query.answer()
     
     delete_all_user_data()
-    await query.edit_message_text(
-        "✅ همه داده‌های کاربران با موفقیت حذف شد!",
-        reply_markup=back_to_admin_keyboard()
-    )
+    await query.edit_message_text("✅ همه داده‌ها حذف شد!", reply_markup=back_to_admin_keyboard())
 
 # ---------- مدیریت ادمین‌ها ----------
 
 async def manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """منوی مدیریت ادمین‌ها"""
+    """منوی ادمین‌ها"""
     query = update.callback_query
     await query.answer()
-    
-    await query.edit_message_text(
-        "👥 **مدیریت ادمین‌ها**",
-        reply_markup=admin_manage_admins_keyboard(),
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("👥 **مدیریت ادمین‌ها**", reply_markup=admin_manage_admins_keyboard(), parse_mode='Markdown')
 
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع افزودن ادمین"""
+    """افزودن ادمین"""
     query = update.callback_query
     await query.answer()
     
-    await query.edit_message_text(
-        "➕ **افزودن ادمین**\n\n"
-        "لطفاً **user_id** کاربر مورد نظر را ارسال کنید:\n"
-        "(مثال: 123456789)",
-        reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
-    )
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    if user_id != admin_id:
+        await query.edit_message_text("⛔ فقط ادمین اصلی!")
+        return ConversationHandler.END
+    
     context.user_data['awaiting_message'] = True
+    await query.edit_message_text("➕ **افزودن ادمین**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
     return ADD_ADMIN_ID
 
 async def add_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اجرای افزودن ادمین"""
+    """اجرای افزودن"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
     try:
         user_id = int(update.message.text.strip())
         db_add_admin(user_id)
-        await update.message.reply_text(f"✅ کاربر `{user_id}` به ادمین‌ها اضافه شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text(f"✅ کاربر `{user_id}` ادمین شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
     except ValueError:
-        await update.message.reply_text("❌ شناسه کاربر نامعتبر!", reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
     
     context.user_data.clear()
     return ConversationHandler.END
 
 async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع حذف ادمین"""
+    """حذف ادمین"""
     query = update.callback_query
     await query.answer()
     
@@ -340,14 +370,10 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard.append([InlineKeyboardButton(f"👤 {name} ({admin['user_id']})", callback_data=f"admin_remove_{admin['user_id']}")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_admins")])
     
-    await query.edit_message_text(
-        "➖ **حذف ادمین**\n\nادمین مورد نظر را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("➖ **حذف ادمین**\n\nادمین مورد نظر را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def remove_admin_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """اجرای حذف ادمین"""
+    """اجرای حذف"""
     query = update.callback_query
     await query.answer()
     
@@ -363,9 +389,7 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admins = get_all_admins()
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    text = "👑 **لیست ادمین‌ها:**\n\n"
-    text += f"🔸 **ادمین اصلی:** `{admin_id}`\n\n"
-    
+    text = f"👑 **لیست ادمین‌ها:**\n\n🔸 ادمین اصلی: `{admin_id}`\n\n"
     if admins:
         text += "**ادمین‌های فرعی:**\n"
         for admin in admins:
@@ -379,44 +403,37 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- مدیریت کاربران ----------
 
 async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """منوی مدیریت کاربران"""
+    """منوی کاربران"""
     query = update.callback_query
     await query.answer()
-    
-    await query.edit_message_text(
-        "🚫 **مدیریت کاربران**",
-        reply_markup=admin_manage_users_keyboard(),
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("🚫 **مدیریت کاربران**", reply_markup=admin_manage_users_keyboard(), parse_mode='Markdown')
 
 async def ban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع بن کردن کاربر"""
+    """شروع بن"""
     query = update.callback_query
     await query.answer()
     
-    await query.edit_message_text(
-        "🔨 **بن کردن کاربر**\n\n"
-        "لطفاً **user_id** کاربر را ارسال کنید:",
-        reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
-    )
     context.user_data['awaiting_message'] = True
+    await query.edit_message_text("🔨 **بن کردن کاربر**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
     return BAN_USER_ID
 
 async def ban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اجرای بن"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
     try:
         user_id = int(update.message.text.strip())
         db_ban_user(user_id)
         await update.message.reply_text(f"🚫 کاربر `{user_id}` بن شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
     except ValueError:
-        await update.message.reply_text("❌ شناسه کاربر نامعتبر!", reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
     
     context.user_data.clear()
     return ConversationHandler.END
 
 async def unban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع آزادسازی کاربر"""
+    """شروع آزادسازی"""
     query = update.callback_query
     await query.answer()
     
@@ -431,11 +448,7 @@ async def unban_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton(f"🔓 {name} ({user['user_id']})", callback_data=f"admin_unban_{user['user_id']}")])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_users")])
     
-    await query.edit_message_text(
-        "🔓 **آزادسازی کاربر**\n\nکاربر مورد نظر را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("🔓 **آزادسازی کاربر**\n\nکاربر مورد نظر را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def unban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اجرای آزادسازی"""
@@ -447,7 +460,7 @@ async def unban_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text(f"✅ کاربر `{user_id}` آزاد شد!", parse_mode='Markdown', reply_markup=back_to_admin_keyboard())
 
 async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لیست کاربران بن شده"""
+    """لیست بن شده‌ها"""
     query = update.callback_query
     await query.answer()
     
@@ -466,21 +479,19 @@ async def banned_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- جستجوی کاربر ----------
 
 async def search_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع جستجوی کاربر"""
+    """شروع جستجو"""
     query = update.callback_query
     await query.answer()
     
-    await query.edit_message_text(
-        "🔍 **جستجوی کاربر**\n\n"
-        "لطفاً **user_id** کاربر را ارسال کنید:",
-        reply_markup=back_to_admin_keyboard(),
-        parse_mode='Markdown'
-    )
     context.user_data['awaiting_message'] = True
+    await query.edit_message_text("🔍 **جستجوی کاربر**\n\nلطفاً **user_id** را ارسال کنید:", reply_markup=back_to_admin_keyboard(), parse_mode='Markdown')
     return SEARCH_USER_ID
 
 async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش نتیجه جستجو"""
+    """نتیجه جستجو"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
     try:
         user_id = int(update.message.text.strip())
         user = get_user_info(user_id)
@@ -503,7 +514,7 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             keyboard = []
             if user['is_banned']:
-                keyboard.append([InlineKeyboardButton("🔓 آزادسازی کاربر", callback_data=f"admin_unban_{user_id}")])
+                keyboard.append([InlineKeyboardButton("🔓 آزادسازی", callback_data=f"admin_unban_{user_id}")])
             else:
                 keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{user_id}")])
             keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
@@ -511,68 +522,7 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     
     except ValueError:
-        await update.message.reply_text("❌ شناسه کاربر نامعتبر!", reply_markup=back_to_admin_keyboard())
+        await update.message.reply_text("❌ شناسه نامعتبر!", reply_markup=back_to_admin_keyboard())
     
     context.user_data.clear()
     return ConversationHandler.END
-
-# ---------- مشاهده پیام‌های همگانی ----------
-
-async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لیست پیام‌های همگانی"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcasts = get_all_broadcasts()
-    if not broadcasts:
-        await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
-        return
-    
-    await query.edit_message_text(
-        "📋 **پیام‌های همگانی**",
-        reply_markup=admin_broadcasts_list_keyboard(broadcasts),
-        parse_mode='Markdown'
-    )
-
-async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """جزئیات پیام همگانی"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    progress_text = get_broadcast_progress_text(broadcast_id)
-    
-    broadcasts = get_all_broadcasts()
-    broadcast = None
-    for b in broadcasts:
-        if b['id'] == broadcast_id:
-            broadcast = b
-            break
-    
-    if broadcast:
-        await query.edit_message_text(
-            progress_text,
-            reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
-            parse_mode='Markdown'
-        )
-
-async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لغو پیام همگانی"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    mark_broadcast_cancelled(broadcast_id)
-    
-    await query.edit_message_text("⛔ پیام همگانی لغو شد!", reply_markup=back_to_admin_keyboard())
-
-async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حذف پیام همگانی"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    delete_broadcast(broadcast_id)
-    
-    await query.edit_message_text("🗑️ پیام همگانی حذف شد!", reply_markup=back_to_admin_keyboard())
-
