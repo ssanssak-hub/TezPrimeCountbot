@@ -142,7 +142,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await manage_admins(update, context)
     elif data == "admin_add_admin":
         await add_admin_start(update, context)
-    elif data.startswith("admin_remove_") and "broadcast" not in data:
+    elif data == "admin_remove_admin":
+        await remove_admin_start(update, context)
+    elif data.startswith("admin_remove_") and data != "admin_remove_admin":
         await remove_admin_execute(update, context)
     elif data == "admin_list_admins":
         await list_admins(update, context)
