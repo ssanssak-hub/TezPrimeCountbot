@@ -42,17 +42,6 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
             keyboard.append([InlineKeyboardButton("📊 آمار و گزارشات", callback_data="admin_stats")])
         if check_admin_permission(user_id, admin_id, "perm_bot_status"):
             keyboard.append([InlineKeyboardButton("⚙️ وضعیت ربات", callback_data="admin_bot_status")])
-    else:
-        keyboard = [
-            [InlineKeyboardButton("📢 ارسال پیام همگانی فوری", callback_data="admin_broadcast_now")],
-            [InlineKeyboardButton("⏰ پیام همگانی زمان‌بندی شده", callback_data="admin_broadcast_scheduled")],
-            [InlineKeyboardButton("📋 پیام‌های همگانی", callback_data="admin_broadcasts_list")],
-            [InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data="admin_manage_admins")],
-            [InlineKeyboardButton("🚫 مدیریت کاربران", callback_data="admin_manage_users")],
-            [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="admin_search_user")],
-            [InlineKeyboardButton("📊 آمار و گزارشات", callback_data="admin_stats")],
-            [InlineKeyboardButton("⚙️ وضعیت ربات", callback_data="admin_bot_status")],
-        ]
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="back_to_main")])
     return InlineKeyboardMarkup(keyboard)
@@ -87,10 +76,9 @@ def admin_confirm_add_keyboard():
     keyboard = [
         [InlineKeyboardButton("✅ تأیید و افزودن", callback_data="admin_confirm_add")],
         [InlineKeyboardButton("❌ لغو", callback_data="admin_cancel_add")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="perm_back")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")],
     ]
     return InlineKeyboardMarkup(keyboard)
-
 
 def admin_manage_admins_keyboard():
     """کیبورد مدیریت ادمین‌ها"""
@@ -103,7 +91,6 @@ def admin_manage_admins_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
 def admin_manage_users_keyboard():
     """کیبورد مدیریت کاربران"""
     keyboard = [
@@ -114,7 +101,6 @@ def admin_manage_users_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
 def admin_bot_status_keyboard(is_active):
     """کیبورد وضعیت ربات"""
     status_text = "🔴 خاموش کردن ربات" if is_active else "🟢 روشن کردن ربات"
@@ -122,11 +108,10 @@ def admin_bot_status_keyboard(is_active):
     keyboard = [
         [InlineKeyboardButton(status_text, callback_data="admin_toggle_bot")],
         [InlineKeyboardButton("🗑️ حذف همه داده‌های کاربران", callback_data="admin_delete_all_data")],
-        [InlineKeyboardButton("📈 وضعیت سرور", callback_data="admin_server_status")],
+        [InlineKeyboardButton("📈 وضعیت سرور", callback_data="admin_server_status")],  # ✅ دکمه حفظ شد
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
-
 
 def admin_broadcasts_list_keyboard(broadcasts):
     """کیبورد لیست پیام‌های همگانی"""
@@ -140,7 +125,6 @@ def admin_broadcasts_list_keyboard(broadcasts):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
     return InlineKeyboardMarkup(keyboard)
 
-
 def broadcast_action_keyboard(broadcast_id, is_sent, is_cancelled):
     """کیبورد عملیات پیام همگانی"""
     keyboard = []
@@ -151,7 +135,6 @@ def broadcast_action_keyboard(broadcast_id, is_sent, is_cancelled):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_broadcasts_list")])
     
     return InlineKeyboardMarkup(keyboard)
-
 
 def back_to_admin_keyboard():
     """دکمه بازگشت به پنل"""
