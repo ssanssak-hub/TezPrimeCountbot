@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram import Bot
 import os
@@ -15,15 +15,8 @@ bot = Bot(token=TOKEN)
 
 logger = logging.getLogger(__name__)
 
-# ⚠️ event loop موجود رو استفاده کن
-import asyncio
-try:
-    loop = asyncio.get_running_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-scheduler = AsyncIOScheduler(event_loop=loop, timezone='Asia/Tehran')
+# ⚠️ از BackgroundScheduler استفاده کن (نه AsyncIOScheduler)
+scheduler = BackgroundScheduler(timezone='UTC')
 
 def start_scheduler():
     """راه‌اندازی زمان‌بند"""
@@ -55,36 +48,46 @@ def schedule_reminder_sync(reminder_id, user_id, message, days_str, hour, minute
     """برنامه‌ریزی هم‌زمان اعلان"""
     days = [int(d) for d in days_str.split(',')]
     
-    # تابع ارسال پیام
-    async def send_reminder():
+    # تابع ارسال پیام (غیر async برای BackgroundScheduler)
+    def send_reminder():
         try:
-            # لاگ برای دیباگ
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
             current_day = get_current_weekday()
             logger.info(f"🔍 Reminder {reminder_id} triggered - Today: {current_day} ({get_weekday_name(current_day)}), Days: {days}")
             
             # بررسی اینکه آیا امروز روز اعلان است
             if current_day not in days:
                 logger.info(f"⏭️ Reminder {reminder_id} skipped - today ({current_day}) not in selected days {days}")
+                loop.close()
                 return
             
-            # ارسال پیام
-            day_name = get_weekday_name(current_day)
-            text = (
-                f"🔔 **یادآوری!**\n\n"
-                f"{message}\n\n"
-                f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}"
-            )
+            async def _send():
+                try:
+                    day_name = get_weekday_name(current_day)
+                    text = (
+                        f"🔔 **یادآوری!**\n\n"
+                        f"{message}\n\n"
+                        f"📅 {day_name} | 🕐 {hour:02d}:{minute:02d}"
+                    )
+                    
+                    logger.info(f"📤 Sending reminder {reminder_id} to user {user_id}")
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=text,
+                        parse_mode='Markdown'
+                    )
+                    logger.info(f"✅ Reminder {reminder_id} sent to user {user_id}")
+                except Exception as e:
+                    logger.error(f"❌ Error sending reminder {reminder_id}: {e}", exc_info=True)
             
-            logger.info(f"📤 Sending reminder {reminder_id} to user {user_id}")
-            await bot.send_message(
-                chat_id=user_id,
-                text=text,
-                parse_mode='Markdown'
-            )
-            logger.info(f"✅ Reminder {reminder_id} sent to user {user_id}")
+            loop.run_until_complete(_send())
+            loop.close()
             
         except Exception as e:
-            logger.error(f"❌ Error sending reminder {reminder_id}: {e}", exc_info=True)
+            logger.error(f"❌ Error in send_reminder {reminder_id}: {e}", exc_info=True)
     
     # تبدیل ساعت تهران به UTC
     server_hour, server_minute = convert_to_server_time(hour, minute)
