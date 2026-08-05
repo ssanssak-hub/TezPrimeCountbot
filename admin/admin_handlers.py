@@ -77,6 +77,7 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
+    context.user_data['broadcast_type'] = 'now'  # ⚠️ این خط رو اضافه کن
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
     
