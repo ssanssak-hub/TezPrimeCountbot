@@ -7,7 +7,7 @@ from telegram import Bot
 import os
 from dotenv import load_dotenv
 from .reminder_database import get_all_active_reminders, get_reminder_db_connection
-from .reminder_utils import convert_to_tehran_time, get_weekday_name, get_current_weekday
+from .reminder_utils import convert_to_server_time, convert_to_tehran_time, get_weekday_name, get_current_weekday
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
