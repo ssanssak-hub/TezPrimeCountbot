@@ -15,7 +15,6 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # جدول کاربران با ستون‌های جدید
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -24,11 +23,11 @@ def init_db():
             last_name TEXT,
             is_admin BOOLEAN DEFAULT 0,
             is_banned BOOLEAN DEFAULT 0,
+            admin_permissions TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
-    # اضافه کردن ستون‌های جدید به دیتابیس قدیمی
     try:
         cursor.execute('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0')
         logger.info("✅ Added is_admin column")
@@ -41,7 +40,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
-    # جدول وضعیت ربات
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN admin_permissions TEXT DEFAULT ""')
+        logger.info("✅ Added admin_permissions column")
+    except sqlite3.OperationalError:
+        pass
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS bot_status (
             id INTEGER PRIMARY KEY DEFAULT 1,
@@ -50,10 +54,7 @@ def init_db():
         )
     ''')
     
-    # اطمینان از وجود رکورد وضعیت
-    cursor.execute('''
-        INSERT OR IGNORE INTO bot_status (id, is_active) VALUES (1, 1)
-    ''')
+    cursor.execute('INSERT OR IGNORE INTO bot_status (id, is_active) VALUES (1, 1)')
     
     conn.commit()
     conn.close()
@@ -63,18 +64,15 @@ def save_user(user_id, username, first_name, last_name):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # اول چک کن کاربر وجود داره یا نه
     cursor.execute('SELECT is_admin, is_banned FROM users WHERE user_id = ?', (user_id,))
     existing = cursor.fetchone()
     
     if existing:
-        # کاربر هست - فقط نام و یوزرنیم رو آپدیت کن
         cursor.execute('''
             UPDATE users SET username = ?, first_name = ?, last_name = ?
             WHERE user_id = ?
         ''', (username, first_name, last_name, user_id))
     else:
-        # کاربر جدید - insert کن
         cursor.execute('''
             INSERT INTO users (user_id, username, first_name, last_name)
             VALUES (?, ?, ?, ?)
@@ -88,23 +86,39 @@ def is_user_admin(user_id, admin_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # ادمین اصلی (از .env)
     if user_id == admin_id:
         conn.close()
-        return True, "main_admin"
+        return True, "main_admin", "all"
     
-    # ادمین فرعی (از دیتابیس)
-    cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT is_admin, admin_permissions FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
     conn.close()
     
     if result and result['is_admin']:
-        return True, "sub_admin"
+        return True, "sub_admin", result['admin_permissions'] or ''
     
-    return False, None
+    return False, None, ''
+
+# ⚠️ تابع جدید: چک دسترسی ادمین فرعی
+def check_admin_permission(user_id, admin_id, permission):
+    """چک اینکه ادمین فرعی به یه بخش خاص دسترسی داره یا نه"""
+    is_admin, admin_type, permissions = is_user_admin(user_id, admin_id)
+    
+    if not is_admin:
+        return False
+    
+    if admin_type == "main_admin":
+        return True
+    
+    if permission == "admin_panel":
+        return True  # همه ادمین‌ها پنل رو می‌بینن
+    
+    if permissions == "all":
+        return True
+    
+    return permission in permissions.split(',') if permissions else False
 
 def get_all_users():
-    """دریافت همه کاربران"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users')
@@ -113,7 +127,6 @@ def get_all_users():
     return users
 
 def get_all_active_users():
-    """دریافت کاربران فعال (بن نشده)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE is_banned = 0')
@@ -122,7 +135,6 @@ def get_all_active_users():
     return users
 
 def get_total_users_count():
-    """تعداد کل کاربران"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT COUNT(*) as count FROM users')
@@ -131,7 +143,6 @@ def get_total_users_count():
     return result['count'] if result else 0
 
 def ban_user(user_id):
-    """بن کردن کاربر"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET is_banned = 1 WHERE user_id = ?', (user_id,))
@@ -140,7 +151,6 @@ def ban_user(user_id):
     logger.info(f"🚫 User {user_id} banned")
 
 def unban_user(user_id):
-    """آزاد کردن کاربر"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET is_banned = 0 WHERE user_id = ?', (user_id,))
@@ -149,7 +159,6 @@ def unban_user(user_id):
     logger.info(f"✅ User {user_id} unbanned")
 
 def get_banned_users():
-    """لیست کاربران بن شده"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE is_banned = 1')
@@ -158,7 +167,6 @@ def get_banned_users():
     return users
 
 def is_user_banned(user_id):
-    """چک کردن بن بودن کاربر"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT is_banned FROM users WHERE user_id = ?', (user_id,))
@@ -167,7 +175,6 @@ def is_user_banned(user_id):
     return result and result['is_banned'] == 1
 
 def get_user_info(user_id):
-    """دریافت اطلاعات کامل یک کاربر"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
@@ -175,26 +182,28 @@ def get_user_info(user_id):
     conn.close()
     return user
 
-def add_admin(user_id):
-    """اضافه کردن ادمین فرعی"""
+# ⚠️ تغییر کرد - حالا permissions هم ذخیره میشه
+def add_admin(user_id, permissions="all"):
+    """اضافه کردن ادمین فرعی با دسترسی‌های مشخص"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET is_admin = 1 WHERE user_id = ?', (user_id,))
+    cursor.execute('''
+        UPDATE users SET is_admin = 1, admin_permissions = ? WHERE user_id = ?
+    ''', (permissions, user_id))
     conn.commit()
     conn.close()
-    logger.info(f"👑 User {user_id} promoted to admin")
+    logger.info(f"👑 User {user_id} promoted to admin with permissions: {permissions}")
 
 def remove_admin(user_id):
     """حذف ادمین فرعی"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET is_admin = 0 WHERE user_id = ?', (user_id,))
+    cursor.execute('UPDATE users SET is_admin = 0, admin_permissions = "" WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
     logger.info(f"⬇️ User {user_id} demoted from admin")
 
 def get_all_admins():
-    """لیست همه ادمین‌ها"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE is_admin = 1')
@@ -203,7 +212,6 @@ def get_all_admins():
     return admins
 
 def get_bot_status():
-    """دریافت وضعیت ربات"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM bot_status WHERE id = 1')
@@ -212,7 +220,6 @@ def get_bot_status():
     return status
 
 def toggle_bot_status():
-    """تغییر وضعیت ربات (روشن/خاموش)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     current = cursor.execute('SELECT is_active FROM bot_status WHERE id = 1').fetchone()
@@ -224,7 +231,6 @@ def toggle_bot_status():
     return new_status
 
 def delete_all_user_data():
-    """حذف همه داده‌های کاربران"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('DELETE FROM users')
@@ -233,7 +239,6 @@ def delete_all_user_data():
     logger.info("🗑️ All user data deleted")
 
 def is_bot_active():
-    """چک کردن فعال بودن ربات"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT is_active FROM bot_status WHERE id = 1')
