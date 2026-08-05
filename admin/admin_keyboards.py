@@ -19,12 +19,12 @@ def admin_manage_admins_keyboard():
     """کیبورد مدیریت ادمین‌ها"""
     keyboard = [
         [InlineKeyboardButton("➕ افزودن ادمین", callback_data="admin_add_admin")],
-        [InlineKeyboardButton("➖ حذف ادمین", callback_data="admin_remove_admin")],
+        [InlineKeyboardButton("➖ حذف ادمین", callback_data="admin_remove_admin")],  # ⚠️ این callback_data
         [InlineKeyboardButton("📋 لیست ادمین‌ها", callback_data="admin_list_admins")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
-
+    
 def admin_manage_users_keyboard():
     """کیبورد مدیریت کاربران"""
     keyboard = [
