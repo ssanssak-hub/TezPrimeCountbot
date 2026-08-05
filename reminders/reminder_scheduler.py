@@ -107,7 +107,12 @@ def schedule_reminder_sync(reminder_id, user_id, title, message, days_str, hour,
 def remove_scheduled_reminder(reminder_id):
     """حذف یک اعلان از زمان‌بند"""
     try:
-        scheduler.remove_job(f"reminder_{reminder_id}")
-        logger.info(f"✅ Reminder {reminder_id} removed from scheduler")
+        job_id = f"reminder_{reminder_id}"
+        if scheduler.get_job(job_id):
+            scheduler.remove_job(job_id)
+            logger.info(f"✅ Reminder {reminder_id} removed from scheduler")
+        else:
+            logger.info(f"ℹ️ Reminder {reminder_id} job not found in scheduler (already removed)")
     except Exception as e:
-        logger.error(f"❌ Error removing reminder {reminder_id}: {e}")
+        logger.warning(f"⚠️ Error removing reminder {reminder_id}: {e}")
+
