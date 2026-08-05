@@ -1,9 +1,17 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-def main_menu_keyboard():
+def main_menu_keyboard(user_id=None, admin_id=None):
     keyboard = [
         [InlineKeyboardButton("🔔 اعلان‌ها", callback_data="notifications")]
     ]
+    
+    # دکمه پنل مدیریت فقط برای ادمین‌ها
+    if user_id and admin_id:
+        from database import is_user_admin
+        is_admin, _ = is_user_admin(user_id, admin_id)
+        if is_admin:
+            keyboard.append([InlineKeyboardButton("👑 پنل مدیریت", callback_data="admin_panel")])
+    
     return InlineKeyboardMarkup(keyboard)
 
 def reminder_menu_keyboard():
