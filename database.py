@@ -63,10 +63,22 @@ def save_user(user_id, username, first_name, last_name):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        INSERT OR REPLACE INTO users (user_id, username, first_name, last_name)
-        VALUES (?, ?, ?, ?)
-    ''', (user_id, username, first_name, last_name))
+    # اول چک کن کاربر وجود داره یا نه
+    cursor.execute('SELECT is_admin, is_banned FROM users WHERE user_id = ?', (user_id,))
+    existing = cursor.fetchone()
+    
+    if existing:
+        # کاربر هست - فقط نام و یوزرنیم رو آپدیت کن
+        cursor.execute('''
+            UPDATE users SET username = ?, first_name = ?, last_name = ?
+            WHERE user_id = ?
+        ''', (username, first_name, last_name, user_id))
+    else:
+        # کاربر جدید - insert کن
+        cursor.execute('''
+            INSERT INTO users (user_id, username, first_name, last_name)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, username, first_name, last_name))
     
     conn.commit()
     conn.close()
