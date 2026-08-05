@@ -93,11 +93,13 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
+    # ⚠️ فقط برای ارسال فوری
+    if context.user_data.get('broadcast_type') != 'now':
+        return ConversationHandler.END
+    
     message = update.message.text
-    broadcast_type = context.user_data.get('broadcast_type', 'now')
     step = context.user_data.get('broadcast_step', 'title')
     
-    # فقط برای ارسال فوری
     if step == 'title':
         context.user_data['broadcast']['title'] = message
         context.user_data['broadcast_step'] = 'message'
@@ -166,7 +168,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- پیام همگانی زمان‌بندی شده ----------
 
 async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع پیام همگانی زمان‌بندی شده - مرحله عنوان"""
+    """شروع پیام همگانی زمان‌بندی شده"""
     query = update.callback_query
     await query.answer()
     
@@ -184,7 +186,8 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     await query.edit_message_text(
         "📝 **پیام همگانی زمان‌بندی شده - مرحله ۱/۴**\n\n"
         "لطفاً **عنوان** پیام را ارسال کنید:\n"
-        "(مثلاً: اطلاعیه مهم، تخفیف ویژه)",
+        "(مثلاً: اطلاعیه مهم، تخفیف ویژه)\n\n"
+        "🔙 برای بازگشت /cancel را بزنید",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
@@ -195,6 +198,9 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
     """دریافت عنوان و پیام برای زمان‌بندی"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
+
+    if context.user_data.get('broadcast_type') != 'scheduled':
+        return ConversationHandler.END    
     
     message = update.message.text
     step = context.user_data.get('broadcast_step', 'title')
@@ -206,7 +212,8 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text(
             f"📝 **مرحله ۲/۴**\n\n"
             f"عنوان: **{message}**\n\n"
-            f"حالا لطفاً **متن پیام** را ارسال کنید:",
+            f"حالا لطفاً **متن پیام** را ارسال کنید:\n\n"
+            f"🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
@@ -216,144 +223,153 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         context.user_data['broadcast']['message'] = message
         context.user_data['broadcast_step'] = 'date'
         
-        # کیبورد انتخاب تاریخ (فردا تا ۷ روز آینده)
-        from datetime import datetime, timedelta
-        keyboard = []
-        today = datetime.now()
-        
-        for i in range(1, 8):
-            date = today + timedelta(days=i)
-            date_str = date.strftime("%Y-%m-%d")
-            persian_date = get_persian_datetime()  # از utils خودت استفاده کن
-            keyboard.append([InlineKeyboardButton(
-                f"📅 {date_str}",
-                callback_data=f"broadcast_date_{date_str}"
-            )])
-        
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
-        
         await update.message.reply_text(
             f"📅 **مرحله ۳/۴ - انتخاب تاریخ**\n\n"
             f"عنوان: **{context.user_data['broadcast']['title']}**\n"
             f"پیام: {message[:50]}...\n\n"
-            f"تاریخ ارسال را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            f"لطفاً **تاریخ** را به صورت شمسی وارد کنید:\n"
+            f"📌 فرمت: **YYYY/MM/DD**\n"
+            f"📌 مثال: **1405/05/15**\n\n"
+            f"⚠️ تاریخ باید امروز یا بعد از امروز باشد.\n\n"
+            f"🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
         return BROADCAST_DATE
 
 
 async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انتخاب تاریخ و رفتن به انتخاب ساعت"""
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "admin_panel":
-        context.user_data.clear()
+    """دریافت تاریخ شمسی و اعتبارسنجی"""
+    if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
-    date_str = query.data.split("_")[-1]  # مثلاً 2026-08-06
-    context.user_data['broadcast']['date'] = date_str
-    context.user_data['broadcast_step'] = 'time'
+    date_input = update.message.text.strip()
     
-    # کیبورد انتخاب ساعت (۰ تا ۲۳)
-    keyboard = []
-    hour_row = []
-    for h in range(24):
-        hour_row.append(InlineKeyboardButton(f"{h:02d}", callback_data=f"broadcast_hour_{h}"))
-        if len(hour_row) == 6:
-            keyboard.append(hour_row)
-            hour_row = []
-    if hour_row:
-        keyboard.append(hour_row)
-    
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
-    
-    await query.edit_message_text(
-        f"🕐 **مرحله ۴/۴ - انتخاب ساعت**\n\n"
-        f"📅 تاریخ: **{date_str}**\n\n"
-        f"لطفاً **ساعت** ارسال را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    return BROADCAST_TIME
-
-
-async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انتخاب ساعت و دقیقه و ثبت نهایی"""
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "admin_panel":
-        context.user_data.clear()
-        return ConversationHandler.END
-    
-    data = query.data
-    
-    if data.startswith("broadcast_hour_"):
-        hour = int(data.split("_")[-1])
-        context.user_data['broadcast']['hour'] = hour
+    # اعتبارسنجی فرمت تاریخ
+    try:
+        import jdatetime
+        parts = date_input.split('/')
+        if len(parts) != 3:
+            raise ValueError("فرمت اشتباه")
         
-        # کیبورد انتخاب دقیقه (۰ تا ۵۵ با گام ۵)
-        keyboard = []
-        minute_row = []
-        for m in range(0, 60, 5):
-            minute_row.append(InlineKeyboardButton(f"{m:02d}", callback_data=f"broadcast_minute_{m}"))
-            if len(minute_row) == 6:
-                keyboard.append(minute_row)
-                minute_row = []
-        if minute_row:
-            keyboard.append(minute_row)
+        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+        persian_date = jdatetime.date(year, month, day)
         
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت به انتخاب ساعت", callback_data="broadcast_back_to_hour")])
+        # تبدیل به میلادی
+        gregorian_date = persian_date.togregorian()
         
-        await query.edit_message_text(
-            f"🕐 **انتخاب دقیقه**\n\n"
-            f"ساعت انتخاب شده: **{hour:02d}**\n\n"
-            f"لطفاً **دقیقه** را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+        # چک اینکه تاریخ گذشته نباشه
+        today = jdatetime.date.today()
+        if persian_date < today:
+            await update.message.reply_text(
+                f"❌ **خطا!**\n\n"
+                f"تاریخ وارد شده ({date_input}) مربوط به گذشته است!\n"
+                f"📌 امروز: **{today.strftime('%Y/%m/%d')}**\n\n"
+                f"لطفاً یک تاریخ **امروز یا بعد از امروز** وارد کنید:",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='Markdown'
+            )
+            return BROADCAST_DATE
+        
+        # ذخیره تاریخ
+        context.user_data['broadcast']['date'] = gregorian_date.strftime("%Y-%m-%d")
+        context.user_data['broadcast']['persian_date'] = date_input
+        context.user_data['broadcast_step'] = 'time'
+        
+        await update.message.reply_text(
+            f"🕐 **مرحله ۴/۴ - انتخاب ساعت**\n\n"
+            f"📅 تاریخ: **{date_input}**\n\n"
+            f"لطفاً **ساعت** را به صورت تهران وارد کنید:\n"
+            f"📌 فرمت: **HH:MM** (۲۴ ساعته)\n"
+            f"📌 مثال: **14:30** یا **09:00**\n\n"
+            f"⚠️ اگر تاریخ امروز است، ساعت باید بعد از الان باشد.\n\n"
+            f"🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
         return BROADCAST_TIME
+        
+    except Exception as e:
+        logger.error(f"Date validation error: {e}")
+        await update.message.reply_text(
+            f"❌ **فرمت تاریخ اشتباه است!**\n\n"
+            f"لطفاً تاریخ را به صورت **YYYY/MM/DD** وارد کنید.\n"
+            f"مثال: **1405/05/15**\n\n"
+            f"دوباره تلاش کنید:",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='Markdown'
+        )
+        return BROADCAST_DATE
+
+
+async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت ساعت تهران و ثبت نهایی"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
     
-    elif data.startswith("broadcast_minute_"):
-        minute = int(data.split("_")[-1])
+    time_input = update.message.text.strip()
+    
+    # اعتبارسنجی فرمت ساعت
+    try:
+        parts = time_input.split(':')
+        if len(parts) != 2:
+            raise ValueError("فرمت اشتباه")
+        
+        hour, minute = int(parts[0]), int(parts[1])
+        
+        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+            raise ValueError("ساعت یا دقیقه نامعتبر")
+        
+        # چک اینکه برای امروز، ساعت گذشته نباشه
+        import jdatetime
+        from datetime import datetime, timedelta
+        import pytz
+        
+        persian_date_str = context.user_data['broadcast']['persian_date']
+        today = jdatetime.date.today()
+        
+        if persian_date_str == today.strftime('%Y/%m/%d'):
+            # تاریخ امروزه - چک کن ساعت گذشته نباشه
+            now_tehran = datetime.now(pytz.timezone('Asia/Tehran'))
+            scheduled_time = now_tehran.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            if scheduled_time <= now_tehran:
+                await update.message.reply_text(
+                    f"❌ **خطا!**\n\n"
+                    f"ساعت وارد شده ({time_input}) مربوط به گذشته است!\n"
+                    f"📌 الان ساعت: **{now_tehran.strftime('%H:%M')}**\n\n"
+                    f"لطفاً یک ساعت **بعد از الان** وارد کنید:",
+                    reply_markup=back_to_admin_keyboard(),
+                    parse_mode='Markdown'
+                )
+                return BROADCAST_TIME
+        
+        # همه چی درسته - ثبت نهایی
+        context.user_data['broadcast']['time'] = f"{hour:02d}:{minute:02d}"
         
         title = context.user_data['broadcast']['title']
         message = context.user_data['broadcast']['message']
-        date = context.user_data['broadcast']['date']
-        hour = context.user_data['broadcast']['hour']
+        date_miladi = context.user_data['broadcast']['date']
         
         # ذخیره در دیتابیس
-        broadcast_id = save_broadcast(update.effective_user.id, title, message, date, f"{hour:02d}:{minute:02d}")
-        
-        # زمان‌بندی
-        from apscheduler.triggers.date import DateTrigger
-        from datetime import datetime
-        from reminders.reminder_scheduler import scheduler
-        
-        run_date = datetime.strptime(f"{date} {hour:02d}:{minute:02d}:00", "%Y-%m-%d %H:%M:%S")
-        
-        scheduler.add_job(
-            lambda: None,  # جایگزین با تابع ارسال
-            trigger=DateTrigger(run_date=run_date),
-            id=f"broadcast_{broadcast_id}",
-            replace_existing=True
+        broadcast_id = save_broadcast(
+            update.effective_user.id, title, message,
+            date_miladi, f"{hour:02d}:{minute:02d}"
         )
         
-        # تایید نهایی
         total_users = get_total_users_count()
+        
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ تایید و برنامه‌ریزی", callback_data=f"admin_confirm_scheduled_{broadcast_id}")],
             [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
         ])
         
-        await query.edit_message_text(
+        await update.message.reply_text(
             f"📢 **تایید نهایی**\n\n"
             f"📌 عنوان: **{title}**\n"
             f"📝 پیام: {message[:100]}...\n"
-            f"📅 تاریخ: **{date}**\n"
-            f"🕐 ساعت: **{hour:02d}:{minute:02d}**\n"
+            f"📅 تاریخ: **{persian_date_str}** (شمسی)\n"
+            f"🕐 ساعت: **{hour:02d}:{minute:02d}** (تهران)\n"
             f"👥 گیرندگان: **{total_users}** کاربر\n\n"
             f"آیا تأیید می‌کنید؟",
             reply_markup=keyboard,
@@ -362,31 +378,22 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         
         context.user_data.clear()
         return ConversationHandler.END
-    
-    elif data == "broadcast_back_to_hour":
-        # برگشت به انتخاب ساعت
-        keyboard = []
-        hour_row = []
-        for h in range(24):
-            hour_row.append(InlineKeyboardButton(f"{h:02d}", callback_data=f"broadcast_hour_{h}"))
-            if len(hour_row) == 6:
-                keyboard.append(hour_row)
-                hour_row = []
-        if hour_row:
-            keyboard.append(hour_row)
         
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
-        
-        await query.edit_message_text(
-            "🕐 **انتخاب ساعت**\n\nلطفاً ساعت ارسال را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+    except Exception as e:
+        logger.error(f"Time validation error: {e}")
+        await update.message.reply_text(
+            f"❌ **فرمت ساعت اشتباه است!**\n\n"
+            f"لطفاً ساعت را به صورت **HH:MM** (۲۴ ساعته) وارد کنید.\n"
+            f"مثال: **14:30** یا **09:00**\n\n"
+            f"دوباره تلاش کنید:",
+            reply_markup=back_to_admin_keyboard(),
             parse_mode='Markdown'
         )
         return BROADCAST_TIME
 
 
 async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تایید نهایی پیام زمان‌بندی شده"""
+    """تایید نهایی و برنامه‌ریزی"""
     query = update.callback_query
     await query.answer()
     
@@ -403,22 +410,27 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    # برنامه‌ریزی واقعی ارسال
+    # برنامه‌ریزی در scheduler
     from reminders.reminder_scheduler import scheduler
     from apscheduler.triggers.date import DateTrigger
     from datetime import datetime
+    import pytz
     
-    run_date = datetime.strptime(
+    # زمان ارسال به UTC تبدیل کن
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    run_date_tehran = datetime.strptime(
         f"{broadcast['send_date']} {broadcast['send_time']}:00",
         "%Y-%m-%d %H:%M:%S"
     )
+    run_date_tehran = tehran_tz.localize(run_date_tehran)
+    run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
     async def send_scheduled_broadcast():
         await send_broadcast_now(broadcast_id, broadcast['admin_id'], broadcast['title'], broadcast['message'])
     
     scheduler.add_job(
         send_scheduled_broadcast,
-        trigger=DateTrigger(run_date=run_date),
+        trigger=DateTrigger(run_date=run_date_utc),
         id=f"broadcast_{broadcast_id}",
         replace_existing=True
     )
@@ -427,8 +439,8 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         f"✅ **پیام همگانی برنامه‌ریزی شد!**\n\n"
         f"📌 عنوان: **{broadcast['title']}**\n"
         f"📅 تاریخ: **{broadcast['send_date']}**\n"
-        f"🕐 ساعت: **{broadcast['send_time']}**\n\n"
-        f"پیام در تاریخ مشخص شده به همه کاربران ارسال خواهد شد.",
+        f"🕐 ساعت تهران: **{broadcast['send_time']}**\n\n"
+        f"پیام در تاریخ و ساعت مشخص شده به همه کاربران ارسال خواهد شد.",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='Markdown'
     )
