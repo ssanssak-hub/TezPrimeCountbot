@@ -75,8 +75,10 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    if user_id != admin_id:
-        await query.edit_message_text("⛔ فقط ادمین اصلی!")
+    # ⚠️ چک دسترسی به جای user_id != admin_id
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
@@ -176,8 +178,16 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # بررسی دسترسی ادمین اصلی
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
+        return ConversationHandler.END
+    
+    # بررسی مجوز دسترسی به broadcast زمان‌بندی شده
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
@@ -193,7 +203,7 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE 
+    return BROADCAST_TITLE
 
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای زمان‌بندی"""
@@ -514,6 +524,83 @@ async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
+async def edit_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع ویرایش ادمین - نمایش لیست برای انتخاب"""
+    query = update.callback_query
+    await query.answer()
+    
+    admins = get_all_admins()
+    if not admins:
+        await query.edit_message_text("📭 هیچ ادمین فرعی وجود ندارد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    keyboard = []
+    for admin in admins:
+        name = admin['first_name'] or 'ناشناس'
+        keyboard.append([InlineKeyboardButton(
+            f"✏️ {name} ({admin['user_id']})",
+            callback_data=f"admin_edit_{admin['user_id']}"
+        )])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_manage_admins")])
+    
+    await query.edit_message_text(
+        "✏️ <b>ویرایش دسترسی ادمین</b>\n\nادمین مورد نظر را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+
+async def edit_admin_permissions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش دسترسی‌های فعلی برای ویرایش"""
+    query = update.callback_query
+    await query.answer()
+    
+    edit_user_id = int(query.data.split("_")[-1])
+    
+    # گرفتن دسترسی‌های فعلی
+    user = get_user_info(edit_user_id)
+    current_perms = user['admin_permissions'] if user and user['admin_permissions'] else ''
+    selected = current_perms.split(',') if current_perms else []
+    
+    context.user_data['edit_admin_id'] = edit_user_id
+    context.user_data['new_admin_permissions'] = selected
+    
+    await query.edit_message_text(
+        f"✏️ <b>ویرایش دسترسی - کاربر: <code>{edit_user_id}</code></b>\n\n"
+        f"دسترسی‌های فعلی: {len(selected)} مورد\n"
+        f"دسترسی‌های مورد نظر را انتخاب کنید:",
+        reply_markup=permissions_selection_keyboard(selected, is_edit=True),
+        parse_mode='HTML'
+    )
+    return ADD_ADMIN_ID
+
+
+async def save_admin_permissions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ذخیره دسترسی‌های ویرایش شده"""
+    query = update.callback_query
+    await query.answer()
+    
+    edit_user_id = context.user_data.get('edit_admin_id')
+    permissions = context.user_data.get('new_admin_permissions', [])
+    perms_str = ','.join(permissions) if permissions else ''
+    
+    db_add_admin(edit_user_id, perms_str)  # آپدیت می‌کنه
+    
+    from admin.admin_keyboards import get_permission_name
+    perm_names = [get_permission_name(p) for p in permissions]
+    perm_text = "\n".join([f"✅ {n}" for n in perm_names]) if perm_names else "❌ هیچ دسترسی"
+    
+    await query.edit_message_text(
+        f"✅ <b>دسترسی‌ها با موفقیت ویرایش شد!</b>\n\n"
+        f"🆔 کاربر: <code>{edit_user_id}</code>\n\n"
+        f"<b>دسترسی‌های جدید:</b>\n{perm_text}",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
 # ---------- لیست پیام‌های همگانی ----------
 
 async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -592,8 +679,14 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
+    
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
+        return
+    
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_stats"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return
     
     total_users = get_total_users_count()
@@ -619,7 +712,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
-
+    
 # ---------- وضعیت ربات ----------
 
 async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -632,6 +725,11 @@ async def admin_bot_status_menu(update: Update, context: ContextTypes.DEFAULT_TY
     if user_id != admin_id:
         await query.edit_message_text("⛔ فقط ادمین اصلی!")
         return
+
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_bot_status"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return    
     
     status = get_bot_status()
     is_active = status['is_active'] if status else True
