@@ -445,6 +445,23 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         parse_mode='Markdown'
     )
 
+async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عملیات جاری را کنسل کن و به مدیریت پنل برگرد"""
+    context.user_data.clear()
+    
+    if update.message:
+        await update.message.reply_text(
+            "❌ عملیات لغو شد.\n\nبازگشت به پنل مدیریت:",
+            reply_markup=back_to_admin_keyboard()
+        )
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=back_to_admin_keyboard()
+        )
+    
+    return ConversationHandler.END
+
 # ---------- لیست پیام‌های همگانی ----------
 
 async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
