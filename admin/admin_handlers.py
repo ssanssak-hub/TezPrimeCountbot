@@ -780,15 +780,25 @@ async def handle_permission_toggle(update: Update, context: ContextTypes.DEFAULT
             selected.append(perm)
         context.user_data['new_admin_permissions'] = selected
     
-    # آپدیت کیبورد
-    await query.edit_message_text(
-        f"➕ <b>افزودن ادمین - مرحله ۲/۳</b>\n\n"
-        f"🆔 کاربر: <code>{context.user_data.get('new_admin_id')}</code>\n\n"
-        f"دسترسی‌های انتخاب شده: {len(selected)} مورد\n"
-        f"دسترسی‌های مورد نظر را انتخاب کنید:",
-        reply_markup=permissions_selection_keyboard(selected),
-        parse_mode='HTML'
-    )
+    # آپدیت کیبورد - فقط اگه تغییر کرده
+    if data not in ["perm_done"]:
+        new_text = (
+            f"➕ <b>افزودن ادمین - مرحله ۲/۳</b>\n\n"
+            f"🆔 کاربر: <code>{context.user_data.get('new_admin_id')}</code>\n\n"
+            f"دسترسی‌های انتخاب شده: {len(selected)} مورد\n"
+            f"دسترسی‌های مورد نظر را انتخاب کنید:"
+        )
+        new_markup = permissions_selection_keyboard(selected)
+        
+        try:
+            await query.edit_message_text(
+                new_text,
+                reply_markup=new_markup,
+                parse_mode='HTML'
+            )
+        except:
+            pass  # متن تغییر نکرده - بی‌خیال
+    
     return ADD_ADMIN_ID
 
 async def confirm_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
