@@ -4,7 +4,7 @@ import psutil
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from database import (
-    get_all_users, get_all_active_users, get_total_users_count,
+    get_all_users, get_all_active_users, get_admin_info, get_total_users_count,
     ban_user as db_ban_user, unban_user as db_unban_user,
     get_banned_users, is_user_banned, get_user_info,
     add_admin as db_add_admin, remove_admin as db_remove_admin,
@@ -42,7 +42,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    is_admin, admin_type, _ = is_user_admin(user_id, admin_id)
+    is_admin, admin_type, permissions = get_admin_info(user_id, admin_id)
     
     if not is_admin:
         if query:
@@ -58,14 +58,12 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"از منوی زیر استفاده کنید:"
     )
     
-    # ⚠️ کیبورد با user_id/admin_id
     keyboard = admin_panel_keyboard(user_id=user_id, admin_id=admin_id)
     
     if query:
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
     else:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
-
 # ---------- ارسال پیام همگانی فوری ----------
 
 async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
