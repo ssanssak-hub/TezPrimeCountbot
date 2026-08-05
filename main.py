@@ -115,8 +115,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_broadcasts_list":
         await broadcasts_list(update, context)
     elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
-        if data.startswith("admin_broadcast_scheduled"):
-            await broadcast_scheduled_start(update, context)
+        elif data.startswith("admin_confirm_scheduled_"):
+            await confirm_scheduled_broadcast(update, context)
         elif data.startswith("admin_broadcast_now"):
             pass  # توسط ConversationHandler مدیریت میشه
         elif data.startswith("admin_cancel_broadcast_"):
@@ -358,13 +358,16 @@ def main():
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
+            CallbackQueryHandler(broadcast_scheduled_start, pattern="^admin_broadcast_scheduled$"),
             CallbackQueryHandler(ban_user_start, pattern="^admin_ban_user$"),
             CallbackQueryHandler(add_admin_start, pattern="^admin_add_admin$"),
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
-            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
-            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message)],
+            BROADCAST_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message)],
+            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message)],
+            BROADCAST_DATE: [CallbackQueryHandler(broadcast_scheduled_date, pattern="^broadcast_date_")],
+            BROADCAST_TIME: [CallbackQueryHandler(broadcast_scheduled_time, pattern="^broadcast_")],
             BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
             ADD_ADMIN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute)],
             SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
