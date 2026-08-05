@@ -84,3 +84,31 @@ def get_broadcast_progress_text(broadcast_id):
     )
     
     return text
+
+
+async def send_broadcast_report(admin_chat_id, title, sent, failed, total):
+    """ارسال گزارش نهایی به ادمین"""
+    try:
+        progress = round((sent + failed) / total * 100, 1) if total > 0 else 0
+        bar_length = 20
+        filled = int(bar_length * progress / 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+        
+        text = (
+            f"📊 **گزارش ارسال پیام همگانی**\n\n"
+            f"📌 **{title}**\n\n"
+            f"[{bar}] {progress}%\n\n"
+            f"👥 کل کاربران: {total}\n"
+            f"✅ ارسال موفق: {sent}\n"
+            f"❌ ناموفق: {failed}\n\n"
+            f"✅ **ارسال به پایان رسید!**"
+        )
+        
+        await bot.send_message(
+            chat_id=admin_chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
+        logger.info(f"📊 Report sent to admin {admin_chat_id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to send report: {e}")
