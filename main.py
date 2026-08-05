@@ -273,23 +273,40 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
-    # چک خاموش بودن
     if not is_bot_active() and not is_admin:
         return
     
-    # چک بن
     if db_is_banned(user_id):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ⚠️ فقط اگه منتظر پیام ریمایندر هستیم
+    # ⚠️ برای broadcast زمان‌بندی
+    if context.user_data.get('awaiting_message') and context.user_data.get('broadcast_type') == 'scheduled':
+        await broadcast_scheduled_message(update, context)
+        return
+    
+    # ⚠️ برای broadcast فوری
+    if context.user_data.get('awaiting_message') and context.user_data.get('broadcast_type') == 'now':
+        await broadcast_now_message(update, context)
+        return
+    
+    # ⚠️ برای ریمایندر
     if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
         await set_reminder_message(update, context)
-    elif context.user_data.get('awaiting_message') and context.user_data.get('broadcast_step'):
-        # در حال broadcast هستیم - echo کاری نکنه
-        pass
-    else:
-        await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
+        return
+    
+    # ⚠️ برای تاریخ broadcast
+    if context.user_data.get('broadcast_step') == 'date':
+        await broadcast_scheduled_date(update, context)
+        return
+    
+    # ⚠️ برای ساعت broadcast
+    if context.user_data.get('broadcast_step') == 'time':
+        await broadcast_scheduled_time(update, context)
+        return
+    
+    # هیچکدوم نبود - پیام پیش‌فرض
+    await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای ربات"""
