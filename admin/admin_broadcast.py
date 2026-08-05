@@ -1,22 +1,22 @@
 import logging
 import asyncio
 from telegram import Bot
+from telegram.request import HTTPXRequest
 import os
 from dotenv import load_dotenv
 from database import get_all_active_users
-from .admin_database import (
+from admin.admin_database import (
     add_broadcast_log, update_broadcast_count,
     mark_broadcast_sent, get_broadcast_stats
 )
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
-bot = Bot(token=TOKEN)
 
-# ⚠️ افزایش connection pool
+# افزایش connection pool
 request = HTTPXRequest(
-    connection_pool_size=20,  # حداکثر ۲۰ کانکشن همزمان
-    pool_timeout=30  # تایم‌اوت ۳۰ ثانیه
+    connection_pool_size=20,
+    pool_timeout=30
 )
 bot = Bot(token=TOKEN, request=request)
 
@@ -47,11 +47,8 @@ async def send_broadcast_now(broadcast_id, admin_id, title, message):
             failed += 1
             logger.error(f"❌ Failed to send to {user['user_id']}: {e}")
         
-        # بروزرسانی
         update_broadcast_count(broadcast_id, sent, failed)
-        
-        # ⚠️ تاخیر بیشتر بین ارسال‌ها (تلگرام محدودیت ۳۰ پیام در ثانیه داره)
-        await asyncio.sleep(0.1)  # ۱۰۰ میلی‌ثانیه = ۱۰ پیام در ثانیه
+        await asyncio.sleep(0.1)
     
     logger.info(f"✅ Broadcast {broadcast_id} completed: {sent}/{total} sent, {failed} failed")
     return sent, failed, total
@@ -63,9 +60,9 @@ def get_broadcast_progress_text(broadcast_id):
     if not broadcast:
         return "❌ پیام یافت نشد"
     
-    total = broadcast['total_users']
-    sent = broadcast['sent_count']
-    failed = broadcast['failed_count']
+    total = broadcast['total_users'] if broadcast['total_users'] else 0
+    sent = broadcast['sent_count'] if broadcast['sent_count'] else 0
+    failed = broadcast['failed_count'] if broadcast['failed_count'] else 0
     
     if total == 0:
         return "⏳ در حال آماده‌سازی..."
