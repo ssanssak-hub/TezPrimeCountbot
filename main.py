@@ -282,8 +282,12 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    if context.user_data.get('awaiting_message'):
+    # ⚠️ فقط اگه منتظر پیام ریمایندر هستیم
+    if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
         await set_reminder_message(update, context)
+    elif context.user_data.get('awaiting_message') and context.user_data.get('broadcast_step'):
+        # در حال broadcast هستیم - echo کاری نکنه
+        pass
     else:
         await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
 
