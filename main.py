@@ -76,8 +76,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Button handler received: {data}")
     
-    # ⚠️ perm_ها رو نادیده بگیر - ConversationHandler مدیریت می‌کنه
+    # ⚠️ perm_ها رو مستقیم به handle_permission_toggle بفرست
     if data.startswith("perm_"):
+        await handle_permission_toggle(update, context)
         return
     
     user_id = update.effective_user.id
