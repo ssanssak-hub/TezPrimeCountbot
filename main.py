@@ -28,7 +28,7 @@ from admin.admin_handlers import (
     broadcast_now_start, broadcast_now_message, confirm_broadcast,
     broadcast_scheduled_start, broadcast_scheduled_message, 
     broadcast_scheduled_date, broadcast_scheduled_time, confirm_scheduled_broadcast,
-    admin_cancel, 
+    admin_cancel, broadcast_stats,
     admin_stats, admin_bot_status_menu, toggle_bot, delete_all_data, confirm_delete_all,
     manage_admins, add_admin_start, add_admin_execute,
     remove_admin_start, remove_admin_execute, list_admins,
@@ -157,6 +157,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_broadcast_handler(update, context)
     elif data.startswith("admin_confirm_delete_broadcast_"):
         await delete_broadcast_handler(update, context)
+    elif data.startswith("admin_broadcast_stats_"):
+        await broadcast_stats(update, context)  # ✅ اضافه کن
     
     # ---- آمار و وضعیت ----
     elif data == "admin_stats":
