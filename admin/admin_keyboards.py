@@ -301,3 +301,23 @@ def search_results_keyboard(user_id, is_banned):
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")])
     
     return InlineKeyboardMarkup(keyboard)
+
+def date_selection_keyboard():
+    """کیبورد انتخاب تاریخ - امروز یا دستی"""
+    import jdatetime
+    
+    today = jdatetime.date.today()
+    today_str = today.strftime("%Y/%m/%d")
+    weekday = today.weekday()
+    
+    weekdays_fa = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"]
+    
+    keyboard = [
+        [InlineKeyboardButton(
+            f"📅 امروز: {today_str} ({weekdays_fa[weekday]})", 
+            callback_data=f"broadcast_date_{today_str}"
+        )],
+        [InlineKeyboardButton("✏️ وارد کردن تاریخ دلخواه", callback_data="broadcast_date_custom")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
