@@ -85,7 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"سلام کسخل درس خون {user.first_name}🫶 👋🍑\n"
-        f"به ربات TezPrimeCountbot خوش اومدی و کنکور کیری!\n\n"
+        f"به ربات TezPrimeCountbot و کنکور کیری خوش اومدی لیوه!\n\n"
         f"این سال تخمی رو با موفقیت تموم کنی لاشی\n\n"
         f"از دکمه‌های زیر میتونی استفاده کن کنکوری:",
         reply_markup=keyboard
