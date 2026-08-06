@@ -289,6 +289,7 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
     step = context.user_data.get('broadcast_step', 'title')
     
     if step == 'title':
+        # ✅ ذخیره عنوان
         context.user_data['broadcast']['title'] = message
         context.user_data['broadcast_step'] = 'message'
         
@@ -303,10 +304,10 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         return BROADCAST_MESSAGE
     
     elif step == 'message':
+        # ✅ ذخیره متن پیام و رفتن به مرحله تاریخ
         context.user_data['broadcast']['message'] = message
         context.user_data['broadcast_step'] = 'date'
 
-        # کیبورد انتخاب تاریخ با توضیحات کامل
         await update.message.reply_text(
             f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
             f"عنوان: <b>{context.user_data['broadcast']['title']}</b>\n"
@@ -322,7 +323,13 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
             parse_mode='HTML'
         )
         return BROADCAST_DATE
-
+    
+    else:
+        await update.message.reply_text(
+            "❌ خطا! لطفاً دوباره تلاش کنید.",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return ConversationHandler.END
 
 async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت تاریخ شمسی و اعتبارسنجی"""
