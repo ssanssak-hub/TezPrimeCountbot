@@ -544,20 +544,22 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    # ✅ استفاده از get_broadcast_by_id به جای لوپ
+    # ✅ استفاده از ایندکس به جای .get()
     broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    # ✅ چک کن که قبلاً لغو نشده باشه
-    if broadcast.get('is_cancelled') or broadcast.get('status') == 'cancelled':
+    # ✅ بررسی با ایندکس
+    if broadcast['is_cancelled'] or broadcast['status'] == 'cancelled':
         await query.edit_message_text(
             "⛔ این پیام قبلاً لغو شده است!",
             reply_markup=back_to_admin_keyboard()
         )
         return
+    
+    # ... ادامه کد
     
     from reminders.reminder_scheduler import scheduler
     from apscheduler.triggers.date import DateTrigger
