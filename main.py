@@ -498,6 +498,15 @@ def info():
 def setup_handlers():
     """تنظیم همه هندلرها"""
     global application
+
+    # import های جدید
+    from admin.admin_handlers import (
+        BROADCAST_CONTENT_TYPE, BROADCAST_BUTTONS,
+        handle_content_type, handle_file_receive,
+        handle_inline_buttons, handle_button_text_input,
+        show_final_preview, confirm_advanced_broadcast,
+        edit_broadcast_buttons
+    )    
     
     admin_conv = ConversationHandler(
         entry_points=[
@@ -508,12 +517,23 @@ def setup_handlers():
             CallbackQueryHandler(search_user_start, pattern="^admin_search_user$"),
         ],
         states={
+            BROADCAST_CONTENT_TYPE: [
+                CallbackQueryHandler(handle_content_type, pattern="^content_type_"),
+            ],            
             BROADCAST_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),                   
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
+                MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.AUDIO | filters.Document.VIDEO | filters.Document.ALL, handle_file_receive),
             ],
             BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),        
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
             ],
+            BROADCAST_BUTTONS: [
+                CallbackQueryHandler(handle_inline_buttons, pattern="^ib_"),
+                CallbackQueryHandler(confirm_advanced_broadcast, pattern="^admin_confirm_advanced_"),
+                CallbackQueryHandler(edit_broadcast_buttons, pattern="^admin_edit_buttons_"),
+                CallbackQueryHandler(show_final_preview, pattern="^admin_final_preview"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button_text_input),
+            ],            
             BROADCAST_DATE: [
                 CallbackQueryHandler(broadcast_date_selection, pattern="^broadcast_date_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_date),
