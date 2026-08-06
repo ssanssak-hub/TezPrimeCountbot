@@ -461,6 +461,58 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         )
         return BROADCAST_TIME
 
+async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت انتخاب تاریخ (امروز یا دستی)"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data == "broadcast_date_custom":
+        # کاربر می‌خواد دستی وارد کنه
+        await query.edit_message_text(
+            "📅 لطفاً <b>تاریخ</b> را به صورت شمسی وارد کنید:\n"
+            "📌 فرمت: <b>YYYY/MM/DD</b>\n"
+            "📌 مثال: <b>1405/05/15</b>\n\n"
+            "⚠️ تاریخ باید امروز یا بعد از امروز باشد.",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_DATE
+    
+    elif data.startswith("broadcast_date_"):
+        # کاربر امروز رو انتخاب کرده
+        persian_date_str = data.replace("broadcast_date_", "")
+        
+        try:
+            import jdatetime
+            parts = persian_date_str.split('/')
+            year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+            persian_date = jdatetime.date(year, month, day)
+            gregorian_date = persian_date.togregorian()
+            
+            context.user_data['broadcast']['date'] = gregorian_date.strftime("%Y-%m-%d")
+            context.user_data['broadcast']['persian_date'] = persian_date_str
+            context.user_data['broadcast_step'] = 'time'
+            
+            await query.edit_message_text(
+                f"🕐 <b>مرحله ۴/۴ - انتخاب ساعت</b>\n\n"
+                f"📅 تاریخ: <b>{persian_date_str}</b>\n\n"
+                f"لطفاً <b>ساعت</b> را به صورت تهران وارد کنید:\n"
+                f"📌 فرمت: <b>HH:MM</b> (۲۴ ساعته)\n"
+                f"📌 مثال: <b>14:30</b> یا <b>09:00</b>",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_TIME
+            
+        except Exception as e:
+            logger.error(f"Date processing error: {e}")
+            await query.edit_message_text(
+                "❌ خطا در پردازش تاریخ!",
+                reply_markup=back_to_admin_keyboard()
+            )
+            return BROADCAST_DATE
 
 async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تایید نهایی و برنامه‌ریزی"""
