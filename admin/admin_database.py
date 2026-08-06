@@ -426,3 +426,11 @@ def get_broadcast_summary():
         'completed': completed,
         'failed': failed
     }
+
+def row_to_dict(row):
+    if row is None:
+        return None
+    return dict(row)
+
+def rows_to_dicts(rows):
+    return [dict(row) for row in rows]
