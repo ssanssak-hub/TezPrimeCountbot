@@ -16,6 +16,17 @@ def get_reminder_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+# ✅ توابع کمکی برای تبدیل
+def row_to_dict(row):
+    """تبدیل sqlite3.Row به دیکشنری"""
+    if row is None:
+        return None
+    return dict(row)
+
+def rows_to_dicts(rows):
+    """تبدیل لیست sqlite3.Row به لیست دیکشنری"""
+    return [dict(row) for row in rows]
+
 def init_reminder_db():
     """ایجاد جدول reminders اگر وجود نداشت"""
     conn = get_reminder_db_connection()
@@ -79,7 +90,7 @@ def get_user_reminders(user_id):
     reminders = cursor.fetchall()
     conn.close()
     
-    return reminders
+    return rows_to_dicts(reminders)  # ✅ تبدیل به دیکشنری
 
 def get_all_user_reminders(user_id):
     """دریافت همه اعلان‌های کاربر (فعال و غیرفعال)"""
@@ -95,7 +106,7 @@ def get_all_user_reminders(user_id):
     reminders = cursor.fetchall()
     conn.close()
     
-    return reminders
+    return rows_to_dicts(reminders)  # ✅ تبدیل به دیکشنری
 
 def delete_reminder(reminder_id, user_id):
     """حذف کامل اعلان از دیتابیس"""
@@ -154,4 +165,15 @@ def get_all_active_reminders():
     reminders = cursor.fetchall()
     conn.close()
     
-    return reminders
+    return rows_to_dicts(reminders)  # ✅ تبدیل به دیکشنری
+
+def get_reminder_by_id(reminder_id):
+    """دریافت یک اعلان با شناسه"""
+    conn = get_reminder_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM reminders WHERE id = ?', (reminder_id,))
+    reminder = cursor.fetchone()
+    conn.close()
+    
+    return row_to_dict(reminder)  # ✅ تبدیل به دیکشنری
