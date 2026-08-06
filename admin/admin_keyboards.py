@@ -10,6 +10,9 @@ PERMISSION_BUTTONS = [
     ("👥 مدیریت ادمین‌ها", "perm_manage_admins"),
     ("📢 ارسال پیام همگانی فوری", "perm_broadcast_now"),
     ("⏰ پیام همگانی زمان‌بندی", "perm_broadcast_scheduled"),
+    ("✏️ ویرایش دسترسی ادمین", "perm_edit_permissions"),  # ✅ اضافه شد
+    ("📋 لیست ادمین‌ها", "perm_list_admins"),  # ✅ اضافه شد
+    ("🗑️ حذف همه داده‌ها", "perm_delete_all"),  # ✅ اضافه شد
 ]
 
 def get_permission_name(perm_code):
@@ -26,21 +29,35 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
     keyboard = []
     
     if user_id and admin_id:
-        if check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        # ادمین اصلی همه دسترسی‌ها رو داره
+        is_main_admin = (user_id == admin_id)
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
             keyboard.append([InlineKeyboardButton("📢 ارسال پیام همگانی فوری", callback_data="admin_broadcast_now")])
-        if check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
             keyboard.append([InlineKeyboardButton("⏰ پیام همگانی زمان‌بندی شده", callback_data="admin_broadcast_scheduled")])
-        if check_admin_permission(user_id, admin_id, "perm_broadcasts_list"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_broadcasts_list"):
             keyboard.append([InlineKeyboardButton("📋 پیام‌های همگانی", callback_data="admin_broadcasts_list")])
-        if check_admin_permission(user_id, admin_id, "perm_manage_admins"):
+        
+        # جداکننده
+        if keyboard:
+            keyboard.append([InlineKeyboardButton("➖➖➖➖➖➖➖➖", callback_data="admin_separator")])
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_manage_admins"):
             keyboard.append([InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data="admin_manage_admins")])
-        if check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_manage_users"):
             keyboard.append([InlineKeyboardButton("🚫 مدیریت کاربران", callback_data="admin_manage_users")])
-        if check_admin_permission(user_id, admin_id, "perm_search_user"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_search_user"):
             keyboard.append([InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="admin_search_user")])
-        if check_admin_permission(user_id, admin_id, "perm_stats"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_stats"):
             keyboard.append([InlineKeyboardButton("📊 آمار و گزارشات", callback_data="admin_stats")])
-        if check_admin_permission(user_id, admin_id, "perm_bot_status"):
+        
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_bot_status"):
             keyboard.append([InlineKeyboardButton("⚙️ وضعیت ربات", callback_data="admin_bot_status")])
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="back_to_main")])
@@ -50,18 +67,31 @@ def permissions_selection_keyboard(selected_permissions, is_edit=False):
     """کیبورد انتخاب دسترسی‌ها (شیشه‌ای/toggle)"""
     keyboard = []
     
-    for name, code in PERMISSION_BUTTONS:
+    # فقط دسترسی‌های قابل واگذاری رو نشون بده (بعضی دسترسی‌ها مخصوص ادمین اصلیه)
+    delegatable_permissions = [
+        ("📋 پیام‌های همگانی", "perm_broadcasts_list"),
+        ("🚫 مدیریت کاربران", "perm_manage_users"),
+        ("🔍 جستجوی کاربر", "perm_search_user"),
+        ("📊 آمار و گزارشات", "perm_stats"),
+        ("⚙️ وضعیت ربات", "perm_bot_status"),
+        ("📢 ارسال پیام همگانی فوری", "perm_broadcast_now"),
+        ("⏰ پیام همگانی زمان‌بندی", "perm_broadcast_scheduled"),
+    ]
+    
+    for name, code in delegatable_permissions:
         emoji = "✅" if code in selected_permissions else "❌"
         keyboard.append([InlineKeyboardButton(
             f"{emoji} {name}",
             callback_data=f"perm_toggle_{code}"
         )])
     
+    # ردیف انتخاب همه/هیچ
     keyboard.append([
-        InlineKeyboardButton("✅ دسترسی به همه", callback_data="perm_all"),
+        InlineKeyboardButton("✅ انتخاب همه", callback_data="perm_all"),
         InlineKeyboardButton("❌ حذف همه", callback_data="perm_none")
     ])
     
+    # دکمه تایید
     if is_edit:
         keyboard.append([InlineKeyboardButton("💾 ذخیره تغییرات", callback_data="admin_save_permissions")])
     else:
@@ -75,8 +105,9 @@ def admin_confirm_add_keyboard():
     """کیبورد تأیید نهایی افزودن ادمین"""
     keyboard = [
         [InlineKeyboardButton("✅ تأیید و افزودن", callback_data="admin_confirm_add")],
+        [InlineKeyboardButton("✏️ ویرایش دسترسی‌ها", callback_data="perm_done")],
         [InlineKeyboardButton("❌ لغو", callback_data="admin_cancel_add")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")],
+        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -107,37 +138,166 @@ def admin_bot_status_keyboard(is_active):
     
     keyboard = [
         [InlineKeyboardButton(status_text, callback_data="admin_toggle_bot")],
+        [InlineKeyboardButton("📈 وضعیت سرور", callback_data="admin_server_status")],
         [InlineKeyboardButton("🗑️ حذف همه داده‌های کاربران", callback_data="admin_delete_all_data")],
-        [InlineKeyboardButton("📈 وضعیت سرور", callback_data="admin_server_status")],  # ✅ دکمه حفظ شد
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def admin_broadcasts_list_keyboard(broadcasts):
-    """کیبورد لیست پیام‌های همگانی"""
+def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
+    """
+    کیبورد لیست پیام‌های همگانی با pagination
+    
+    Args:
+        broadcasts: لیست broadcast ها
+        page: شماره صفحه (۰-based)
+        per_page: تعداد در هر صفحه
+    """
     keyboard = []
     
-    for b in broadcasts:
-        status = "✅" if b['is_sent'] else "⛔" if b['is_cancelled'] else "⏳"
-        text = f"{status} {b['title'][:30]}..."
+    # تشخیص وضعیت با اولویت فیلد status جدید
+    def get_status_emoji(b):
+        status = b.get('status', '')
+        
+        if status == 'completed' or b.get('is_sent'):
+            return '✅'
+        elif status == 'sending':
+            return '📤'
+        elif status == 'pending':
+            return '⏰'
+        elif status == 'failed':
+            return '❌'
+        elif status == 'stopped':
+            return '🛑'
+        elif status == 'cancelled' or b.get('is_cancelled'):
+            return '⛔'
+        else:
+            return '📝'
+    
+    # Pagination
+    total = len(broadcasts)
+    total_pages = (total + per_page - 1) // per_page
+    start = page * per_page
+    end = start + per_page
+    page_broadcasts = broadcasts[start:end]
+    
+    for b in page_broadcasts:
+        emoji = get_status_emoji(b)
+        title = b.get('title', 'بدون عنوان')
+        # محدود کردن طول عنوان
+        if len(title) > 35:
+            title = title[:32] + "..."
+        
+        # نمایش تعداد ارسال اگر موجود باشه
+        sent = b.get('sent_count', 0)
+        total_users = b.get('total_users', 0)
+        count_text = f" ({sent}/{total_users})" if total_users > 0 else ""
+        
+        text = f"{emoji} {title}{count_text}"
         keyboard.append([InlineKeyboardButton(text, callback_data=f"admin_broadcast_{b['id']}")])
+    
+    # دکمه‌های pagination
+    if total_pages > 1:
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"admin_broadcasts_page_{page-1}"))
+        nav_buttons.append(InlineKeyboardButton(f"📄 {page+1}/{total_pages}", callback_data="admin_noop"))
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"admin_broadcasts_page_{page+1}"))
+        keyboard.append(nav_buttons)
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
     return InlineKeyboardMarkup(keyboard)
 
-def broadcast_action_keyboard(broadcast_id, is_sent, is_cancelled):
-    """کیبورد عملیات پیام همگانی"""
+def broadcast_action_keyboard(broadcast_id, status_or_is_sent, is_cancelled=None):
+    """
+    کیبورد عملیات پیام همگانی
+    
+    Args:
+        broadcast_id: شناسه broadcast
+        status_or_is_sent: می‌تونه status جدید (string) یا is_sent قدیمی (boolean) باشه
+        is_cancelled: وضعیت لغو (برای سازگاری با کد قدیمی)
+    """
     keyboard = []
     
-    if not is_sent and not is_cancelled:
+    # تشخیص وضعیت
+    if isinstance(status_or_is_sent, str):
+        # کد جدید - status string
+        status = status_or_is_sent
+        is_sent = status in ['completed', 'sending']
+        is_cancelled = status == 'cancelled'
+    else:
+        # کد قدیمی - boolean
+        is_sent = status_or_is_sent
+        status = 'completed' if is_sent else ('cancelled' if is_cancelled else 'pending')
+    
+    # دکمه‌ها بر اساس وضعیت
+    if status == 'sending':
+        keyboard.append([InlineKeyboardButton("🛑 توقف ارسال", callback_data=f"admin_cancel_broadcast_{broadcast_id}")])
+        keyboard.append([InlineKeyboardButton("🔄 بروزرسانی وضعیت", callback_data=f"admin_broadcast_{broadcast_id}")])
+    
+    elif status == 'pending':
         keyboard.append([InlineKeyboardButton("⛔ لغو ارسال", callback_data=f"admin_cancel_broadcast_{broadcast_id}")])
+        keyboard.append([InlineKeyboardButton("📤 ارسال فوری", callback_data=f"admin_send_now_{broadcast_id}")])
+    
+    elif status == 'failed':
+        keyboard.append([InlineKeyboardButton("🔄 ارسال مجدد", callback_data=f"admin_retry_broadcast_{broadcast_id}")])
+    
+    elif status == 'stopped':
+        keyboard.append([InlineKeyboardButton("▶️ ادامه ارسال", callback_data=f"admin_resume_broadcast_{broadcast_id}")])
+    
+    elif status == 'completed':
+        keyboard.append([InlineKeyboardButton("📊 آمار کامل", callback_data=f"admin_broadcast_stats_{broadcast_id}")])
+    
+    # دکمه‌های مشترک
     keyboard.append([InlineKeyboardButton("🗑️ حذف", callback_data=f"admin_delete_broadcast_{broadcast_id}")])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_broadcasts_list")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="admin_broadcasts_list")])
     
     return InlineKeyboardMarkup(keyboard)
 
 def back_to_admin_keyboard():
     """دکمه بازگشت به پنل"""
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
-    ]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin_panel")]
+    ])
+
+def confirm_delete_keyboard(item_type, item_id, back_callback):
+    """
+    کیبورد تایید حذف (عمومی)
+    
+    Args:
+        item_type: نوع آیتم (مثلاً "broadcast", "user")
+        item_id: شناسه آیتم
+        back_callback: callback_data برای بازگشت
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("⚠️ تأیید حذف", callback_data=f"admin_confirm_delete_{item_type}_{item_id}"),
+            InlineKeyboardButton("🔙 انصراف", callback_data=back_callback)
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def broadcast_stats_keyboard(broadcast_id):
+    """کیبورد آمار پیشرفته broadcast"""
+    keyboard = [
+        [InlineKeyboardButton("📊 آمار کلی", callback_data=f"admin_broadcast_stats_{broadcast_id}")],
+        [InlineKeyboardButton("❌ کاربران ناموفق", callback_data=f"admin_broadcast_failed_{broadcast_id}")],
+        [InlineKeyboardButton("📥 خروجی CSV", callback_data=f"admin_broadcast_export_{broadcast_id}")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin_broadcast_{broadcast_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def search_results_keyboard(user_id, is_banned):
+    """کیبورد نتایج جستجوی کاربر"""
+    keyboard = []
+    
+    if is_banned:
+        keyboard.append([InlineKeyboardButton("🔓 آزادسازی کاربر", callback_data=f"admin_unban_{user_id}")])
+    else:
+        keyboard.append([InlineKeyboardButton("🔨 بن کاربر", callback_data=f"admin_ban_{user_id}")])
+    
+    keyboard.append([InlineKeyboardButton("📋 ریمایندرهای کاربر", callback_data=f"admin_user_reminders_{user_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")])
+    
+    return InlineKeyboardMarkup(keyboard)
