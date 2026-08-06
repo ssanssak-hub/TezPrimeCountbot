@@ -98,51 +98,94 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return BROADCAST_TITLE  # ✅ فقط یه return، اونم آخر کار
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و پیام برای ارسال فوری"""
+    """دریافت عنوان و پیام - هم برای فوری و هم برای زمان‌بندی"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
-    if context.user_data.get('broadcast_type') != 'now':
+    broadcast_type = context.user_data.get('broadcast_type')
+    
+    # ✅ این شرط رو بردارید یا اصلاحش کنید
+    if broadcast_type not in ['now', 'scheduled']:
+        logger.error(f"❌ Unknown broadcast_type: {broadcast_type}")
+        await update.message.reply_text("❌ خطا! نوع ارسال مشخص نیست.")
         return ConversationHandler.END
     
     message = update.message.text
     step = context.user_data.get('broadcast_step', 'title')
     
     if step == 'title':
+        # ذخیره عنوان
         context.user_data['broadcast']['title'] = message
         context.user_data['broadcast_step'] = 'message'
         
-        await update.message.reply_text(
-            f"📝 عنوان: <b>{message}</b>\n\n"
-            f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
-            f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!",
-            reply_markup=back_to_admin_keyboard(),
-            parse_mode='HTML'
-        )
+        if broadcast_type == 'now':
+            # پیام برای ارسال فوری
+            await update.message.reply_text(
+                f"📝 عنوان: <b>{message}</b>\n\n"
+                f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
+                f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+        else:  # scheduled
+            # پیام برای زمان‌بندی
+            await update.message.reply_text(
+                f"📝 <b>مرحله ۲/۴</b>\n\n"
+                f"عنوان: <b>{message}</b>\n\n"
+                f"حالا لطفاً <b>متن پیام</b> را ارسال کنید:\n\n"
+                f"🔙 برای بازگشت /cancel را بزنید",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+        
         return BROADCAST_MESSAGE
     
     elif step == 'message':
         title = context.user_data['broadcast']['title']
-        broadcast_id = save_broadcast(update.effective_user.id, title, message)
-        users_count = get_total_users_count()
+        context.user_data['broadcast']['message'] = message
         
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ تایید و ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
-            [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
-        ])
-        
-        await update.message.reply_text(
-            f"📢 <b>تایید نهایی</b>\n\n"
-            f"📌 عنوان: <b>{title}</b>\n"
-            f"📝 پیام: {message[:100]}...\n"
-            f"👥 گیرندگان: <b>{users_count}</b> کاربر\n\n"
-            f"آیا از ارسال اطمینان دارید؟",
-            reply_markup=keyboard,
-            parse_mode='HTML'
-        )
-        
-        context.user_data.clear()
-        return ConversationHandler.END
+        if broadcast_type == 'now':
+            # ارسال فوری - تایید نهایی
+            broadcast_id = save_broadcast(update.effective_user.id, title, message)
+            users_count = get_total_users_count()
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ تایید و ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
+                [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
+            ])
+            
+            await update.message.reply_text(
+                f"📢 <b>تایید نهایی</b>\n\n"
+                f"📌 عنوان: <b>{title}</b>\n"
+                f"📝 پیام: {message[:100]}...\n"
+                f"👥 گیرندگان: <b>{users_count}</b> کاربر\n\n"
+                f"آیا از ارسال اطمینان دارید؟",
+                reply_markup=keyboard,
+                parse_mode='HTML'
+            )
+            
+            context.user_data.clear()
+            return ConversationHandler.END
+            
+        else:  # scheduled
+            # زمان‌بندی - برو به مرحله تاریخ
+            context.user_data['broadcast_step'] = 'date'
+            
+            await update.message.reply_text(
+                f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
+                f"عنوان: <b>{title}</b>\n"
+                f"پیام: {message[:50]}...\n\n"
+                f"می‌توانید تاریخ <b>امروز</b> را انتخاب کنید\n"
+                f"یا یک <b>تاریخ دلخواه</b> وارد نمایید.\n\n"
+                f"⚠️ <b>نکات مهم:</b>\n"
+                f"• تاریخ نمی‌تواند مربوط به گذشته باشد\n"
+                f"• فرمت تاریخ شمسی: <b>YYYY/MM/DD</b>\n"
+                f"• مثال: <b>1405/05/15</b>\n\n"
+                f"لطفاً تاریخ ارسال را انتخاب کنید:",
+                reply_markup=date_selection_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_DATE
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تایید و ارسال فوری با مدیریت بهتر"""
@@ -259,12 +302,15 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     if user_id != admin_id:
         if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
             await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
-            return ConversationHandler.END
+            return
     
     context.user_data['broadcast'] = {}
     context.user_data['broadcast_type'] = 'scheduled'
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
+
+    # ✅ دیباگ درست - فقط لاگ ساده
+    logger.info(f"📝 Scheduled broadcast started for user {user_id}")
     
     # ✅ اول پیام رو نشون بده
     await query.edit_message_text(
@@ -275,8 +321,8 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE  # ✅ بعد از نمایش پیام
-
+    return BROADCAST_TITLE
+    
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای زمان‌بندی"""
     if not context.user_data.get('awaiting_message'):
