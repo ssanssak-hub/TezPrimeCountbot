@@ -88,6 +88,8 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['broadcast_type'] = 'now'
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
+    # ✅ این خط رو اضافه کن - به ConversationHandler بگو منتظر پیام باشه
+    return BROADCAST_TITLE  # ⚠️ این مهمه!    
     
     await query.edit_message_text(
         "📝 <b>ارسال پیام همگانی فوری</b>\n\nلطفاً <b>عنوان</b> پیام را ارسال کنید:",
@@ -118,7 +120,7 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=back_to_admin_keyboard(),
             parse_mode='HTML'
         )
-        return BROADCAST_MESSAGE
+        return BROADCAST_MESSAGE  # ✅ اینو اضافه کن
     
     elif step == 'message':
         title = context.user_data['broadcast']['title']
