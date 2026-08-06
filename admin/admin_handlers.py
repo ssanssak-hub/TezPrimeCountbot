@@ -1718,3 +1718,29 @@ async def back_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = admin_panel_keyboard(user_id=user_id, admin_id=admin_id)
     await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
 
+# ---------- مدیریت خطای کلی ----------
+
+async def admin_error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت خطاهای پنل ادمین"""
+    logger.error(f"Admin panel error: {context.error}", exc_info=True)
+    
+    try:
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                "❌ <b>خطایی رخ داد!</b>\n\n"
+                "لطفاً دوباره تلاش کنید یا به پنل مدیریت برگردید.",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+        elif update.message:
+            await update.message.reply_text(
+                "❌ <b>خطایی رخ داد!</b>\n\n"
+                "لطفاً دوباره تلاش کنید.",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+    except Exception as e:
+        logger.error(f"Error in error handler: {e}")
+    
+    # پاکسازی context
+    context.user_data.clear()
