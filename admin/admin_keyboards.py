@@ -10,9 +10,9 @@ PERMISSION_BUTTONS = [
     ("👥 مدیریت ادمین‌ها", "perm_manage_admins"),
     ("📢 ارسال پیام همگانی فوری", "perm_broadcast_now"),
     ("⏰ پیام همگانی زمان‌بندی", "perm_broadcast_scheduled"),
-    ("✏️ ویرایش دسترسی ادمین", "perm_edit_permissions"),  # ✅ اضافه شد
-    ("📋 لیست ادمین‌ها", "perm_list_admins"),  # ✅ اضافه شد
-    ("🗑️ حذف همه داده‌ها", "perm_delete_all"),  # ✅ اضافه شد
+    ("✏️ ویرایش دسترسی ادمین", "perm_edit_permissions"),
+    ("📋 لیست ادمین‌ها", "perm_list_admins"),
+    ("🗑️ حذف همه داده‌ها", "perm_delete_all"),
 ]
 
 def get_permission_name(perm_code):
@@ -43,7 +43,7 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
         
         # جداکننده
         if keyboard:
-            keyboard.append([InlineKeyboardButton("➖➖➖➖➖➖➖➖", callback_data="admin_separator")])
+            keyboard.append([InlineKeyboardButton("➖➖➖➖➖➖➖➖", callback_data="admin_noop")])
         
         if is_main_admin or check_admin_permission(user_id, admin_id, "perm_manage_admins"):
             keyboard.append([InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data="admin_manage_admins")])
@@ -67,7 +67,7 @@ def permissions_selection_keyboard(selected_permissions, is_edit=False):
     """کیبورد انتخاب دسترسی‌ها (شیشه‌ای/toggle)"""
     keyboard = []
     
-    # فقط دسترسی‌های قابل واگذاری رو نشون بده (بعضی دسترسی‌ها مخصوص ادمین اصلیه)
+    # فقط دسترسی‌های قابل واگذاری رو نشون بده
     delegatable_permissions = [
         ("📋 پیام‌های همگانی", "perm_broadcasts_list"),
         ("🚫 مدیریت کاربران", "perm_manage_users"),
@@ -155,7 +155,6 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
     """
     keyboard = []
     
-    # تشخیص وضعیت با اولویت فیلد status جدید
     def get_status_emoji(b):
         status = b.get('status', '')
         
@@ -184,11 +183,9 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
     for b in page_broadcasts:
         emoji = get_status_emoji(b)
         title = b.get('title', 'بدون عنوان')
-        # محدود کردن طول عنوان
         if len(title) > 35:
             title = title[:32] + "..."
         
-        # نمایش تعداد ارسال اگر موجود باشه
         sent = b.get('sent_count', 0)
         total_users = b.get('total_users', 0)
         count_text = f" ({sent}/{total_users})" if total_users > 0 else ""
@@ -222,12 +219,10 @@ def broadcast_action_keyboard(broadcast_id, status_or_is_sent, is_cancelled=None
     
     # تشخیص وضعیت
     if isinstance(status_or_is_sent, str):
-        # کد جدید - status string
         status = status_or_is_sent
         is_sent = status in ['completed', 'sending']
         is_cancelled = status == 'cancelled'
     else:
-        # کد قدیمی - boolean
         is_sent = status_or_is_sent
         status = 'completed' if is_sent else ('cancelled' if is_cancelled else 'pending')
     
