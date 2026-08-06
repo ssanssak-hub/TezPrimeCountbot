@@ -156,9 +156,9 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
     keyboard = []
     
     def get_status_emoji(b):
-        status = b.get('status', '')
+        status = b['status'] if 'status' in b.keys() else ''
         
-        if status == 'completed' or b.get('is_sent'):
+        if status == 'completed' or (b.get('is_sent') if hasattr(b, 'get') else False):
             return '✅'
         elif status == 'sending':
             return '📤'
@@ -168,7 +168,7 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
             return '❌'
         elif status == 'stopped':
             return '🛑'
-        elif status == 'cancelled' or b.get('is_cancelled'):
+        elif status == 'cancelled' or (b.get('is_cancelled') if hasattr(b, 'get') else False):
             return '⛔'
         else:
             return '📝'
@@ -182,12 +182,13 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
     
     for b in page_broadcasts:
         emoji = get_status_emoji(b)
-        title = b.get('title', 'بدون عنوان')
+        # ✅ استفاده از [] به جای .get()
+        title = b['title'] if 'title' in b.keys() else 'بدون عنوان'
         if len(title) > 35:
             title = title[:32] + "..."
         
-        sent = b.get('sent_count', 0)
-        total_users = b.get('total_users', 0)
+        sent = b['sent_count'] if 'sent_count' in b.keys() else 0
+        total_users = b['total_users'] if 'total_users' in b.keys() else 0
         count_text = f" ({sent}/{total_users})" if total_users > 0 else ""
         
         text = f"{emoji} {title}{count_text}"
