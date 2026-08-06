@@ -1745,12 +1745,3 @@ async def admin_error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # پاکسازی context
     context.user_data.clear()
 
-def row_to_dict(row):
-    """تبدیل sqlite3.Row به دیکشنری"""
-    if row is None:
-        return None
-    return dict(row)
-
-def rows_to_dicts(rows):
-    """تبدیل لیست sqlite3.Row به لیست دیکشنری"""
-    return [dict(row) for row in rows]
