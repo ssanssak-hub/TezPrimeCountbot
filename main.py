@@ -35,8 +35,7 @@ from admin.admin_handlers import (
     handle_permission_toggle, confirm_add_admin, cancel_add_admin,
     broadcasts_list, broadcast_detail, cancel_broadcast, delete_broadcast_handler,
     save_admin_permissions, admin_server_status,
-    edit_admin_start, edit_admin_permissions,
-    back_to_admin,  # ✅ اضافه شد
+    edit_admin_start, edit_admin_permissions, back_to_admin,
     BROADCAST_TITLE, BROADCAST_MESSAGE, BROADCAST_DATE, BROADCAST_TIME,
     BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
 )
@@ -424,7 +423,7 @@ def process_update(update_json: dict) -> bool:
             await application.process_update(update)
         
         future = asyncio.run_coroutine_threadsafe(process(), loop)
-        future.result(timeout=30)  # افزایش timeout
+        future.result(timeout=30)
         return True
         
     except Exception as e:
@@ -529,7 +528,6 @@ def setup_handlers():
             CallbackQueryHandler(back_to_main, pattern="^back_to_main$"),
         ],
         name="admin_conversation",
-        per_message=True,
         allow_reentry=True
     )
     application.add_handler(admin_conv)
@@ -554,7 +552,6 @@ def setup_handlers():
             CallbackQueryHandler(back_to_main, pattern="^back_to_main$")
         ],
         name="reminder_conversation",
-        per_message=True,
         allow_reentry=True
     )
     application.add_handler(reminder_conv)
@@ -620,10 +617,13 @@ def main():
     # سیگنال‌های خروج
     def shutdown():
         logger.info("🛑 Shutting down...")
-        if application:
-            loop.run_until_complete(application.stop())
-        if loop and not loop.is_closed():
-            loop.close()
+        try:
+            if application:
+                loop.run_until_complete(application.stop())
+            if loop and not loop.is_closed():
+                loop.close()
+        except Exception as e:
+            logger.error(f"Shutdown error: {e}")
         sys.exit(0)
     
     signal.signal(signal.SIGINT, lambda s, f: shutdown())
