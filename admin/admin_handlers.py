@@ -537,15 +537,19 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    broadcasts = get_all_broadcasts()
-    broadcast = None
-    for b in broadcasts:
-        if b['id'] == broadcast_id:
-            broadcast = b
-            break
+    # ✅ استفاده از get_broadcast_by_id به جای لوپ
+    broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    # ✅ چک کن که قبلاً لغو نشده باشه
+    if broadcast.get('is_cancelled') or broadcast.get('status') == 'cancelled':
+        await query.edit_message_text(
+            "⛔ این پیام قبلاً لغو شده است!",
+            reply_markup=back_to_admin_keyboard()
+        )
         return
     
     from reminders.reminder_scheduler import scheduler
@@ -555,45 +559,128 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     import asyncio
     
     tehran_tz = pytz.timezone('Asia/Tehran')
-    run_date_tehran = datetime.strptime(
-        f"{broadcast['send_date']} {broadcast['send_time']}:00",
-        "%Y-%m-%d %H:%M:%S"
-    )
-    run_date_tehran = tehran_tz.localize(run_date_tehran)
-    run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     
+    # ✅ اعتبارسنجی تاریخ و زمان
+    try:
+        run_date_tehran = datetime.strptime(
+            f"{broadcast['send_date']} {broadcast['send_time']}:00",
+            "%Y-%m-%d %H:%M:%S"
+        )
+        run_date_tehran = tehran_tz.localize(run_date_tehran)
+        
+        # ✅ چک کن که زمان وارد شده از الان بزرگتر باشه
+        now_tehran = datetime.now(tehran_tz)
+        if run_date_tehran <= now_tehran:
+            await query.edit_message_text(
+                f"❌ <b>خطا!</b>\n\n"
+                f"زمان وارد شده ({broadcast['send_time']}) مربوط به گذشته است!\n"
+                f"📌 الان ساعت: <b>{now_tehran.strftime('%H:%M')}</b>\n\n"
+                f"لطفاً دوباره تلاش کنید.",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+            return
+            
+    except Exception as e:
+        logger.error(f"❌ Date/time validation error: {e}")
+        await query.edit_message_text(
+            "❌ تاریخ یا زمان نامعتبر است!",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return
+    
+    run_date_utc = run_date_tehran.astimezone(pytz.UTC)
     admin_chat_id = update.effective_user.id
     
+    # ✅ تابع ارسال با چک‌های اضافی
     def send_scheduled_broadcast_sync():
+        # ✅ چک کن که broadcast هنوز وجود داره
+        b = get_broadcast_by_id(broadcast_id)
+        if not b:
+            logger.warning(f"⚠️ Broadcast {broadcast_id} not found at execution time")
+            return
+        
+        # ✅ چک کن که لغو نشده باشه
+        if b.get('is_cancelled') or b.get('status') == 'cancelled':
+            logger.info(f"⛔ Broadcast {broadcast_id} was cancelled, skipping...")
+            return
+        
+        # ✅ چک کن که قبلاً ارسال نشده باشه
+        if b.get('status') in ['completed', 'sending']:
+            logger.info(f"⏭️ Broadcast {broadcast_id} already sent or sending, skipping...")
+            return
+        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            logger.info(f"🚀 Starting scheduled broadcast {broadcast_id}")
+            
             result = loop.run_until_complete(
                 send_broadcast_now(
                     broadcast_id, 
-                    broadcast['admin_id'], 
-                    broadcast['title'], 
-                    broadcast['message']
+                    b['admin_id'], 
+                    b['title'], 
+                    b['message']
                 )
             )
             sent, failed, total = result
+            
+            # ✅ ارسال گزارش به ادمین
             loop.run_until_complete(
-                send_broadcast_report(admin_chat_id, broadcast['title'], sent, failed, total)
+                send_broadcast_report(admin_chat_id, b['title'], sent, failed, total)
             )
+            
+            logger.info(f"✅ Scheduled broadcast {broadcast_id} completed: {sent}/{total} sent")
+            
         except Exception as e:
             logger.error(f"❌ Scheduled broadcast error: {e}", exc_info=True)
+            
+            # ✅ تلاش برای ارسال گزارش خطا به ادمین
+            try:
+                loop.run_until_complete(
+                    bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"❌ <b>خطا در ارسال زمان‌بندی شده!</b>\n\n"
+                             f"📌 {b['title']}\n"
+                             f"<code>{str(e)[:200]}</code>",
+                        parse_mode='HTML'
+                    )
+                )
+            except:
+                pass
         finally:
             loop.close()
     
+    # ✅ لاگ زمان‌بندی
+    logger.info(f"⏰ Scheduled broadcast {broadcast_id} for {run_date_tehran} (UTC: {run_date_utc})")
+    
+    # ✅ اضافه کردن job به scheduler
+    job_id = f"broadcast_{broadcast_id}"
     scheduler.add_job(
         send_scheduled_broadcast_sync,
         trigger=DateTrigger(run_date=run_date_utc),
-        id=f"broadcast_{broadcast_id}",
+        id=job_id,
         replace_existing=True
     )
     
+    # ✅ ذخیره job_id در دیتابیس (اختیاری)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE broadcasts 
+            SET job_id = ? 
+            WHERE id = ?
+        ''', (job_id, broadcast_id))
+        conn.commit()
+        conn.close()
+        logger.info(f"💾 Job ID {job_id} saved for broadcast {broadcast_id}")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not save job_id: {e}")
+    
     total_users = get_total_users_count()
     
+    # ✅ نمایش پیام تایید نهایی
     await query.edit_message_text(
         f"✅ <b>پیام همگانی برنامه‌ریزی شد!</b>\n\n"
         f"📌 عنوان: <b>{broadcast['title']}</b>\n"
@@ -605,7 +692,6 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
-
 
 async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_TYPE, broadcast_id: int):
     """نمایش و آپدیت خودکار پیشرفت ارسال - با محدودیت زمانی"""
