@@ -336,10 +336,25 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if context.user_data.get('awaiting_message'):
-        # ✅ برای broadcast ها، ConversationHandler خودش هندل می‌کنه
         broadcast_type = context.user_data.get('broadcast_type')
-        if broadcast_type in ['now', 'scheduled']:
-            return  # بذار ConversationHandler کارشو بکنه
+        
+        # ✅ broadcast_now رو مستقیم از echo صدا بزن
+        if broadcast_type == 'now':
+            await broadcast_now_message(update, context)
+            return
+        
+        # ✅ broadcast_scheduled رو مستقیم از echo صدا بزن
+        elif broadcast_type == 'scheduled':
+            step = context.user_data.get('broadcast_step')
+            if step in ['title', 'message']:
+                await broadcast_scheduled_message(update, context)
+                return
+            elif step == 'date':
+                await broadcast_scheduled_date(update, context)
+                return
+            elif step == 'time':
+                await broadcast_scheduled_time(update, context)
+                return
         
         if context.user_data.get('awaiting_admin'):
             await add_admin_execute(update, context)
@@ -360,7 +375,6 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
     )
-
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
