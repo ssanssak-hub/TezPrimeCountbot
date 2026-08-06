@@ -274,11 +274,9 @@ def get_broadcast_stats(broadcast_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # اطلاعات اصلی broadcast
     cursor.execute('SELECT * FROM broadcasts WHERE id = ?', (broadcast_id,))
     broadcast = cursor.fetchone()
     
-    # آمار لاگ‌ها
     cursor.execute('''
         SELECT status, COUNT(*) as count 
         FROM broadcast_logs 
@@ -288,8 +286,8 @@ def get_broadcast_stats(broadcast_id):
     logs = cursor.fetchall()
     
     conn.close()
-    return broadcast, logs
-
+    return row_to_dict(broadcast), rows_to_dicts(logs)  # ✅
+    
 def get_broadcast_progress(broadcast_id):
     """درصد پیشرفت ارسال"""
     conn = get_db_connection()
