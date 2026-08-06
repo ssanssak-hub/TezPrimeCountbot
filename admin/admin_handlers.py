@@ -100,94 +100,57 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return BROADCAST_CONTENT_TYPE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و پیام - هم برای فوری و هم برای زمان‌بندی"""
+    """دریافت عنوان و پیام - فقط برای نوع text"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
     broadcast_type = context.user_data.get('broadcast_type')
+    content_type = context.user_data['broadcast'].get('content_type', 'text')
     
-    # ✅ این شرط رو بردارید یا اصلاحش کنید
     if broadcast_type not in ['now', 'scheduled']:
         logger.error(f"❌ Unknown broadcast_type: {broadcast_type}")
         await update.message.reply_text("❌ خطا! نوع ارسال مشخص نیست.")
+        return ConversationHandler.END
+    
+    # اگه محتوا فایل باشه، اینجا نباید بیاد
+    if content_type != 'text':
         return ConversationHandler.END
     
     message = update.message.text
     step = context.user_data.get('broadcast_step', 'title')
     
     if step == 'title':
-        # ذخیره عنوان
         context.user_data['broadcast']['title'] = message
         context.user_data['broadcast_step'] = 'message'
         
-        if broadcast_type == 'now':
-            # پیام برای ارسال فوری
-            await update.message.reply_text(
-                f"📝 عنوان: <b>{message}</b>\n\n"
-                f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
-                f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!",
-                reply_markup=back_to_admin_keyboard(),
-                parse_mode='HTML'
-            )
-        else:  # scheduled
-            # پیام برای زمان‌بندی
-            await update.message.reply_text(
-                f"📝 <b>مرحله ۲/۴</b>\n\n"
-                f"عنوان: <b>{message}</b>\n\n"
-                f"حالا لطفاً <b>متن پیام</b> را ارسال کنید:\n\n"
-                f"🔙 برای بازگشت /cancel را بزنید",
-                reply_markup=back_to_admin_keyboard(),
-                parse_mode='HTML'
-            )
-        
+        await update.message.reply_text(
+            f"📝 عنوان: <b>{message}</b>\n\n"
+            f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
+            f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!\n\n"
+            f"🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
         return BROADCAST_MESSAGE
     
     elif step == 'message':
         title = context.user_data['broadcast']['title']
         context.user_data['broadcast']['message'] = message
+        context.user_data['broadcast_step'] = 'buttons'
+        context.user_data['awaiting_message'] = False
         
-        if broadcast_type == 'now':
-            # ارسال فوری - تایید نهایی
-            broadcast_id = save_broadcast(update.effective_user.id, title, message)
-            users_count = get_total_users_count()
-            
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ تایید و ارسال", callback_data=f"admin_confirm_broadcast_{broadcast_id}")],
-                [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
-            ])
-            
-            await update.message.reply_text(
-                f"📢 <b>تایید نهایی</b>\n\n"
-                f"📌 عنوان: <b>{title}</b>\n"
-                f"📝 پیام: {message[:100]}...\n"
-                f"👥 گیرندگان: <b>{users_count}</b> کاربر\n\n"
-                f"آیا از ارسال اطمینان دارید؟",
-                reply_markup=keyboard,
-                parse_mode='HTML'
-            )
-            
-            context.user_data.clear()
-            return ConversationHandler.END
-            
-        else:  # scheduled
-            # زمان‌بندی - برو به مرحله تاریخ
-            context.user_data['broadcast_step'] = 'date'
-            
-            await update.message.reply_text(
-                f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
-                f"عنوان: <b>{title}</b>\n"
-                f"پیام: {message[:50]}...\n\n"
-                f"می‌توانید تاریخ <b>امروز</b> را انتخاب کنید\n"
-                f"یا یک <b>تاریخ دلخواه</b> وارد نمایید.\n\n"
-                f"⚠️ <b>نکات مهم:</b>\n"
-                f"• تاریخ نمی‌تواند مربوط به گذشته باشد\n"
-                f"• فرمت تاریخ شمسی: <b>YYYY/MM/DD</b>\n"
-                f"• مثال: <b>1405/05/15</b>\n\n"
-                f"لطفاً تاریخ ارسال را انتخاب کنید:",
-                reply_markup=date_selection_keyboard(),
-                parse_mode='HTML'
-            )
-            return BROADCAST_DATE
+        # رفتن به مرحله دکمه‌های شیشه‌ای
+        await update.message.reply_text(
+            f"📝 <b>متن پیام دریافت شد</b>\n\n"
+            f"📌 عنوان: <b>{title}</b>\n"
+            f"📝 متن: {message[:100]}...\n\n"
+            f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> به پیام اضافه کنید (اختیاری):\n\n"
+            f"🔗 دکمه لینک: کاربر را به سایت/کانال هدایت می‌کند\n"
+            f"🔘 دکمه داخلی: بعد از کلیک پیام نمایش می‌دهد",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تایید و ارسال فوری با مدیریت بهتر"""
@@ -820,6 +783,127 @@ async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_
         )
     except Exception:
         pass
+
+# ============ هندلر انتخاب نوع محتوا ============
+
+async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت انتخاب نوع محتوا - مشترک برای فوری و زمان‌بندی"""
+    query = update.callback_query
+    await query.answer()
+    
+    content_type = query.data.replace("content_type_", "")
+    broadcast_type = context.user_data['broadcast_type']
+    context.user_data['broadcast']['content_type'] = content_type
+    
+    if content_type == 'text':
+        text = (
+            "📝 <b>ارسال متن</b>\n\n"
+            f"لطفاً <b>عنوان</b> پیام را وارد کنید:\n"
+            "(مثلاً: اطلاعیه مهم، تخفیف ویژه)\n\n"
+            "🔙 برای بازگشت /cancel را بزنید"
+        )
+        context.user_data['broadcast_step'] = 'title'
+        context.user_data['awaiting_message'] = True
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_TITLE
+        
+    elif content_type in ['photo', 'video', 'document', 'audio']:
+        content_fa = get_content_type_fa(content_type)
+        text = (
+            f"📎 <b>ارسال {content_fa}</b>\n\n"
+            f"لطفاً فایل <b>{content_fa}</b> خود را ارسال کنید:\n\n"
+            f"📌 می‌توانید برای فایل <b>کپشن</b> هم بنویسید.\n"
+            f"📌 کپشن به عنوان عنوان پیام استفاده می‌شود.\n\n"
+            f"🔙 برای بازگشت /cancel را بزنید"
+        )
+        context.user_data['broadcast_step'] = 'file'
+        context.user_data['awaiting_message'] = True
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_TITLE
+
+
+# ============ هندلر دریافت فایل ============
+
+async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت فایل (عکس/فیلم/فایل/صدا) از ادمین"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
+    broadcast_type = context.user_data.get('broadcast_type')
+    if broadcast_type not in ['now', 'scheduled']:
+        return ConversationHandler.END
+    
+    content_type = context.user_data['broadcast']['content_type']
+    message = update.message
+    
+    file_id = None
+    
+    try:
+        if content_type == 'photo':
+            file_id = message.photo[-1].file_id  # بهترین کیفیت
+        elif content_type == 'video':
+            file_id = message.video.file_id
+        elif content_type == 'document':
+            file_id = message.document.file_id
+        elif content_type == 'audio':
+            if message.audio:
+                file_id = message.audio.file_id
+            elif message.voice:
+                file_id = message.voice.file_id
+                content_type = 'audio'  # ویس هم به عنوان audio ذخیره میشه
+        
+        if not file_id:
+            await message.reply_text(
+                f"❌ فایل نامعتبر! لطفاً یک <b>{get_content_type_fa(content_type)}</b> واقعی ارسال کنید:",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_TITLE
+        
+        # ذخیره اطلاعات فایل
+        caption = message.caption or ''
+        title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
+        
+        context.user_data['broadcast']['file_id'] = file_id
+        context.user_data['broadcast']['caption'] = caption
+        context.user_data['broadcast']['title'] = title
+        context.user_data['broadcast']['message'] = caption  # برای سازگاری
+        
+        # رفتن به مرحله دکمه‌های شیشه‌ای
+        context.user_data['broadcast_step'] = 'buttons'
+        context.user_data['awaiting_message'] = False
+        context.user_data['awaiting_button'] = False
+        
+        await message.reply_text(
+            f"✅ <b>فایل دریافت شد!</b>\n\n"
+            f"📎 نوع: <b>{get_content_type_fa(content_type)}</b>\n"
+            f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
+            f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> به پیام اضافه کنید (اختیاری):\n\n"
+            f"🔗 دکمه لینک: کاربر را به سایت/کانال هدایت می‌کند\n"
+            f"🔘 دکمه داخلی: بعد از کلیک پیام نمایش می‌دهد",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+        
+    except Exception as e:
+        logger.error(f"Error receiving file: {e}")
+        await message.reply_text(
+            "❌ خطا در دریافت فایل! دوباره تلاش کنید:",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return BROADCAST_TITLE
+
         
 async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عملیات جاری را کنسل کن و به مدیریت پنل برگرد"""
