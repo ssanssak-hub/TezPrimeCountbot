@@ -1107,6 +1107,80 @@ async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT
         parse_mode='HTML'
     )
 
+async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش آمار کامل broadcast به کاربر"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    from database import check_admin_permission
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    
+    # ✅ استفاده از تابعی که داری
+    broadcast_row, logs = get_broadcast_stats(broadcast_id)
+    
+    if not broadcast_row:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    broadcast = dict(broadcast_row)
+    
+    # محاسبه آمار از logs
+    success_count = 0
+    failed_count = 0
+    for log in logs:
+        if log['status'] == 'success':
+            success_count += log['count']
+        elif log['status'] == 'failed':
+            failed_count += log['count']
+    
+    # ساخت متن آمار
+    text = (
+        f"📊 <b>آمار کامل</b>\n\n"
+        f"📌 عنوان: {broadcast.get('title', 'بدون عنوان')}\n"
+        f"📝 وضعیت: {broadcast.get('status', 'نامشخص')}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👥 کل کاربران: {broadcast.get('total_users', 0):,}\n"
+        f"✅ ارسال موفق: {broadcast.get('sent_count', success_count):,}\n"
+        f"❌ ناموفق: {broadcast.get('failed_count', failed_count):,}\n"
+        f"🚫 بلاک شده: {broadcast.get('blocked_count', 0):,}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📅 تاریخ ایجاد: {broadcast.get('created_at', 'نامشخص')}\n"
+    )
+    
+    if broadcast.get('started_at'):
+        text += f"📤 زمان شروع: {broadcast.get('started_at')}\n"
+    if broadcast.get('completed_at'):
+        text += f"✅ زمان پایان: {broadcast.get('completed_at')}\n"
+    
+    # دکمه بازگشت
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="admin_broadcasts_list")],
+        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")]
+    ])
+    
+    # ✅ ویرایش امن
+    try:
+        await query.edit_message_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            await query.answer("ℹ️ اطلاعات قبلاً به‌روز است.")
+        else:
+            logger.error(f"❌ Error in broadcast_stats: {e}")
+            await query.edit_message_text(
+                "❌ خطا در نمایش آمار!",
+                reply_markup=back_to_admin_keyboard()
+            )
 
 # ---------- آمار ----------
 
