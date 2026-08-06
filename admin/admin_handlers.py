@@ -590,28 +590,30 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    # ✅ استفاده از ایندکس به جای .get()
-    broadcast = get_broadcast_by_id(broadcast_id)
+    # ✅ دریافت broadcast و تبدیل به دیکشنری
+    broadcast_row = get_broadcast_by_id(broadcast_id)
     
-    if not broadcast:
+    if not broadcast_row:
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    # ✅ بررسی با ایندکس
-    if broadcast['is_cancelled'] or broadcast['status'] == 'cancelled':
+    # ✅ تبدیل به دیکشنری برای استفاده از .get()
+    broadcast = dict(broadcast_row)
+    
+    # ✅ بررسی با .get() (چون الان دیکشنری هست)
+    if broadcast.get('is_cancelled') or broadcast.get('status') == 'cancelled':
         await query.edit_message_text(
             "⛔ این پیام قبلاً لغو شده است!",
             reply_markup=back_to_admin_keyboard()
         )
         return
     
-    # ... ادامه کد
-    
     from reminders.reminder_scheduler import scheduler
     from apscheduler.triggers.date import DateTrigger
     from datetime import datetime
     import pytz
     import asyncio
+    from telegram import Bot
     
     tehran_tz = pytz.timezone('Asia/Tehran')
     
@@ -649,13 +651,15 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     
     # ✅ تابع ارسال با چک‌های اضافی
     def send_scheduled_broadcast_sync():
-        # ✅ چک کن که broadcast هنوز وجود داره
-        b = get_broadcast_by_id(broadcast_id)
-        if not b:
+        # ✅ دریافت broadcast و تبدیل به دیکشنری
+        b_row = get_broadcast_by_id(broadcast_id)
+        if not b_row:
             logger.warning(f"⚠️ Broadcast {broadcast_id} not found at execution time")
             return
         
-        # ✅ چک کن که لغو نشده باشه
+        b = dict(b_row)  # ✅ تبدیل به دیکشنری
+        
+        # ✅ چک کن که لغو نشده باشه (با .get() چون دیکشنری هست)
         if b.get('is_cancelled') or b.get('status') == 'cancelled':
             logger.info(f"⛔ Broadcast {broadcast_id} was cancelled, skipping...")
             return
@@ -692,6 +696,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
             
             # ✅ تلاش برای ارسال گزارش خطا به ادمین
             try:
+                bot = Bot(token=os.getenv('TOKEN'))
                 loop.run_until_complete(
                     bot.send_message(
                         chat_id=admin_chat_id,
@@ -718,8 +723,9 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         replace_existing=True
     )
     
-    # ✅ ذخیره job_id در دیتابیس (اختیاری)
+    # ✅ ذخیره job_id در دیتابیس
     try:
+        from admin.admin_database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
