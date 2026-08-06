@@ -100,6 +100,12 @@ def init_admin_db():
         logger.info("✅ Added error_message column to broadcasts table")
     except sqlite3.OperationalError:
         pass
+
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN job_id TEXT")
+        logger.info("✅ Added job_id column to broadcasts table")
+    except sqlite3.OperationalError:
+        pass
     
     conn.commit()
     conn.close()
