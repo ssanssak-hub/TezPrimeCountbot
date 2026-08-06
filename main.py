@@ -1,8 +1,13 @@
 import logging
 import asyncio
+import signal
+import sys
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, 
+    MessageHandler, filters, ContextTypes, ConversationHandler
+)
 import os
 from dotenv import load_dotenv
 
@@ -30,7 +35,8 @@ from admin.admin_handlers import (
     handle_permission_toggle, confirm_add_admin, cancel_add_admin,
     broadcasts_list, broadcast_detail, cancel_broadcast, delete_broadcast_handler,
     save_admin_permissions, admin_server_status,
-    edit_admin_start, edit_admin_permissions, 
+    edit_admin_start, edit_admin_permissions,
+    back_to_admin,  # ✅ اضافه شد
     BROADCAST_TITLE, BROADCAST_MESSAGE, BROADCAST_DATE, BROADCAST_TIME,
     BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
 )
@@ -41,28 +47,40 @@ from database import init_db, is_user_admin, is_bot_active, is_user_banned as db
 from reminders.reminder_database import init_reminder_db, get_all_user_reminders, get_user_reminders
 from reminders.reminder_keyboards import main_menu_keyboard, reminder_menu_keyboard
 
+# لود متغیرهای محیطی
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
+ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+PORT = int(os.environ.get('PORT', 5000))
 
+# تنظیمات logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
+# Flask app
 flask_app = Flask(__name__)
-application = None
-loop = None
+
+# متغیرهای گلوبال
+application: Application = None
+loop: asyncio.AbstractEventLoop = None
+
+
+# ============ هندلرهای اصلی ============
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دستور /start"""
     user = update.effective_user
     user_id = user.id
     
+    # ذخیره کاربر در دیتابیس
     from database import save_user
     save_user(user_id, user.username, user.first_name, user.last_name)
     
+    # ساخت کیبورد مناسب
     keyboard = main_menu_keyboard(user_id=user_id, admin_id=ADMIN_ID)
     
     await update.message.reply_text(
@@ -72,27 +90,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت همه دکمه‌ها"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
-    logger.info(f"Button handler received: {data}")
+    user_id = update.effective_user.id
+    logger.info(f"🔘 Button: {data} from user {user_id}")
     
-    # ⚠️ perm_ها و confirm/cancel ادمین
-    if data.startswith("perm_"):
+    # چک دسترسی‌های admin (perm_ ها)
+    if data.startswith("perm_") or data in ["admin_confirm_add", "admin_cancel_add", "admin_save_permissions"]:
         await handle_permission_toggle(update, context)
         return
     
-    if data == "admin_confirm_add":
-        await confirm_add_admin(update, context)
-        return
-    
-    if data == "admin_cancel_add":
-        await cancel_add_admin(update, context)
-        return
-    
-    user_id = update.effective_user.id
+    # چک وضعیت ربات و بن
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
     if not is_bot_active() and not is_admin:
@@ -102,6 +115,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin and db_is_banned(user_id):
         await query.edit_message_text("🚫 شما از ربات بن شده‌اید!")
         return
+    
+    # ========== مسیریابی دکمه‌ها ==========
     
     # ---- دکمه‌های اصلی ----
     if data == "notifications":
@@ -118,22 +133,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- پنل ادمین ----
     elif data == "admin_panel":
         await admin_panel(update, context)
+    elif data == "back_to_admin_panel":
+        await back_to_admin(update, context)
+    
+    # ---- Broadcast ها ----
     elif data == "admin_broadcast_now":
         await broadcast_now_start(update, context)
     elif data == "admin_broadcast_scheduled":
         await broadcast_scheduled_start(update, context)
     elif data == "admin_broadcasts_list":
         await broadcasts_list(update, context)
+    elif data.startswith("admin_confirm_broadcast_"):
+        await confirm_broadcast(update, context)
     elif data.startswith("admin_confirm_scheduled_"):
         await confirm_scheduled_broadcast(update, context)
+    elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
+        await broadcast_detail(update, context)
     elif data.startswith("admin_cancel_broadcast_"):
         await cancel_broadcast(update, context)
     elif data.startswith("admin_delete_broadcast_"):
         await delete_broadcast_handler(update, context)
-    elif data.startswith("admin_confirm_broadcast_"):
-        await confirm_broadcast(update, context)
-    elif data.startswith("admin_broadcast_") and not data.startswith("admin_broadcasts_"):
-        await broadcast_detail(update, context)
+    elif data.startswith("admin_confirm_delete_broadcast_"):
+        await delete_broadcast_handler(update, context)
+    
+    # ---- آمار و وضعیت ----
     elif data == "admin_stats":
         await admin_stats(update, context)
     elif data == "admin_bot_status":
@@ -144,6 +167,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_all_data(update, context)
     elif data == "admin_confirm_delete":
         await confirm_delete_all(update, context)
+    elif data == "admin_server_status":
+        await admin_server_status(update, context)
+    
+    # ---- مدیریت ادمین‌ها ----
     elif data == "admin_manage_admins":
         await manage_admins(update, context)
     elif data == "admin_add_admin":
@@ -152,35 +179,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_admin_start(update, context)
     elif data.startswith("admin_remove_") and data != "admin_remove_admin":
         await remove_admin_execute(update, context)
-    elif data == "admin_server_status":
-        await admin_server_status(update, context)
     elif data == "admin_edit_admin":
-        await edit_admin_start(update, context) 
+        await edit_admin_start(update, context)
     elif data.startswith("admin_edit_") and data != "admin_edit_admin":
         await edit_admin_permissions(update, context)
-    elif data == "admin_save_permissions":
-        await save_admin_permissions(update, context)
     elif data == "admin_list_admins":
         await list_admins(update, context)
+    
+    # ---- مدیریت کاربران ----
     elif data == "admin_manage_users":
         await manage_users(update, context)
     elif data == "admin_ban_user":
         await ban_user_start(update, context)
     elif data.startswith("admin_ban_"):
-        try:
-            user_id_to_ban = int(data.split("_")[-1])
-            from database import ban_user as db_ban
-            db_ban(user_id_to_ban)
-            await query.edit_message_text(
-                f"🚫 کاربر <code>{user_id_to_ban}</code> بن شد!",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
-                ]])
-            )
-        except Exception as e:
-            logger.error(f"Error banning user: {e}")
-            await query.edit_message_text("❌ خطا در بن کردن کاربر!")
+        await handle_ban_from_search(update, context)
     elif data == "admin_unban_user":
         await unban_user_start(update, context)
     elif data.startswith("admin_unban_"):
@@ -190,174 +202,292 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_search_user":
         await search_user_start(update, context)
     
-    # ---- دکمه‌های اعلان ----
+    # ---- ریمایندرها ----
     elif data.startswith("view_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await view_reminder_detail(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid view callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در نمایش اعلان!")
+        await view_reminder_detail(update, context)
     elif data.startswith("delete_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await delete_reminder(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid delete callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در حذف اعلان!")
+        await delete_reminder(update, context)
     elif data.startswith("cancel_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await cancel_reminder(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid cancel callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در لغو اعلان!")
+        await cancel_reminder(update, context)
     elif data.startswith("activate_"):
-        try:
-            reminder_id = int(data.split("_")[1])
-            await activate_reminder_handler(update, context)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Invalid activate callback: {data}, error: {e}")
-            await query.edit_message_text("❌ خطا در فعال‌سازی اعلان!")
+        await activate_reminder_handler(update, context)
     
+    # ---- بازگشت‌ها ----
     elif data == "back_to_main":
         await back_to_main(update, context)
     elif data == "back_to_notifications":
         await back_to_notifications(update, context)
     
+    # ---- ناشناخته ----
     else:
-        logger.warning(f"Unknown callback data: {data}")
+        logger.warning(f"⚠️ Unknown callback: {data}")
+        await query.answer("⚠️ این دکمه تعریف نشده است", show_alert=True)
+
+
+async def handle_ban_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بن کردن کاربر از نتایج جستجو"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    from database import check_admin_permission, ban_user as db_ban
+    
+    if not check_admin_permission(user_id, admin_id, "perm_manage_users"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
+    try:
+        user_id_to_ban = int(query.data.split("_")[-1])
+        db_ban(user_id_to_ban)
+        
+        await query.edit_message_text(
+            f"🚫 کاربر <code>{user_id_to_ban}</code> بن شد!",
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
+            ]])
+        )
+        logger.info(f"🚫 User {user_id_to_ban} banned by admin {user_id}")
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
+        await query.edit_message_text("❌ خطا در بن کردن کاربر!")
+
+
+# ============ نمایش لیست‌ها ============
 
 async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست حذف ریمایندر"""
     query = update.callback_query
     user_id = update.effective_user.id
     reminders = get_all_user_reminders(user_id)
     
     if not reminders:
-        await query.edit_message_text("📭 هیچ اعلانی برای حذف وجود ندارد!", reply_markup=reminder_menu_keyboard())
+        await query.edit_message_text(
+            "📭 هیچ اعلانی برای حذف وجود ندارد!", 
+            reply_markup=reminder_menu_keyboard()
+        )
         return
     
     keyboard = []
     for r in reminders:
         title = r['title'] if r['title'] else 'بدون عنوان'
         status = "✅" if r['is_active'] else "⛔"
-        text = f"{status} 🗑️ {title[:25]}..."
+        text = f"{status} 🗑️ {title[:30]}"
+        if len(title) > 30:
+            text += "..."
         keyboard.append([InlineKeyboardButton(text, callback_data=f"delete_{r['id']}")])
+    
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "🗑️ <b>حذف اعلان</b>\n\n⚠️ با حذف، اعلان کاملاً پاک می‌شود!\nبرای غیرفعال کردن موقت از گزینه لغو استفاده کنید.\n\nاعلان مورد نظر برای حذف را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
+        "🗑️ <b>حذف اعلان</b>\n\n"
+        "⚠️ با حذف، اعلان کاملاً پاک می‌شود!\n"
+        "برای غیرفعال کردن موقت از گزینه لغو استفاده کنید.\n\n"
+        "اعلان مورد نظر برای حذف را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode='HTML'
     )
 
+
 async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست لغو ریمایندر"""
     query = update.callback_query
     user_id = update.effective_user.id
     reminders = get_user_reminders(user_id)
     
     if not reminders:
-        await query.edit_message_text("📭 هیچ اعلان فعالی برای لغو وجود ندارد!", reply_markup=reminder_menu_keyboard())
+        await query.edit_message_text(
+            "📭 هیچ اعلان فعالی برای لغو وجود ندارد!", 
+            reply_markup=reminder_menu_keyboard()
+        )
         return
     
     keyboard = []
     for r in reminders:
         title = r['title'] if r['title'] else 'بدون عنوان'
-        text = f"⛔ {title[:25]}..."
+        text = f"⛔ {title[:30]}"
+        if len(title) > 30:
+            text += "..."
         keyboard.append([InlineKeyboardButton(text, callback_data=f"cancel_{r['id']}")])
+    
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
     
     await query.edit_message_text(
-        "⛔ <b>لغو اعلان</b>\n\nاعلان غیرفعال می‌شود ولی پاک نمی‌شود.\nبعداً می‌توانید دوباره فعالش کنید.\n\nاعلان مورد نظر برای لغو را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
+        "⛔ <b>لغو اعلان</b>\n\n"
+        "اعلان غیرفعال می‌شود ولی پاک نمی‌شود.\n"
+        "بعداً می‌توانید دوباره فعالش کنید.\n\n"
+        "اعلان مورد نظر برای لغو را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode='HTML'
     )
 
+
+# ============ Echo Handler ============
+
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پاسخ به پیام‌های متنی"""
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
+    # چک وضعیت ربات
     if not is_bot_active() and not is_admin:
         return
     
+    # چک بن
     if db_is_banned(user_id):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ====== افزودن ادمین ======
-    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_admin'):
-        await add_admin_execute(update, context)
-        return
+    # مدیریت conversation های مختلف
+    if context.user_data.get('awaiting_message'):
+        # افزودن ادمین
+        if context.user_data.get('awaiting_admin'):
+            await add_admin_execute(update, context)
+            return
+        
+        # بن کاربر
+        if context.user_data.get('awaiting_ban'):
+            await ban_user_execute(update, context)
+            return
+        
+        # جستجوی کاربر
+        if context.user_data.get('awaiting_search'):
+            await search_user_result(update, context)
+            return
+        
+        # broadcast
+        broadcast_type = context.user_data.get('broadcast_type')
+        if broadcast_type == 'now':
+            await broadcast_now_message(update, context)
+            return
+        elif broadcast_type == 'scheduled':
+            step = context.user_data.get('broadcast_step')
+            if step == 'title':
+                await broadcast_scheduled_message(update, context)
+                return
+            elif step == 'message':
+                await broadcast_scheduled_message(update, context)
+                return
+            elif step == 'date':
+                await broadcast_scheduled_date(update, context)
+                return
+            elif step == 'time':
+                await broadcast_scheduled_time(update, context)
+                return
+        
+        # ریمایندر
+        if context.user_data.get('step') in ['title', 'message']:
+            await set_reminder_message(update, context)
+            return
     
-    # ====== بن کاربر ======
-    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_ban'):
-        await ban_user_execute(update, context)
-        return
-    
-    # ====== جستجوی کاربر ======
-    if context.user_data.get('awaiting_message') and context.user_data.get('awaiting_search'):
-        await search_user_result(update, context)
-        return
-    
-    # ====== ریمایندر ======
-    if context.user_data.get('awaiting_message') and context.user_data.get('step') in ['title', 'message']:
-        await set_reminder_message(update, context)
-        return
-    
-    # ====== هیچکدوم نبود ======
-    await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید.")
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Error: {context.error}", exc_info=context.error)
-    if update and update.effective_message:
-        try:
-            await update.effective_message.reply_text("❌ خطایی رخ داد! لطفاً /start را بزنید.")
-        except:
-            pass
+    # پیام پیش‌فرض
+    await update.message.reply_text(
+        "لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید."
+    )
 
-def process_update(update_json):
-    global application, loop
+
+# ============ مدیریت خطا ============
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت خطاهای کلی"""
+    logger.error(f"❌ Error: {context.error}", exc_info=context.error)
+    
     try:
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "❌ خطایی رخ داد! لطفاً /start را بزنید."
+            )
+    except Exception as e:
+        logger.error(f"Error in error handler: {e}")
+
+
+# ============ Webhook Handler ============
+
+def process_update(update_json: dict) -> bool:
+    """پردازش آپدیت از Webhook"""
+    global application, loop
+    
+    try:
+        if application is None or application.bot is None:
+            logger.error("❌ Application not initialized")
+            return False
+        
         if loop is None or loop.is_closed():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+        
         update = Update.de_json(update_json, application.bot)
-        future = asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
-        future.result(timeout=10)
+        
+        async def process():
+            await application.process_update(update)
+        
+        future = asyncio.run_coroutine_threadsafe(process(), loop)
+        future.result(timeout=30)  # افزایش timeout
         return True
+        
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
+        logger.error(f"❌ Webhook processing error: {e}", exc_info=True)
         return False
+
+
+# ============ Flask Routes ============
 
 @flask_app.route('/', methods=['GET', 'POST'])
 def webhook():
+    """Endpoint اصلی Webhook"""
     if request.method == 'POST':
         try:
             json_data = request.get_json(force=True)
-            if not json_data: return jsonify({'status': 'error'}), 400
+            
+            if not json_data:
+                logger.warning("⚠️ Empty request body")
+                return jsonify({'status': 'error', 'message': 'Empty body'}), 400
+            
             success = process_update(json_data)
-            return jsonify({'status': 'ok' if success else 'error'}), 200 if success else 500
+            
+            if success:
+                return jsonify({'status': 'ok'}), 200
+            else:
+                return jsonify({'status': 'error', 'message': 'Processing failed'}), 500
+                
         except Exception as e:
-            logger.error(f"Webhook exception: {e}")
-            return jsonify({'status': 'error'}), 500
+            logger.error(f"❌ Webhook exception: {e}", exc_info=True)
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    
     return "TezPrimeCountbot is running! 🚀", 200
+
 
 @flask_app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'healthy'}), 200
+    """Health check endpoint"""
+    status = 'healthy' if application and application.bot else 'initializing'
+    return jsonify({
+        'status': status,
+        'bot': 'TezPrimeCountbot',
+        'webhook': WEBHOOK_URL
+    }), 200
+
 
 @flask_app.route('/info', methods=['GET'])
 def info():
-    return jsonify({'status': 'running', 'bot': 'TezPrimeCountbot', 'webhook': WEBHOOK_URL}), 200
+    """اطلاعات ربات"""
+    return jsonify({
+        'status': 'running',
+        'bot': 'TezPrimeCountbot',
+        'webhook': WEBHOOK_URL,
+        'admin_id': ADMIN_ID
+    }), 200
 
-def main():
-    global application, loop
-    
-    init_db()
-    init_reminder_db()
-    init_admin_db()
-    
-    application = Application.builder().token(TOKEN).build()
-    
-    # ⚠️ admin_conv با states کامل
 
+# ============ راه‌اندازی ============
+
+def setup_handlers():
+    """تنظیم همه هندلرها"""
+    global application
+    
+    # ConversationHandler برای admin
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -368,24 +498,30 @@ def main():
         ],
         states={
             BROADCAST_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
             ],
             BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
             ],
-            BROADCAST_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_date)],
-            BROADCAST_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_time)],
-            BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)],
+            BROADCAST_DATE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_date)
+            ],
+            BROADCAST_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_time)
+            ],
+            BAN_USER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)
+            ],
             ADD_ADMIN_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute),
                 CallbackQueryHandler(handle_permission_toggle, pattern="^perm_"),
                 CallbackQueryHandler(confirm_add_admin, pattern="^admin_confirm_add$"),
                 CallbackQueryHandler(cancel_add_admin, pattern="^admin_cancel_add$"),
-                CallbackQueryHandler(save_admin_permissions, pattern="^admin_save_permissions$"),  # ⚠️ اینجا
+                CallbackQueryHandler(save_admin_permissions, pattern="^admin_save_permissions$"),
             ],
-            SEARCH_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)],
+            SEARCH_USER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)
+            ],
         },
         fallbacks=[
             CommandHandler("cancel", admin_cancel),
@@ -396,65 +532,112 @@ def main():
         per_message=True,
         allow_reentry=True
     )
-    application.add_handler(admin_conv)    
+    application.add_handler(admin_conv)
     
+    # ConversationHandler برای ریمایندر
     reminder_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")],
+        entry_points=[
+            CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")
+        ],
         states={
-            REMINDER_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder_message)],
-            REMINDER_DAYS: [CallbackQueryHandler(set_reminder_days, pattern="^days_")],
-            REMINDER_TIME: [CallbackQueryHandler(set_reminder_time, pattern="^time_")],
+            REMINDER_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder_message)
+            ],
+            REMINDER_DAYS: [
+                CallbackQueryHandler(set_reminder_days, pattern="^days_")
+            ],
+            REMINDER_TIME: [
+                CallbackQueryHandler(set_reminder_time, pattern="^time_")
+            ],
         },
-        fallbacks=[CallbackQueryHandler(back_to_main, pattern="^back_to_main$")],
+        fallbacks=[
+            CallbackQueryHandler(back_to_main, pattern="^back_to_main$")
+        ],
         name="reminder_conversation",
         per_message=True,
         allow_reentry=True
     )
     application.add_handler(reminder_conv)
     
+    # هندلرهای عمومی
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     application.add_error_handler(error_handler)
     
+    logger.info("✅ All handlers configured")
+
+
+def main():
+    """تابع اصلی راه‌اندازی"""
+    global application, loop
+    
+    # راه‌اندازی دیتابیس‌ها
+    logger.info("🔧 Initializing databases...")
+    init_db()
+    init_reminder_db()
+    init_admin_db()
+    logger.info("✅ All databases initialized")
+    
+    # ساخت application
+    application = Application.builder().token(TOKEN).build()
+    
+    # تنظیم هندلرها
+    setup_handlers()
+    
+    # ساخت event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
+    # تنظیم Webhook
     async def setup_webhook():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
     
     loop.run_until_complete(setup_webhook())
     
-    async def run_application():
+    # راه‌اندازی application
+    async def start_app():
         await application.initialize()
         await application.start()
         logger.info("✅ Application started")
         
-        from reminders.reminder_scheduler import start_scheduler
-        start_scheduler()
-        
-        from reminders.reminder_scheduler import scheduler
-        jobs = scheduler.get_jobs()
-        logger.info(f"📋 Active jobs: {len(jobs)}")
-        for job in jobs:
-            logger.info(f"  - Job: {job.id}, Next run: {job.next_run_time}")
-        
-        await asyncio.Event().wait()
+        # راه‌اندازی scheduler
+        try:
+            from reminders.reminder_scheduler import start_scheduler
+            start_scheduler()
+            
+            from reminders.reminder_scheduler import scheduler
+            jobs = scheduler.get_jobs()
+            logger.info(f"📋 Active jobs: {len(jobs)}")
+            for job in jobs:
+                logger.info(f"  - {job.id}: Next run at {job.next_run_time}")
+        except Exception as e:
+            logger.error(f"⚠️ Scheduler error: {e}")
     
-    import threading
-    def run_bot():
-        loop.run_until_complete(run_application())
+    loop.run_until_complete(start_app())
     
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
+    # سیگنال‌های خروج
+    def shutdown():
+        logger.info("🛑 Shutting down...")
+        if application:
+            loop.run_until_complete(application.stop())
+        if loop and not loop.is_closed():
+            loop.close()
+        sys.exit(0)
     
-    logger.info("✅ Bot is ready to receive updates")
+    signal.signal(signal.SIGINT, lambda s, f: shutdown())
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown())
     
-    port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Starting Flask server on port {port}")
-    
-    flask_app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
-    
+    # اجرای Flask
+    logger.info(f"🚀 Starting Flask server on port {PORT}")
+    flask_app.run(
+        host='0.0.0.0',
+        port=PORT,
+        debug=False,
+        threaded=True
+    )
+
+
 if __name__ == "__main__":
     main()
