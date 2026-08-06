@@ -182,7 +182,6 @@ def admin_broadcasts_list_keyboard(broadcasts, page=0, per_page=10):
     
     for b in page_broadcasts:
         emoji = get_status_emoji(b)
-        # ✅ استفاده از [] به جای .get()
         title = b['title'] if 'title' in b.keys() else 'بدون عنوان'
         if len(title) > 35:
             title = title[:32] + "..."
@@ -317,3 +316,81 @@ def date_selection_keyboard():
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+# ============ کیبوردهای جدید برای ارسال پیشرفته ============
+
+def content_type_keyboard():
+    """کیبورد انتخاب نوع محتوا برای پیام همگانی"""
+    keyboard = [
+        [InlineKeyboardButton("📝 متن", callback_data="content_type_text")],
+        [InlineKeyboardButton("🖼 عکس", callback_data="content_type_photo")],
+        [InlineKeyboardButton("🎥 فیلم", callback_data="content_type_video")],
+        [InlineKeyboardButton("📄 فایل", callback_data="content_type_document")],
+        [InlineKeyboardButton("🎵 صدا/ویس", callback_data="content_type_audio")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def inline_buttons_keyboard(current_buttons=None, is_editing=False):
+    """کیبورد مدیریت دکمه‌های شیشه‌ای"""
+    if current_buttons is None:
+        current_buttons = []
+    
+    keyboard = []
+    
+    # نمایش دکمه‌های فعلی
+    for i, btn in enumerate(current_buttons):
+        if len(btn) == 2:  # دکمه URL
+            text, url = btn
+            keyboard.append([
+                InlineKeyboardButton(f"🔗 {text[:20]}", url=url),
+                InlineKeyboardButton("❌", callback_data=f"ib_remove_{i}")
+            ])
+        elif len(btn) == 3:  # دکمه Callback
+            text, data, _ = btn
+            keyboard.append([
+                InlineKeyboardButton(f"🔘 {text[:20]}", callback_data=f"ib_noop"),
+                InlineKeyboardButton("❌", callback_data=f"ib_remove_{i}")
+            ])
+    
+    # دکمه‌های مدیریت
+    if len(current_buttons) < 10:  # حداکثر ۱۰ دکمه
+        keyboard.append([
+            InlineKeyboardButton("➕ لینک", callback_data="ib_add_url"),
+            InlineKeyboardButton("➕ دکمه", callback_data="ib_add_callback")
+        ])
+    
+    # دکمه‌های تأیید/رد
+    action_row = []
+    if current_buttons:
+        action_row.append(InlineKeyboardButton("✅ تأیید دکمه‌ها", callback_data="ib_confirm"))
+    action_row.append(InlineKeyboardButton("⏭ رد کردن", callback_data="ib_skip"))
+    keyboard.append(action_row)
+    
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+
+def broadcast_preview_keyboard(broadcast_id, content_type):
+    """کیبورد پیش‌نمایش و تأیید نهایی"""
+    keyboard = [
+        [InlineKeyboardButton("✅ تأیید و ارسال", callback_data=f"admin_confirm_advanced_{broadcast_id}")],
+        [InlineKeyboardButton("✏️ ویرایش دکمه‌ها", callback_data=f"admin_edit_buttons_{broadcast_id}")],
+        [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_content_type_fa(content_type):
+    """ترجمه فارسی نوع محتوا"""
+    types = {
+        'text': 'متن',
+        'photo': 'عکس',
+        'video': 'فیلم',
+        'document': 'فایل',
+        'audio': 'صدا/ویس',
+        'poll': 'نظرسنجی'
+    }
+    return types.get(content_type, 'محتوا')
