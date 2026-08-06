@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+import pytz
 import asyncio
 import signal
 import sys
@@ -367,16 +369,52 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مدیریت خطاهای کلی"""
+    """مدیریت خطاهای کلی و ارسال به ادمین"""
     logger.error(f"❌ Error: {context.error}", exc_info=context.error)
     
+    # ✅ ارسال خطا به ادمین در تلگرام
+    try:
+        if application and application.bot:
+            admin_id = int(os.getenv('ADMIN_ID'))
+            
+            error_text = (
+                f"🚨 <b>گزارش خطای ربات</b>\n\n"
+                f"<b>نوع خطا:</b> <code>{type(context.error).__name__}</code>\n"
+                f"<b>پیام خطا:</b> <code>{str(context.error)[:500]}</code>\n"
+            )
+            
+            # اضافه کردن اطلاعات کاربر اگر موجود باشه
+            if update:
+                if update.effective_user:
+                    user = update.effective_user
+                    error_text += (
+                        f"\n<b>کاربر:</b> {user.first_name} "
+                        f"(<code>{user.id}</code>)"
+                    )
+                if update.effective_message:
+                    error_text += f"\n<b>چت آیدی:</b> <code>{update.effective_chat.id}</code>"
+            
+            error_text += f"\n\n⏰ <i>{datetime.now(pytz.timezone('Asia/Tehran')).strftime('%Y-%m-%d %H:%M:%S')}</i>"
+            
+            await application.bot.send_message(
+                chat_id=admin_id,
+                text=error_text,
+                parse_mode='HTML'
+            )
+            logger.info("📨 Error report sent to admin")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to send error report to admin: {e}")
+    
+    # پیام به کاربر
     try:
         if update and update.effective_message:
             await update.effective_message.reply_text(
-                "❌ خطایی رخ داد! لطفاً /start را بزنید."
+                "❌ خطایی رخ داد! تیم پشتیبانی مطلع شد.\n"
+                "لطفاً /start را بزنید."
             )
-    except Exception as e:
-        logger.error(f"Error in error handler: {e}")
+    except Exception:
+        pass
 
 
 # ============ Webhook Handler (اصلاح‌شده) ============
