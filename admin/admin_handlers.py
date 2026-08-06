@@ -1,8 +1,10 @@
 import logging
 import os
+import asyncio
 import psutil
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import ContextTypes, ConversationHandler
+from telegram.error import TelegramError
 from database import (
     get_all_users, get_all_active_users, get_admin_info, get_total_users_count,
     ban_user as db_ban_user, unban_user as db_unban_user,
@@ -10,21 +12,21 @@ from database import (
     add_admin as db_add_admin, remove_admin as db_remove_admin,
     get_all_admins, get_bot_status, toggle_bot_status,
     delete_all_user_data, is_user_admin,
-    check_admin_permission
+    check_admin_permission  # ✅ فقط یکبار import کن
 )
 from reminders.reminder_database import get_all_user_reminders
 from admin.admin_keyboards import (
     admin_panel_keyboard, admin_manage_admins_keyboard,
     admin_manage_users_keyboard, admin_bot_status_keyboard,
     admin_broadcasts_list_keyboard, broadcast_action_keyboard,
-    back_to_admin_keyboard, permissions_selection_keyboard,   
+    back_to_admin_keyboard, permissions_selection_keyboard,
     admin_confirm_add_keyboard,
     get_permission_name
 )
 from admin.admin_database import (
     init_admin_db, save_broadcast, get_all_broadcasts,
     mark_broadcast_cancelled, delete_broadcast, get_broadcast_stats,
-    get_broadcast_progress
+    get_broadcast_progress, get_broadcast_by_id  # ✅ اضافه کردن get_broadcast_by_id
 )
 from admin.admin_broadcast import send_broadcast_now, get_broadcast_progress_text, send_broadcast_report
 from reminders.reminder_utils import get_weekday_name, get_persian_datetime
@@ -142,33 +144,104 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تایید و ارسال"""
+    """تایید و ارسال فوری با مدیریت بهتر"""
     query = update.callback_query
     await query.answer()
     
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    # چک دسترسی
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
     broadcast_id = int(query.data.split("_")[-1])
     
-    broadcasts = get_all_broadcasts()
-    broadcast = None
-    for b in broadcasts:
-        if b['id'] == broadcast_id:
-            broadcast = b
-            break
+    # استفاده از فانکشن جدید به‌جای حلقه
+    broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
         return
     
-    await query.edit_message_text("⏳ <b>در حال ارسال پیام همگانی...</b>", parse_mode='HTML')
+    # بررسی وضعیت فعلی
+    if broadcast['status'] == 'sending':
+        await query.answer("⏳ این پیام در حال ارسال است!", show_alert=True)
+        progress_text = get_broadcast_progress_text(broadcast_id)
+        await query.edit_message_text(progress_text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
+        return
     
-    import asyncio
-    asyncio.create_task(
-        send_broadcast_now(broadcast_id, broadcast['admin_id'], broadcast['title'], broadcast['message'])
+    # پیام در حال ارسال
+    progress_msg = await query.edit_message_text(
+        "⏳ <b>در حال ارسال پیام همگانی...</b>\n\n"
+        "🔄 لطفاً صبر کنید...",
+        parse_mode='HTML'
     )
     
-    await asyncio.sleep(2)
-    progress_text = get_broadcast_progress_text(broadcast_id)
-    await query.edit_message_text(progress_text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
+    try:
+        # اجرای ارسال در background
+        task = asyncio.create_task(
+            send_broadcast_now(
+                broadcast_id, 
+                broadcast['admin_id'], 
+                broadcast['title'], 
+                broadcast['message']
+            )
+        )
+        
+        # نمایش پیشرفت هر ۲ ثانیه
+        last_text = ""
+        while not task.done():
+            await asyncio.sleep(2)
+            progress_text = get_broadcast_progress_text(broadcast_id)
+            
+            if progress_text != last_text:
+                last_text = progress_text
+                try:
+                    await progress_msg.edit_text(
+                        progress_text,
+                        reply_markup=back_to_admin_keyboard(),
+                        parse_mode='HTML'
+                    )
+                except Exception:
+                    pass
+        
+        # دریافت نتیجه
+        sent, failed, total = task.result()
+        
+        # ارسال گزارش به ادمین
+        admin_chat_id = update.effective_user.id
+        await send_broadcast_report(admin_chat_id, broadcast['title'], sent, failed, total)
+        
+        # نمایش نتیجه نهایی
+        progress = round((sent + failed) / total * 100, 1) if total > 0 else 0
+        success_rate = round(sent / total * 100, 1) if total > 0 else 0
+        
+        final_text = (
+            f"📊 **گزارش نهایی ارسال**\n\n"
+            f"📌 **{broadcast['title']}**\n\n"
+            f"👥 کل کاربران: {total:,}\n"
+            f"✅ ارسال موفق: {sent:,} ({success_rate}%)\n"
+            f"❌ ناموفق: {failed:,}\n\n"
+            f"📈 پیشرفت: {progress}%\n"
+            f"✅ **ارسال به پایان رسید!**"
+        )
+        
+        await progress_msg.edit_text(
+            final_text,
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Broadcast error: {e}", exc_info=True)
+        await progress_msg.edit_text(
+            f"❌ <b>خطا در ارسال پیام!</b>\n\n"
+            f"<code>{str(e)[:200]}</code>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
 
 # ---------- پیام همگانی زمان‌بندی شده ----------
 
@@ -465,48 +538,75 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
 
 
 async def show_broadcast_progress(update: Update, context: ContextTypes.DEFAULT_TYPE, broadcast_id: int):
-    """نمایش و آپدیت خودکار پیشرفت ارسال"""
-    import asyncio
-    
+    """نمایش و آپدیت خودکار پیشرفت ارسال - با محدودیت زمانی"""
+    max_attempts = 120  # حداکثر ۳ دقیقه (۱۲۰ × ۱.۵ ثانیه)
     last_text = ""
     
-    for i in range(60):
+    for attempt in range(max_attempts):
         progress_text = get_broadcast_progress_text(broadcast_id)
         
+        # فقط اگر متن تغییر کرده آپدیت کن
         if progress_text != last_text:
             last_text = progress_text
             
-            broadcasts = get_all_broadcasts()
-            for b in broadcasts:
-                if b['id'] == broadcast_id and b['total_users'] > 0:
-                    total = b['total_users']
-                    sent = b['sent_count']
-                    failed = b['failed_count']
-                    
-                    if sent + failed >= total:
-                        final_text = get_broadcast_progress_text(broadcast_id)
-                        try:
-                            await update.effective_message.edit_text(
-                                final_text + "\n\n✅ <b>ارسال به پایان رسید!</b>",
-                                reply_markup=back_to_admin_keyboard(),
-                                parse_mode='HTML'
-                            )
-                        except:
-                            pass
-                        return
+            # بررسی وضعیت broadcast
+            broadcast = get_broadcast_by_id(broadcast_id)
+            if not broadcast:
+                break
             
+            # اگر تموم شده یا متوقف شده
+            if broadcast['status'] in ['completed', 'failed', 'stopped', 'cancelled']:
+                final_text = get_broadcast_progress_text(broadcast_id)
+                
+                if broadcast['status'] == 'completed':
+                    final_text += "\n\n✅ <b>ارسال به پایان رسید!</b>"
+                elif broadcast['status'] == 'stopped':
+                    final_text += "\n\n🛑 <b>ارسال متوقف شد!</b>"
+                elif broadcast['status'] == 'failed':
+                    final_text += "\n\n❌ <b>ارسال با خطا مواجه شد!</b>"
+                
+                try:
+                    await update.effective_message.edit_text(
+                        final_text,
+                        reply_markup=broadcast_action_keyboard(
+                            broadcast_id, 
+                            broadcast['status'] == 'completed', 
+                            broadcast['status'] == 'cancelled'
+                        ),
+                        parse_mode='HTML'
+                    )
+                except Exception:
+                    pass
+                return
+            
+            # آپدیت پیام
             try:
                 await update.effective_message.edit_text(
                     progress_text,
-                    reply_markup=back_to_admin_keyboard(),
+                    reply_markup=broadcast_action_keyboard(
+                        broadcast_id,
+                        broadcast['status'] == 'sending',
+                        False
+                    ),
                     parse_mode='HTML'
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update progress message: {e}")
         
         await asyncio.sleep(1.5)
+    
+    # اگر به حداکثر تلاش رسید
+    logger.warning(f"⚠️ Progress monitoring timed out for broadcast {broadcast_id}")
+    try:
+        final_text = get_broadcast_progress_text(broadcast_id)
+        await update.effective_message.edit_text(
+            final_text + "\n\n⚠️ <b>مانیتورینگ متوقف شد. لطفاً دوباره بررسی کنید.</b>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+    except Exception:
+        pass
         
-
 async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عملیات جاری را کنسل کن و به مدیریت پنل برگرد"""
     context.user_data.clear()
@@ -634,82 +734,188 @@ async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("📋 <b>پیام‌های همگانی</b>", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='HTML')
     
 async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """جزئیات پیام همگانی با گرافیک"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    progress_text = get_broadcast_progress_text(broadcast_id)
-    
-    broadcasts = get_all_broadcasts()
-    broadcast = None
-    for b in broadcasts:
-        if b['id'] == broadcast_id:
-            broadcast = b
-            break
-    
-    if broadcast:
-        if not broadcast['is_sent'] and not broadcast['is_cancelled'] and broadcast['total_users'] > 0:
-            await query.edit_message_text(
-                progress_text + "\n\n⏳ <b>در حال ارسال...</b>",
-                reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
-                parse_mode='HTML'
-            )
-            import asyncio
-            asyncio.create_task(show_broadcast_progress(update, context, broadcast_id))
-        else:
-            final_text = progress_text
-            if broadcast['is_sent']:
-                final_text += "\n\n✅ <b>ارسال به پایان رسید!</b>"
-            elif broadcast['is_cancelled']:
-                final_text += "\n\n⛔ <b>ارسال لغو شد!</b>"
-            
-            await query.edit_message_text(
-                final_text,
-                reply_markup=broadcast_action_keyboard(broadcast_id, broadcast['is_sent'], broadcast['is_cancelled']),
-                parse_mode='HTML'
-            )
-            
-async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لغو پیام"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    mark_broadcast_cancelled(broadcast_id)
-    await query.edit_message_text("⛔ پیام همگانی لغو شد!", reply_markup=back_to_admin_keyboard())
-
-async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حذف پیام"""
-    query = update.callback_query
-    await query.answer()
-    
-    broadcast_id = int(query.data.split("_")[-1])
-    delete_broadcast(broadcast_id)
-    await query.edit_message_text("🗑️ پیام همگانی حذف شد!", reply_markup=back_to_admin_keyboard())
-
-# ---------- آمار ----------
-
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """آمار و گزارشات"""
+    """جزئیات پیام همگانی با مدیریت بهتر وضعیت‌ها"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    # ✅ اصلاح: هم ادمین اصلی و هم دسترسی رو چک کن
-    from database import check_admin_permission
-    if user_id != admin_id and not check_admin_permission(user_id, admin_id, "perm_stats"):
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    progress_text = get_broadcast_progress_text(broadcast_id)
+    
+    # وضعیت‌های مختلف
+    if broadcast['status'] == 'sending':
+        # در حال ارسال - شروع مانیتورینگ
+        await query.edit_message_text(
+            progress_text + "\n\n⏳ <b>در حال ارسال...</b>",
+            reply_markup=broadcast_action_keyboard(broadcast_id, True, False),
+            parse_mode='HTML'
+        )
+        asyncio.create_task(show_broadcast_progress(update, context, broadcast_id))
+        
+    elif broadcast['status'] == 'pending':
+        # در انتظار ارسال
+        await query.edit_message_text(
+            progress_text + "\n\n⏰ <b>در انتظار ارسال زمان‌بندی شده...</b>",
+            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
+            parse_mode='HTML'
+        )
+        
+    elif broadcast['status'] == 'completed':
+        await query.edit_message_text(
+            progress_text + "\n\n✅ <b>ارسال به پایان رسید!</b>",
+            reply_markup=broadcast_action_keyboard(broadcast_id, True, False),
+            parse_mode='HTML'
+        )
+        
+    elif broadcast['status'] == 'failed':
+        error_msg = broadcast.get('error_message', 'خطای نامشخص')
+        await query.edit_message_text(
+            progress_text + f"\n\n❌ <b>ارسال ناموفق!</b>\n<code>{error_msg[:100]}</code>",
+            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
+            parse_mode='HTML'
+        )
+        
+    elif broadcast['status'] == 'cancelled' or broadcast['is_cancelled']:
+        await query.edit_message_text(
+            progress_text + "\n\n⛔ <b>ارسال لغو شد!</b>",
+            reply_markup=broadcast_action_keyboard(broadcast_id, False, True),
+            parse_mode='HTML'
+        )
+    
+    else:
+        await query.edit_message_text(
+            progress_text,
+            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
+            parse_mode='HTML'
+        )
+            
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو پیام با توقف ارسال فعال"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    # اگر در حال ارسال بود، متوقفش کن
+    if broadcast['status'] == 'sending':
+        from admin.admin_database import mark_broadcast_stopped
+        mark_broadcast_stopped(broadcast_id)
+        await query.edit_message_text(
+            f"🛑 <b>ارسال متوقف شد!</b>\n\n"
+            f"📌 عنوان: {broadcast['title']}\n"
+            f"✅ ارسال شده: {broadcast['sent_count']}\n"
+            f"❌ ناموفق: {broadcast['failed_count']}",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+    else:
+        # لغو معمولی برای پیام‌های در انتظار
+        mark_broadcast_cancelled(broadcast_id)
+        await query.edit_message_text(
+            f"⛔ <b>پیام همگانی لغو شد!</b>\n\n📌 {broadcast['title']}",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+
+async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حذف پیام با تایید"""
+    query = update.callback_query
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    
+    # اگر callback_data شامل confirm هست، یعنی تایید نهایی
+    if "confirm_delete_broadcast" in query.data:
+        await query.answer()
+        delete_broadcast(broadcast_id)
+        await query.edit_message_text(
+            "🗑️ <b>پیام همگانی حذف شد!</b>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return
+    
+    # در غیر این صورت، نمایش تاییدیه
+    await query.answer()
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⚠️ تأیید حذف", callback_data=f"admin_confirm_delete_broadcast_{broadcast_id}"),
+            InlineKeyboardButton("🔙 انصراف", callback_data=f"admin_broadcast_detail_{broadcast_id}")
+        ]
+    ])
+    
+    await query.edit_message_text(
+        f"⚠️ <b>حذف پیام همگانی</b>\n\n"
+        f"📌 {broadcast['title']}\n\n"
+        f"آیا از حذف این پیام اطمینان دارید؟\n"
+        f"این عملیات قابل بازگشت نیست!",
+        reply_markup=keyboard,
+        parse_mode='HTML'
+    )
+
+
+# ---------- آمار ----------
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """آمار و گزارشات با جزئیات بیشتر"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    if not check_admin_permission(user_id, admin_id, "perm_stats"):
         await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
         return
     
+    # آمار کاربران
     total_users = get_total_users_count()
     active_users = len(get_all_active_users())
     banned_users = len(get_banned_users())
+    inactive_users = total_users - active_users - banned_users
+    
+    # آمار ادمین‌ها
     sub_admins = get_all_admins()
+    
+    # آمار broadcast ها
     broadcasts = get_all_broadcasts()
-    pending = len([b for b in broadcasts if not b['is_sent'] and not b['is_cancelled']])
+    total_broadcasts = len(broadcasts)
+    pending = len([b for b in broadcasts if b['status'] == 'pending'])
+    sending = len([b for b in broadcasts if b['status'] == 'sending'])
+    completed = len([b for b in broadcasts if b['status'] == 'completed'])
+    failed = len([b for b in broadcasts if b['status'] == 'failed'])
+    
+    # محاسبه نرخ موفقیت broadcast
+    success_rate = round(completed / total_broadcasts * 100, 1) if total_broadcasts > 0 else 0
     
     text = (
         f"📊 <b>آمار و گزارشات</b>\n"
@@ -718,13 +924,30 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"   🔸 ادمین اصلی: ۱\n"
         f"   🔹 ادمین فرعی: {len(sub_admins)}\n\n"
         f"👥 <b>کاربران:</b>\n"
-        f"   کل: {total_users}\n"
-        f"   فعال: {active_users}\n"
-        f"   بن شده: {banned_users}\n\n"
+        f"   📊 کل: {total_users:,}\n"
+        f"   🟢 فعال: {active_users:,}\n"
+        f"   🔴 بن شده: {banned_users:,}\n"
+        f"   ⚪ غیرفعال: {inactive_users:,}\n\n"
         f"📢 <b>پیام‌های همگانی:</b>\n"
-        f"   کل: {len(broadcasts)}\n"
-        f"   در انتظار: {pending}\n"
+        f"   📊 کل: {total_broadcasts}\n"
+        f"   ⏰ در انتظار: {pending}\n"
+        f"   📤 در حال ارسال: {sending}\n"
+        f"   ✅ تکمیل شده: {completed}\n"
+        f"   ❌ ناموفق: {failed}\n"
+        f"   📈 نرخ موفقیت: {success_rate}%\n"
     )
+    
+    # هشدارها
+    warnings = []
+    if banned_users > total_users * 0.1:  # بیشتر از ۱۰٪
+        warnings.append("⚠️ تعداد کاربران بن شده بالاست!")
+    if inactive_users > total_users * 0.5:  # بیشتر از ۵۰٪
+        warnings.append("⚠️ بیش از نیمی از کاربران غیرفعالند!")
+    
+    if warnings:
+        text += f"\n<b>⚠️ هشدارها:</b>\n"
+        for w in warnings:
+            text += f"   {w}\n"
     
     await query.edit_message_text(text, reply_markup=back_to_admin_keyboard(), parse_mode='HTML')
     
