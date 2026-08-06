@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 
 # حالت‌های Conversation
 (BROADCAST_TITLE, BROADCAST_MESSAGE, BROADCAST_DATE, BROADCAST_TIME,
- BAN_USER_ID, UNBAN_USER_ID, ADD_ADMIN_ID, REMOVE_ADMIN_ID, SEARCH_USER_ID) = range(9)
+ BAN_USER_ID, UNBAN_USER_ID, ADD_ADMIN_ID, REMOVE_ADMIN_ID, SEARCH_USER_ID,
+ BROADCAST_CONTENT_TYPE, BROADCAST_BUTTONS) = range(11)
 
 # ---------- منوی اصلی پنل ----------
 
@@ -72,30 +73,31 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- ارسال پیام همگانی فوری ----------
 
 async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع ارسال فوری"""
+    """شروع ارسال فوری - مرحله ۰: انتخاب نوع محتوا"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    from database import check_admin_permission
     if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
         await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
     context.user_data['broadcast_type'] = 'now'
-    context.user_data['broadcast_step'] = 'title'
-    context.user_data['awaiting_message'] = True
+    context.user_data['broadcast_step'] = 'content_type'
+    context.user_data['inline_buttons'] = []
     
-    # ✅ اول پیام رو نشون بده، بعد return کن
     await query.edit_message_text(
-        "📝 <b>ارسال پیام همگانی فوری</b>\n\nلطفاً <b>عنوان</b> پیام را ارسال کنید:",
-        reply_markup=back_to_admin_keyboard(),
+        "📢 <b>ارسال پیام همگانی فوری</b>\n\n"
+        "📌 <b>مرحله ۱/۴: انتخاب نوع پیام</b>\n\n"
+        "لطفاً نوع محتوایی که می‌خواهید ارسال کنید را انتخاب نمایید:\n\n"
+        "📝 متن | 🖼 عکس | 🎥 فیلم | 📄 فایل | 🎵 صدا",
+        reply_markup=content_type_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE  # ✅ فقط یه return، اونم آخر کار
+    return BROADCAST_CONTENT_TYPE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام - هم برای فوری و هم برای زمان‌بندی"""
@@ -290,38 +292,33 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- پیام همگانی زمان‌بندی شده ----------
 
 async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع پیام همگانی زمان‌بندی شده"""
+    """شروع پیام همگانی زمان‌بندی شده - مرحله ۰: انتخاب نوع محتوا"""
     query = update.callback_query
     await query.answer()
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    from database import check_admin_permission
-    
-    if user_id != admin_id:
-        if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
-            await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
-            return
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
+        await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
+        return ConversationHandler.END
     
     context.user_data['broadcast'] = {}
     context.user_data['broadcast_type'] = 'scheduled'
-    context.user_data['broadcast_step'] = 'title'
-    context.user_data['awaiting_message'] = True
-
-    # ✅ دیباگ درست - فقط لاگ ساده
+    context.user_data['broadcast_step'] = 'content_type'
+    context.user_data['inline_buttons'] = []
+    
     logger.info(f"📝 Scheduled broadcast started for user {user_id}")
     
-    # ✅ اول پیام رو نشون بده
     await query.edit_message_text(
-        "📝 <b>پیام همگانی زمان‌بندی شده - مرحله ۱/۴</b>\n\n"
-        "لطفاً <b>عنوان</b> پیام را ارسال کنید:\n"
-        "(مثلاً: اطلاعیه مهم، تخفیف ویژه)\n\n"
-        "🔙 برای بازگشت /cancel را بزنید",
-        reply_markup=back_to_admin_keyboard(),
+        "📢 <b>ارسال پیام همگانی زمان‌بندی شده</b>\n\n"
+        "📌 <b>مرحله ۱/۴: انتخاب نوع پیام</b>\n\n"
+        "لطفاً نوع محتوایی که می‌خواهید ارسال کنید را انتخاب نمایید:\n\n"
+        "📝 متن | 🖼 عکس | 🎥 فیلم | 📄 فایل | 🎵 صدا",
+        reply_markup=content_type_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE
+    return BROADCAST_CONTENT_TYPE
     
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای زمان‌بندی"""
