@@ -101,6 +101,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"🔘 Button: {data} from user {user_id}")
     
+    # ✅ اضافه کردن شرط برای دکمه‌های تاریخ (مرحله ۳)
+    if data.startswith("broadcast_date_"):
+        await broadcast_date_selection(update, context)
+        return
+    
     if data.startswith("perm_") or data in ["admin_confirm_add", "admin_cancel_add", "admin_save_permissions"]:
         await handle_permission_toggle(update, context)
         return
@@ -501,10 +506,10 @@ def setup_handlers():
         ],
         states={
             BROADCAST_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_title_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
             ],
             BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
             ],
             BROADCAST_DATE: [
                 CallbackQueryHandler(broadcast_date_selection, pattern="^broadcast_date_"),
