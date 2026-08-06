@@ -506,10 +506,10 @@ def setup_handlers():
         ],
         states={
             BROADCAST_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),                   
             ],
             BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_scheduled_message),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),        
             ],
             BROADCAST_DATE: [
                 CallbackQueryHandler(broadcast_date_selection, pattern="^broadcast_date_"),
