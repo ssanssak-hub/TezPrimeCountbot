@@ -2109,3 +2109,350 @@ async def admin_error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # پاکسازی context
     context.user_data.clear()
 
+# برای چندرسانه هاست
+# ============ هندلرهای دکمه‌های شیشه‌ای ============
+
+async def handle_inline_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت دکمه‌های شیشه‌ای (افزودن/حذف/تأیید)"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    buttons = context.user_data.get('inline_buttons', [])
+    
+    if data == "ib_skip":
+        # رد کردن دکمه‌ها - رفتن به مرحله بعد
+        broadcast_type = context.user_data['broadcast_type']
+        if broadcast_type == 'now':
+            return await show_final_preview(update, context)
+        else:
+            return await go_to_date_selection(update, context)
+    
+    elif data == "ib_confirm":
+        # تأیید دکمه‌ها - رفتن به مرحله بعد
+        broadcast_type = context.user_data['broadcast_type']
+        if broadcast_type == 'now':
+            return await show_final_preview(update, context)
+        else:
+            return await go_to_date_selection(update, context)
+    
+    elif data == "ib_add_url":
+        # افزودن دکمه لینک
+        context.user_data['awaiting_button'] = True
+        context.user_data['adding_button_type'] = 'url'
+        await query.edit_message_text(
+            "🔗 <b>افزودن دکمه لینک</b>\n\n"
+            "لطفاً متن دکمه و لینک را با فرمت زیر ارسال کنید:\n\n"
+            "<code>متن دکمه | https://example.com</code>\n\n"
+            "📌 مثال:\n"
+            "<code>کانال ما | https://t.me/ourchannel</code>\n"
+            "<code>سایت ما | https://example.com</code>\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+    
+    elif data == "ib_add_callback":
+        # افزودن دکمه داخلی
+        context.user_data['awaiting_button'] = True
+        context.user_data['adding_button_type'] = 'callback'
+        await query.edit_message_text(
+            "🔘 <b>افزودن دکمه داخلی</b>\n\n"
+            "لطفاً متن دکمه را ارسال کنید:\n"
+            "(این دکمه بعد از کلیک، یک پیام نمایش می‌دهد)\n\n"
+            "📌 مثال: <code>اطلاعات بیشتر</code>\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+    
+    elif data.startswith("ib_remove_"):
+        # حذف دکمه
+        index = int(data.replace("ib_remove_", ""))
+        if 0 <= index < len(buttons):
+            removed = buttons.pop(index)
+            context.user_data['inline_buttons'] = buttons
+            await query.answer(f"🗑️ دکمه '{removed[0][:20]}' حذف شد")
+        
+        await query.edit_message_text(
+            "✏️ <b>مدیریت دکمه‌های شیشه‌ای</b>\n\n"
+            f"تعداد دکمه‌ها: {len(buttons)}\n\n"
+            "دکمه جدید اضافه کنید یا ادامه دهید:",
+            reply_markup=inline_buttons_keyboard(buttons),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+    
+    elif data == "ib_noop":
+        # دکمه غیرفعال (برای نمایش فقط)
+        await query.answer("ℹ️ این دکمه فقط برای نمایش است")
+        return BROADCAST_BUTTONS
+
+
+async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت متن/لینک دکمه شیشه‌ای"""
+    if not context.user_data.get('awaiting_button'):
+        return ConversationHandler.END
+    
+    text = update.message.text.strip()
+    buttons = context.user_data.get('inline_buttons', [])
+    btn_type = context.user_data.get('adding_button_type')
+    
+    if btn_type == 'url':
+        # فرمت: متن دکمه | لینک
+        parts = text.split('|')
+        if len(parts) != 2:
+            await update.message.reply_text(
+                "❌ فرمت اشتباه!\n\n"
+                "لطفاً به این صورت وارد کنید:\n"
+                "<code>متن دکمه | https://...</code>\n\n"
+                "دوباره تلاش کنید:",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_BUTTONS
+        
+        btn_text = parts[0].strip()
+        url = parts[1].strip()
+        
+        if not url.startswith('http'):
+            await update.message.reply_text(
+                "❌ لینک باید با http یا https شروع شود!\n"
+                "دوباره تلاش کنید:",
+                reply_markup=back_to_admin_keyboard()
+            )
+            return BROADCAST_BUTTONS
+        
+        buttons.append([btn_text, url])
+    
+    elif btn_type == 'callback':
+        btn_text = text
+        callback_data = f"bc_btn_{len(buttons)}_{update.effective_user.id}"
+        buttons.append([btn_text, callback_data, "show_alert"])
+    
+    context.user_data['inline_buttons'] = buttons
+    context.user_data['awaiting_button'] = False
+    context.user_data['adding_button_type'] = None
+    
+    await update.message.reply_text(
+        f"✅ <b>دکمه افزوده شد!</b>\n\n"
+        f"📌 متن: {buttons[-1][0]}\n"
+        f"🔢 تعداد کل دکمه‌ها: {len(buttons)}\n\n"
+        f"می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:",
+        reply_markup=inline_buttons_keyboard(buttons),
+        parse_mode='HTML'
+    )
+    return BROADCAST_BUTTONS
+
+
+# ============ توابع کمکی برای مرحله بعد ============
+
+async def go_to_date_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """رفتن به مرحله انتخاب تاریخ (برای زمان‌بندی)"""
+    query = update.callback_query
+    
+    title = context.user_data['broadcast'].get('title', 'بدون عنوان')
+    content_type = context.user_data['broadcast'].get('content_type', 'text')
+    buttons_count = len(context.user_data.get('inline_buttons', []))
+    
+    context.user_data['broadcast_step'] = 'date'
+    
+    await query.edit_message_text(
+        f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
+        f"📌 عنوان: <b>{title}</b>\n"
+        f"📎 نوع: <b>{get_content_type_fa(content_type)}</b>\n"
+        f"🔘 دکمه‌ها: {buttons_count} عدد\n\n"
+        f"می‌توانید تاریخ <b>امروز</b> را انتخاب کنید\n"
+        f"یا یک <b>تاریخ دلخواه</b> وارد نمایید.\n\n"
+        f"⚠️ <b>نکات مهم:</b>\n"
+        f"• تاریخ نمی‌تواند مربوط به گذشته باشد\n"
+        f"• فرمت تاریخ شمسی: <b>YYYY/MM/DD</b>\n"
+        f"• مثال: <b>1405/05/15</b>\n\n"
+        f"لطفاً تاریخ ارسال را انتخاب کنید:",
+        reply_markup=date_selection_keyboard(),
+        parse_mode='HTML'
+    )
+    return BROADCAST_DATE
+
+
+async def show_final_preview(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش پیش‌نمایش نهایی برای ارسال فوری"""
+    query = update.callback_query
+    
+    broadcast_data = context.user_data['broadcast']
+    content_type = broadcast_data.get('content_type', 'text')
+    buttons = context.user_data.get('inline_buttons', [])
+    title = broadcast_data.get('title', 'بدون عنوان')
+    
+    # ذخیره در دیتابیس
+    import json
+    from admin.admin_database import save_broadcast_advanced
+    
+    broadcast_id = save_broadcast_advanced(
+        admin_id=update.effective_user.id,
+        title=title,
+        content_type=content_type,
+        message=broadcast_data.get('message'),
+        file_id=broadcast_data.get('file_id'),
+        file_caption=broadcast_data.get('caption'),
+        inline_buttons=buttons
+    )
+    
+    users_count = get_total_users_count()
+    
+    # ارسال پیش‌نمایش به ادمین
+    preview_text = (
+        f"📢 <b>پیش‌نمایش نهایی پیام همگانی</b>\n\n"
+        f"📌 عنوان: <b>{title}</b>\n"
+        f"📎 نوع محتوا: <b>{get_content_type_fa(content_type)}</b>\n"
+        f"👥 گیرندگان: <b>{users_count}</b> کاربر\n"
+        f"🔘 دکمه‌های شیشه‌ای: <b>{len(buttons)} عدد</b>\n\n"
+        f"آیا از ارسال اطمینان دارید؟"
+    )
+    
+    await query.edit_message_text(
+        preview_text,
+        reply_markup=broadcast_preview_keyboard(broadcast_id, content_type),
+        parse_mode='HTML'
+    )
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+# ============ هندلر تأیید نهایی ارسال پیشرفته ============
+
+async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تأیید و ارسال پیشرفته"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
+        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        return
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    broadcast_dict = dict(broadcast)
+    
+    if broadcast_dict.get('status') == 'sending':
+        await query.answer("⏳ این پیام در حال ارسال است!", show_alert=True)
+        return
+    
+    # پیام در حال ارسال
+    progress_msg = await query.edit_message_text(
+        "⏳ <b>در حال ارسال پیام همگانی...</b>\n\n"
+        "🔄 لطفاً صبر کنید...",
+        parse_mode='HTML'
+    )
+    
+    try:
+        # استفاده از تابع ارسال پیشرفته
+        task = asyncio.create_task(
+            send_broadcast_advanced(
+                broadcast_id,
+                broadcast_dict['admin_id'],
+                broadcast_dict
+            )
+        )
+        
+        # نمایش پیشرفت
+        last_text = ""
+        while not task.done():
+            await asyncio.sleep(2)
+            progress_text = get_broadcast_progress_text(broadcast_id)
+            
+            if progress_text != last_text:
+                last_text = progress_text
+                try:
+                    await progress_msg.edit_text(
+                        progress_text,
+                        reply_markup=back_to_admin_keyboard(),
+                        parse_mode='HTML'
+                    )
+                except Exception:
+                    pass
+        
+        # دریافت نتیجه
+        sent, failed, total = task.result()
+        
+        # ارسال گزارش
+        admin_chat_id = update.effective_user.id
+        await send_broadcast_report(admin_chat_id, broadcast_dict['title'], sent, failed, total)
+        
+        # نمایش نتیجه نهایی
+        success_rate = round(sent / total * 100, 1) if total > 0 else 0
+        
+        final_text = (
+            f"📊 <b>گزارش نهایی ارسال</b>\n\n"
+            f"📌 <b>{broadcast_dict['title']}</b>\n\n"
+            f"👥 کل کاربران: {total:,}\n"
+            f"✅ ارسال موفق: {sent:,} ({success_rate}%)\n"
+            f"❌ ناموفق: {failed:,}\n\n"
+            f"✅ <b>ارسال به پایان رسید!</b>"
+        )
+        
+        await progress_msg.edit_text(
+            final_text,
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Advanced broadcast error: {e}", exc_info=True)
+        await progress_msg.edit_text(
+            f"❌ <b>خطا در ارسال پیام!</b>\n\n"
+            f"<code>{str(e)[:200]}</code>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+
+
+# ============ هندلر ویرایش دکمه‌ها ============
+
+async def edit_broadcast_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ویرایش دکمه‌های یک broadcast ذخیره شده"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    broadcast_dict = dict(broadcast)
+    
+    # بازیابی دکمه‌های قبلی
+    import json
+    old_buttons = []
+    if broadcast_dict.get('inline_buttons'):
+        try:
+            old_buttons = json.loads(broadcast_dict['inline_buttons'])
+        except:
+            pass
+    
+    context.user_data['editing_broadcast_id'] = broadcast_id
+    context.user_data['inline_buttons'] = old_buttons
+    
+    await query.edit_message_text(
+        "✏️ <b>ویرایش دکمه‌های شیشه‌ای</b>\n\n"
+        f"📌 عنوان: <b>{broadcast_dict['title']}</b>\n"
+        f"🔢 تعداد دکمه‌های فعلی: {len(old_buttons)}\n\n"
+        "دکمه‌ها را ویرایش کنید:",
+        reply_markup=inline_buttons_keyboard(old_buttons, is_editing=True),
+        parse_mode='HTML'
+    )
+    return BROADCAST_BUTTONS
+
