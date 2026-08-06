@@ -981,50 +981,38 @@ async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # وضعیت‌های مختلف
     if broadcast['status'] == 'sending':
-        # در حال ارسال - شروع مانیتورینگ
-        await query.edit_message_text(
-            progress_text + "\n\n⏳ <b>در حال ارسال...</b>",
-            reply_markup=broadcast_action_keyboard(broadcast_id, True, False),
-            parse_mode='HTML'
-        )
-        asyncio.create_task(show_broadcast_progress(update, context, broadcast_id))
-        
+        new_text = progress_text + "\n\n⏳ <b>در حال ارسال...</b>"
+        new_markup = broadcast_action_keyboard(broadcast_id, True, False)
     elif broadcast['status'] == 'pending':
-        # در انتظار ارسال
-        await query.edit_message_text(
-            progress_text + "\n\n⏰ <b>در انتظار ارسال زمان‌بندی شده...</b>",
-            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
-            parse_mode='HTML'
-        )
-        
+        new_text = progress_text + "\n\n⏰ <b>در انتظار ارسال زمان‌بندی شده...</b>"
+        new_markup = broadcast_action_keyboard(broadcast_id, False, False)
     elif broadcast['status'] == 'completed':
-        await query.edit_message_text(
-            progress_text + "\n\n✅ <b>ارسال به پایان رسید!</b>",
-            reply_markup=broadcast_action_keyboard(broadcast_id, True, False),
-            parse_mode='HTML'
-        )
-        
+        new_text = progress_text + "\n\n✅ <b>ارسال به پایان رسید!</b>"
+        new_markup = broadcast_action_keyboard(broadcast_id, True, False)
     elif broadcast['status'] == 'failed':
         error_msg = broadcast.get('error_message', 'خطای نامشخص')
-        await query.edit_message_text(
-            progress_text + f"\n\n❌ <b>ارسال ناموفق!</b>\n<code>{error_msg[:100]}</code>",
-            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
-            parse_mode='HTML'
-        )
-        
+        new_text = progress_text + f"\n\n❌ <b>ارسال ناموفق!</b>\n<code>{error_msg[:100]}</code>"
+        new_markup = broadcast_action_keyboard(broadcast_id, False, False)
     elif broadcast['status'] == 'cancelled' or broadcast['is_cancelled']:
-        await query.edit_message_text(
-            progress_text + "\n\n⛔ <b>ارسال لغو شد!</b>",
-            reply_markup=broadcast_action_keyboard(broadcast_id, False, True),
-            parse_mode='HTML'
-        )
-    
+        new_text = progress_text + "\n\n⛔ <b>ارسال لغو شد!</b>"
+        new_markup = broadcast_action_keyboard(broadcast_id, False, True)
     else:
+        new_text = progress_text
+        new_markup = broadcast_action_keyboard(broadcast_id, False, False)
+    
+    # ✅ با try/except خطا رو بگیر
+    try:
         await query.edit_message_text(
-            progress_text,
-            reply_markup=broadcast_action_keyboard(broadcast_id, False, False),
+            new_text,
+            reply_markup=new_markup,
             parse_mode='HTML'
         )
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            await query.answer("ℹ️ اطلاعات قبلاً به‌روز است.")
+        else:
+            logger.error(f"❌ Error in broadcast_detail: {e}")
+            raise
             
 async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو پیام با توقف ارسال فعال"""
@@ -1122,7 +1110,6 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    # ✅ دریافت آمار با تابع موجود
     from admin.admin_database import get_broadcast_stats
     broadcast_row, logs = get_broadcast_stats(broadcast_id)
     
@@ -1164,13 +1151,20 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")]
     ])
     
+    # ✅ راه‌حل اصلی: با try/except خطا رو بگیر
     try:
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
     except Exception as e:
         if "Message is not modified" in str(e):
+            # فقط به کاربر بگو تغییری نکرده
             await query.answer("ℹ️ اطلاعات قبلاً به‌روز است.")
         else:
-            raise
+            # خطای دیگه رو نشون بده
+            logger.error(f"❌ Error in broadcast_stats: {e}")
+            await query.edit_message_text(
+                "❌ خطا در نمایش آمار!",
+                reply_markup=back_to_admin_keyboard()
+            )
             
 # ---------- آمار ----------
 
