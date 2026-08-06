@@ -1689,3 +1689,32 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     context.user_data.clear()
     return ConversationHandler.END
+
+# ---------- برگشت به پنل (اصلاح‌شده) ----------
+
+async def back_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """برگشت به پنل مدیریت با پاکسازی"""
+    query = update.callback_query
+    await query.answer()
+    
+    # پاکسازی context
+    context.user_data.clear()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    is_admin, admin_type, permissions = get_admin_info(user_id, admin_id)
+    
+    if not is_admin:
+        await query.edit_message_text("⛔ شما دسترسی به پنل مدیریت ندارید!")
+        return
+    
+    text = (
+        f"👑 <b>پنل مدیریت</b>\n\n"
+        f"🎭 سطح دسترسی: {'ادمین اصلی' if admin_type == 'main_admin' else 'ادمین فرعی'}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"از منوی زیر استفاده کنید:"
+    )
+    
+    keyboard = admin_panel_keyboard(user_id=user_id, admin_id=admin_id)
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+
