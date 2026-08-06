@@ -2,6 +2,7 @@ import logging
 import asyncio
 import signal
 import sys
+import threading
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -65,7 +66,7 @@ flask_app = Flask(__name__)
 
 # متغیرهای گلوبال
 application: Application = None
-loop: asyncio.AbstractEventLoop = None
+bot_loop: asyncio.AbstractEventLoop = None
 
 
 # ============ هندلرهای اصلی ============
@@ -75,11 +76,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # ذخیره کاربر در دیتابیس
     from database import save_user
     save_user(user_id, user.username, user.first_name, user.last_name)
     
-    # ساخت کیبورد مناسب
     keyboard = main_menu_keyboard(user_id=user_id, admin_id=ADMIN_ID)
     
     await update.message.reply_text(
@@ -99,12 +98,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"🔘 Button: {data} from user {user_id}")
     
-    # چک دسترسی‌های admin (perm_ ها)
     if data.startswith("perm_") or data in ["admin_confirm_add", "admin_cancel_add", "admin_save_permissions"]:
         await handle_permission_toggle(update, context)
         return
     
-    # چک وضعیت ربات و بن
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
     if not is_bot_active() and not is_admin:
@@ -114,8 +111,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin and db_is_banned(user_id):
         await query.edit_message_text("🚫 شما از ربات بن شده‌اید!")
         return
-    
-    # ========== مسیریابی دکمه‌ها ==========
     
     # ---- دکمه‌های اصلی ----
     if data == "notifications":
@@ -217,10 +212,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_to_notifications":
         await back_to_notifications(update, context)
     
-    # ---- ناشناخته ----
     else:
         logger.warning(f"⚠️ Unknown callback: {data}")
-        await query.answer("⚠️ این دکمه تعریف نشده است", show_alert=True)
 
 
 async def handle_ban_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,13 +241,10 @@ async def handle_ban_from_search(update: Update, context: ContextTypes.DEFAULT_T
                 InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")
             ]])
         )
-        logger.info(f"🚫 User {user_id_to_ban} banned by admin {user_id}")
     except Exception as e:
         logger.error(f"Error banning user: {e}")
         await query.edit_message_text("❌ خطا در بن کردن کاربر!")
 
-
-# ============ نمایش لیست‌ها ============
 
 async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست حذف ریمایندر"""
@@ -323,40 +313,31 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ============ Echo Handler ============
-
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پاسخ به پیام‌های متنی"""
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
-    # چک وضعیت ربات
     if not is_bot_active() and not is_admin:
         return
     
-    # چک بن
     if db_is_banned(user_id):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # مدیریت conversation های مختلف
     if context.user_data.get('awaiting_message'):
-        # افزودن ادمین
         if context.user_data.get('awaiting_admin'):
             await add_admin_execute(update, context)
             return
         
-        # بن کاربر
         if context.user_data.get('awaiting_ban'):
             await ban_user_execute(update, context)
             return
         
-        # جستجوی کاربر
         if context.user_data.get('awaiting_search'):
             await search_user_result(update, context)
             return
         
-        # broadcast
         broadcast_type = context.user_data.get('broadcast_type')
         if broadcast_type == 'now':
             await broadcast_now_message(update, context)
@@ -376,18 +357,14 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await broadcast_scheduled_time(update, context)
                 return
         
-        # ریمایندر
         if context.user_data.get('step') in ['title', 'message']:
             await set_reminder_message(update, context)
             return
     
-    # پیام پیش‌فرض
     await update.message.reply_text(
         "لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید."
     )
 
-
-# ============ مدیریت خطا ============
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی"""
@@ -402,28 +379,30 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in error handler: {e}")
 
 
-# ============ Webhook Handler ============
+# ============ Webhook Handler (اصلاح‌شده) ============
 
 def process_update(update_json: dict) -> bool:
-    """پردازش آپدیت از Webhook"""
-    global application, loop
+    """پردازش آپدیت از Webhook - نسخه غیر blocking"""
+    global application, bot_loop
     
     try:
         if application is None or application.bot is None:
             logger.error("❌ Application not initialized")
             return False
         
-        if loop is None or loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        if bot_loop is None or bot_loop.is_closed():
+            logger.error("❌ Bot loop not available")
+            return False
         
         update = Update.de_json(update_json, application.bot)
         
-        async def process():
-            await application.process_update(update)
+        # استفاده از run_coroutine_threadsafe بدون timeout
+        # این متد non-blocking هست و سریع برمی‌گرده
+        asyncio.run_coroutine_threadsafe(
+            application.process_update(update),
+            bot_loop
+        )
         
-        future = asyncio.run_coroutine_threadsafe(process(), loop)
-        future.result(timeout=30)
         return True
         
     except Exception as e:
@@ -486,7 +465,6 @@ def setup_handlers():
     """تنظیم همه هندلرها"""
     global application
     
-    # ConversationHandler برای admin
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -532,7 +510,6 @@ def setup_handlers():
     )
     application.add_handler(admin_conv)
     
-    # ConversationHandler برای ریمایندر
     reminder_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")
@@ -556,7 +533,6 @@ def setup_handlers():
     )
     application.add_handler(reminder_conv)
     
-    # هندلرهای عمومی
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
@@ -567,31 +543,27 @@ def setup_handlers():
 
 def main():
     """تابع اصلی راه‌اندازی"""
-    global application, loop
+    global application, bot_loop
     
-    # راه‌اندازی دیتابیس‌ها
     logger.info("🔧 Initializing databases...")
     init_db()
     init_reminder_db()
     init_admin_db()
     logger.info("✅ All databases initialized")
     
-    # ساخت application
     application = Application.builder().token(TOKEN).build()
     
-    # تنظیم هندلرها
     setup_handlers()
     
-    # ساخت event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # ساخت event loop اختصاصی برای بات
+    bot_loop = asyncio.new_event_loop()
     
     # تنظیم Webhook
     async def setup_webhook():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
     
-    loop.run_until_complete(setup_webhook())
+    bot_loop.run_until_complete(setup_webhook())
     
     # راه‌اندازی application
     async def start_app():
@@ -599,7 +571,6 @@ def main():
         await application.start()
         logger.info("✅ Application started")
         
-        # راه‌اندازی scheduler
         try:
             from reminders.reminder_scheduler import start_scheduler
             start_scheduler()
@@ -612,16 +583,25 @@ def main():
         except Exception as e:
             logger.error(f"⚠️ Scheduler error: {e}")
     
-    loop.run_until_complete(start_app())
+    bot_loop.run_until_complete(start_app())
+    
+    # اجرای event loop در thread جداگانه
+    def run_bot_loop():
+        asyncio.set_event_loop(bot_loop)
+        bot_loop.run_forever()
+    
+    bot_thread = threading.Thread(target=run_bot_loop, daemon=True)
+    bot_thread.start()
     
     # سیگنال‌های خروج
     def shutdown():
         logger.info("🛑 Shutting down...")
         try:
             if application:
-                loop.run_until_complete(application.stop())
-            if loop and not loop.is_closed():
-                loop.close()
+                future = asyncio.run_coroutine_threadsafe(application.stop(), bot_loop)
+                future.result(timeout=10)
+            if bot_loop and not bot_loop.is_closed():
+                bot_loop.call_soon_threadsafe(bot_loop.stop)
         except Exception as e:
             logger.error(f"Shutdown error: {e}")
         sys.exit(0)
