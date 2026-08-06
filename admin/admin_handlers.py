@@ -1108,7 +1108,7 @@ async def delete_broadcast_handler(update: Update, context: ContextTypes.DEFAULT
     )
 
 async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش آمار کامل broadcast به کاربر"""
+    """نمایش آمار کامل broadcast"""
     query = update.callback_query
     await query.answer()
     
@@ -1122,7 +1122,8 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     broadcast_id = int(query.data.split("_")[-1])
     
-    # ✅ استفاده از تابعی که داری
+    # ✅ دریافت آمار با تابع موجود
+    from admin.admin_database import get_broadcast_stats
     broadcast_row, logs = get_broadcast_stats(broadcast_id)
     
     if not broadcast_row:
@@ -1140,7 +1141,6 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif log['status'] == 'failed':
             failed_count += log['count']
     
-    # ساخت متن آمار
     text = (
         f"📊 <b>آمار کامل</b>\n\n"
         f"📌 عنوان: {broadcast.get('title', 'بدون عنوان')}\n"
@@ -1159,29 +1159,19 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if broadcast.get('completed_at'):
         text += f"✅ زمان پایان: {broadcast.get('completed_at')}\n"
     
-    # دکمه بازگشت
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="admin_broadcasts_list")],
         [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")]
     ])
     
-    # ✅ ویرایش امن
     try:
-        await query.edit_message_text(
-            text,
-            reply_markup=keyboard,
-            parse_mode='HTML'
-        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
     except Exception as e:
         if "Message is not modified" in str(e):
             await query.answer("ℹ️ اطلاعات قبلاً به‌روز است.")
         else:
-            logger.error(f"❌ Error in broadcast_stats: {e}")
-            await query.edit_message_text(
-                "❌ خطا در نمایش آمار!",
-                reply_markup=back_to_admin_keyboard()
-            )
-
+            raise
+            
 # ---------- آمار ----------
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
