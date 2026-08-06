@@ -308,17 +308,20 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
     elif step == 'message':
         context.user_data['broadcast']['message'] = message
         context.user_data['broadcast_step'] = 'date'
-        
+
+        # کیبورد انتخاب تاریخ با توضیحات کامل
         await update.message.reply_text(
             f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
             f"عنوان: <b>{context.user_data['broadcast']['title']}</b>\n"
             f"پیام: {message[:50]}...\n\n"
-            f"لطفاً <b>تاریخ</b> را به صورت شمسی وارد کنید:\n"
-            f"📌 فرمت: <b>YYYY/MM/DD</b>\n"
-            f"📌 مثال: <b>1405/05/15</b>\n\n"
-            f"⚠️ تاریخ باید امروز یا بعد از امروز باشد.\n\n"
-            f"🔙 برای بازگشت /cancel را بزنید",
-            reply_markup=back_to_admin_keyboard(),
+            f"می‌توانید تاریخ <b>امروز</b> را انتخاب کنید\n"
+            f"یا یک <b>تاریخ دلخواه</b> وارد نمایید.\n\n"
+            f"⚠️ <b>نکات مهم:</b>\n"
+            f"• تاریخ نمی‌تواند مربوط به گذشته باشد\n"
+            f"• فرمت تاریخ شمسی: <b>YYYY/MM/DD</b>\n"
+            f"• مثال: <b>1405/05/15</b>\n\n"
+            f"لطفاً تاریخ ارسال را انتخاب کنید:",
+            reply_markup=date_selection_keyboard(),
             parse_mode='HTML'
         )
         return BROADCAST_DATE
@@ -471,10 +474,14 @@ async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT
     if data == "broadcast_date_custom":
         # کاربر می‌خواد دستی وارد کنه
         await query.edit_message_text(
-            "📅 لطفاً <b>تاریخ</b> را به صورت شمسی وارد کنید:\n"
+            "📅 <b>وارد کردن تاریخ دلخواه</b>\n\n"
+            "لطفاً تاریخ را به صورت شمسی وارد کنید:\n\n"
             "📌 فرمت: <b>YYYY/MM/DD</b>\n"
             "📌 مثال: <b>1405/05/15</b>\n\n"
-            "⚠️ تاریخ باید امروز یا بعد از امروز باشد.",
+            "⚠️ <b>شرایط:</b>\n"
+            "• تاریخ نمی‌تواند مربوط به گذشته باشد\n"
+            "• تاریخ امروز یا بعد از آن مجاز است\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
             parse_mode='HTML'
         )
@@ -491,6 +498,15 @@ async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT
             persian_date = jdatetime.date(year, month, day)
             gregorian_date = persian_date.togregorian()
             
+            # اعتبارسنجی - تاریخ امروز طبیعتاً معتبره
+            today = jdatetime.date.today()
+            if persian_date < today:
+                await query.edit_message_text(
+                    "❌ خطای سیستمی! تاریخ امروز نامعتبر است.",
+                    reply_markup=back_to_admin_keyboard()
+                )
+                return BROADCAST_DATE
+            
             context.user_data['broadcast']['date'] = gregorian_date.strftime("%Y-%m-%d")
             context.user_data['broadcast']['persian_date'] = persian_date_str
             context.user_data['broadcast_step'] = 'time'
@@ -500,7 +516,10 @@ async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT
                 f"📅 تاریخ: <b>{persian_date_str}</b>\n\n"
                 f"لطفاً <b>ساعت</b> را به صورت تهران وارد کنید:\n"
                 f"📌 فرمت: <b>HH:MM</b> (۲۴ ساعته)\n"
-                f"📌 مثال: <b>14:30</b> یا <b>09:00</b>",
+                f"📌 مثال: <b>14:30</b> یا <b>09:00</b>\n\n"
+                f"⚠️ اگر تاریخ امروز است،\n"
+                f"ساعت باید بعد از زمان فعلی باشد.\n\n"
+                f"🔙 برای بازگشت /cancel را بزنید",
                 reply_markup=back_to_admin_keyboard(),
                 parse_mode='HTML'
             )
