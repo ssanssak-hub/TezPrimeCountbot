@@ -329,32 +329,34 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if context.user_data.get('awaiting_message'):
+        # ✅ برای broadcast ها، به ConversationHandler بسپار
+        # ولی return نکن - بذار ConversationHandler هم اجرا بشه
         broadcast_type = context.user_data.get('broadcast_type')
-        
-        # ❌ برای broadcast_now و broadcast_scheduled، echo دخالت نکنه
-        # ConversationHandler خودش از طریق states پردازش می‌کنه
         if broadcast_type in ['now', 'scheduled']:
-            return  # مهم: return خالی
-        
-        if context.user_data.get('awaiting_admin'):
+            # هیچی - fall through کن به آخر تابع
+            # دیگه return نکن!
+            pass
+        elif context.user_data.get('awaiting_admin'):
             await add_admin_execute(update, context)
             return
-        
-        if context.user_data.get('awaiting_ban'):
+        elif context.user_data.get('awaiting_ban'):
             await ban_user_execute(update, context)
             return
-        
-        if context.user_data.get('awaiting_search'):
+        elif context.user_data.get('awaiting_search'):
             await search_user_result(update, context)
             return
-        
-        if context.user_data.get('step') in ['title', 'message']:
+        elif context.user_data.get('step') in ['title', 'message']:
             await set_reminder_message(update, context)
             return
+        else:
+            # فقط برای broadcast ها fall through کن
+            pass
     
-    await update.message.reply_text(
-        "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
-    )
+    # این پیام فقط وقتی نشون داده میشه که broadcast نباشه
+    if not context.user_data.get('broadcast_type') in ['now', 'scheduled']:
+        await update.message.reply_text(
+            "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
+        )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
