@@ -360,3 +360,191 @@ async def send_broadcast_safe(broadcast_id, admin_id, title, message):
         await asyncio.sleep(0.05)
     
     return sent, failed, total
+
+# اضافه کردن به انتهای admin_broadcast.py
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import json
+
+async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
+    """
+    ارسال پیشرفته با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
+    
+    Args:
+        broadcast_id: شناسه broadcast
+        admin_id: شناسه ادمین
+        broadcast_data: دیکشنری حاوی اطلاعات broadcast
+    
+    Returns:
+        tuple: (sent, failed, total)
+    """
+    users = get_all_active_users()
+    total = len(users)
+    sent = 0
+    failed = 0
+    blocked_users = []
+    consecutive_errors = 0
+    MAX_CONSECUTIVE_ERRORS = 10
+    
+    if total == 0:
+        logger.warning(f"⚠️ Broadcast {broadcast_id}: No active users")
+        mark_broadcast_completed(broadcast_id, 0, 0)
+        return 0, 0, 0
+    
+    content_type = broadcast_data.get('content_type', 'text')
+    message_text = broadcast_data.get('message')
+    file_id = broadcast_data.get('file_id')
+    caption = broadcast_data.get('file_caption', '')
+    
+    # ساخت reply_markup از دکمه‌های شیشه‌ای
+    reply_markup = None
+    inline_buttons = broadcast_data.get('inline_buttons')
+    if inline_buttons:
+        try:
+            buttons = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
+            if buttons:
+                keyboard = []
+                for btn in buttons:
+                    if len(btn) == 2:  # URL button
+                        keyboard.append([InlineKeyboardButton(btn[0], url=btn[1])])
+                    elif len(btn) == 3:  # Callback button
+                        keyboard.append([InlineKeyboardButton(btn[0], callback_data=btn[1])])
+                reply_markup = InlineKeyboardMarkup(keyboard)
+        except Exception as e:
+            logger.error(f"❌ Error parsing inline buttons: {e}")
+    
+    # شروع ارسال
+    mark_broadcast_sent(broadcast_id, total)
+    logger.info(f"🚀 [Admin:{admin_id}] Starting advanced broadcast {broadcast_id} to {total} users (type: {content_type})")
+    
+    try:
+        for i, user in enumerate(users):
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                error_msg = f"Stopped after {MAX_CONSECUTIVE_ERRORS} consecutive errors"
+                logger.error(f"🛑 {error_msg}")
+                mark_broadcast_failed(broadcast_id, error_msg)
+                break
+            
+            user_id = user['user_id']
+            
+            try:
+                # ارسال بر اساس نوع محتوا
+                if content_type == 'text':
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=message_text,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=True
+                    )
+                elif content_type == 'photo':
+                    await bot.send_photo(
+                        chat_id=user_id,
+                        photo=file_id,
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'video':
+                    await bot.send_video(
+                        chat_id=user_id,
+                        video=file_id,
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'document':
+                    await bot.send_document(
+                        chat_id=user_id,
+                        document=file_id,
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'audio':
+                    await bot.send_audio(
+                        chat_id=user_id,
+                        audio=file_id,
+                        caption=caption,
+                        reply_markup=reply_markup
+                    )
+                
+                # ثبت موفقیت
+                add_broadcast_log(broadcast_id, user_id, 'success')
+                sent += 1
+                consecutive_errors = 0
+                logger.debug(f"📤 [{sent}/{total}] Sent to {user_id}")
+                
+            except Forbidden as e:
+                deactivate_user(user_id)
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'Forbidden: {str(e)}')
+                failed += 1
+                blocked_users.append(user_id)
+                consecutive_errors += 1
+                logger.warning(f"🚫 User {user_id} blocked - deactivated")
+                
+            except BadRequest as e:
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'BadRequest: {str(e)}')
+                failed += 1
+                consecutive_errors += 1
+                logger.error(f"⚠️ Bad request for {user_id}: {e}")
+                
+            except RetryAfter as e:
+                retry_after = e.retry_after
+                logger.warning(f"⏳ Rate limited for {retry_after}s")
+                await asyncio.sleep(retry_after)
+                
+                try:
+                    # تلاش مجدد با متن ساده
+                    if content_type == 'text':
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=message_text,
+                            reply_markup=reply_markup
+                        )
+                    add_broadcast_log(broadcast_id, user_id, 'success')
+                    sent += 1
+                    consecutive_errors = 0
+                    logger.info(f"✅ Retry successful for {user_id}")
+                except Exception as retry_e:
+                    add_broadcast_log(broadcast_id, user_id, 'failed', str(retry_e))
+                    failed += 1
+                    consecutive_errors += 1
+                    logger.error(f"❌ Retry failed for {user_id}: {retry_e}")
+                    
+            except TelegramError as e:
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'TelegramError: {str(e)}')
+                failed += 1
+                consecutive_errors += 1
+                logger.error(f"❌ Telegram error for {user_id}: {e}")
+                
+            except Exception as e:
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'Unexpected: {str(e)}')
+                failed += 1
+                consecutive_errors += 1
+                logger.error(f"💥 Unexpected error for {user_id}: {e}", exc_info=True)
+            
+            # آپدیت دیتابیس
+            if (i + 1) % DB_UPDATE_FREQUENCY == 0:
+                update_broadcast_count(broadcast_id, sent, failed)
+            
+            # مدیریت Delay
+            if (i + 1) % BATCH_SIZE == 0:
+                logger.debug(f"😴 Batch pause: {sent}/{total} sent")
+                await asyncio.sleep(BATCH_DELAY)
+            else:
+                await asyncio.sleep(MESSAGE_DELAY)
+        
+        # آپدیت نهایی
+        update_broadcast_count(broadcast_id, sent, failed)
+        mark_broadcast_completed(broadcast_id, sent, failed)
+        
+    except Exception as critical_error:
+        logger.critical(f"💀 Critical broadcast failure: {critical_error}", exc_info=True)
+        mark_broadcast_failed(broadcast_id, str(critical_error))
+        raise
+    finally:
+        logger.info(
+            f"✅ Broadcast {broadcast_id} finished: "
+            f"{sent}/{total} sent, {failed} failed, "
+            f"{len(blocked_users)} blocked"
+        )
+    
+    return sent, failed, total
