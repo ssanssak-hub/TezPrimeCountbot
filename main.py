@@ -328,35 +328,33 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
+    # ✅ چک کن awaiting_message ولی broadcast نباشه
     if context.user_data.get('awaiting_message'):
-        # ✅ برای broadcast ها، به ConversationHandler بسپار
-        # ولی return نکن - بذار ConversationHandler هم اجرا بشه
         broadcast_type = context.user_data.get('broadcast_type')
+        
+        # ⚠️ برای broadcast ها هیچ کاری نکن - بذار ConversationHandler هندل کنه
         if broadcast_type in ['now', 'scheduled']:
-            # هیچی - fall through کن به آخر تابع
-            # دیگه return نکن!
-            pass
-        elif context.user_data.get('awaiting_admin'):
+            return  # اما این بار return خالی، چون ConversationHandler قبلاً ثبت شده
+        
+        if context.user_data.get('awaiting_admin'):
             await add_admin_execute(update, context)
             return
-        elif context.user_data.get('awaiting_ban'):
+        
+        if context.user_data.get('awaiting_ban'):
             await ban_user_execute(update, context)
             return
-        elif context.user_data.get('awaiting_search'):
+        
+        if context.user_data.get('awaiting_search'):
             await search_user_result(update, context)
             return
-        elif context.user_data.get('step') in ['title', 'message']:
+        
+        if context.user_data.get('step') in ['title', 'message']:
             await set_reminder_message(update, context)
             return
-        else:
-            # فقط برای broadcast ها fall through کن
-            pass
     
-    # این پیام فقط وقتی نشون داده میشه که broadcast نباشه
-    if not context.user_data.get('broadcast_type') in ['now', 'scheduled']:
-        await update.message.reply_text(
-            "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
-        )
+    await update.message.reply_text(
+        "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
+    )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
