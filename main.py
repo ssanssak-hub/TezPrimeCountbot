@@ -84,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = main_menu_keyboard(user_id=user_id, admin_id=ADMIN_ID)
     
     await update.message.reply_text(
-        f"سلام کسخل درس خون {user.first_name}! 👋🍑🫶\n"
+        f"سلام کسخل درس خون {user.first_name}🫶 👋🍑\n"
         f"به ربات TezPrimeCountbot خوش اومدی و کنکور کیری!\n\n"
         f"این سال تخمی رو با موفقیت تموم کنی لاشی\n\n"
         f"از دکمه‌های زیر میتونی استفاده کن کنکوری:",
@@ -365,7 +365,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     
     await update.message.reply_text(
-        "لطفاً از دکمه‌های منو استفاده کنید یا /start را بزنید."
+        "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
     )
 
 
