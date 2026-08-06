@@ -938,11 +938,19 @@ async def broadcasts_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     broadcasts = get_all_broadcasts()
+    
+    # ✅ تبدیل sqlite3.Row به دیکشنری (این خط رو اضافه کنید)
+    broadcasts = [dict(b) for b in broadcasts] if broadcasts else []
+    
     if not broadcasts:
         await query.edit_message_text("📭 هیچ پیام همگانی وجود ندارد!", reply_markup=back_to_admin_keyboard())
         return
     
-    await query.edit_message_text("📋 <b>پیام‌های همگانی</b>", reply_markup=admin_broadcasts_list_keyboard(broadcasts), parse_mode='HTML')
+    await query.edit_message_text(
+        "📋 <b>پیام‌های همگانی</b>", 
+        reply_markup=admin_broadcasts_list_keyboard(broadcasts), 
+        parse_mode='HTML'
+    )
     
 async def broadcast_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """جزئیات پیام همگانی با مدیریت بهتر وضعیت‌ها"""
