@@ -78,7 +78,7 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
-    # ⚠️ چک دسترسی به جای user_id != admin_id
+    
     from database import check_admin_permission
     if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
         await query.edit_message_text("⛔ شما دسترسی ندارید!")
@@ -88,15 +88,14 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['broadcast_type'] = 'now'
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
-    # ✅ این خط رو اضافه کن - به ConversationHandler بگو منتظر پیام باشه
-    return BROADCAST_TITLE  # ⚠️ این مهمه!    
     
+    # ✅ اول پیام رو نشون بده، بعد return کن
     await query.edit_message_text(
         "📝 <b>ارسال پیام همگانی فوری</b>\n\nلطفاً <b>عنوان</b> پیام را ارسال کنید:",
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE
+    return BROADCAST_TITLE  # ✅ فقط یه return، اونم آخر کار
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای ارسال فوری"""
@@ -120,7 +119,7 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=back_to_admin_keyboard(),
             parse_mode='HTML'
         )
-        return BROADCAST_MESSAGE  # ✅ اینو اضافه کن
+        return BROADCAST_MESSAGE
     
     elif step == 'message':
         title = context.user_data['broadcast']['title']
