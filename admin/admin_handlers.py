@@ -254,21 +254,19 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     user_id = update.effective_user.id
     admin_id = int(os.getenv('ADMIN_ID'))
     
-    # ✅ اصلاح: اول دسترسی رو چک کن، بعد ادمین اصلی بودن
     from database import check_admin_permission
     
-    # اگه ادمین اصلی نیست، چک کن دسترسی داره یا نه
     if user_id != admin_id:
         if not check_admin_permission(user_id, admin_id, "perm_broadcast_scheduled"):
             await query.edit_message_text("⛔ شما دسترسی به این بخش ندارید!")
             return ConversationHandler.END
-    # اگه ادمین اصلی هست، نیازی به چک دسترسی نیست
     
     context.user_data['broadcast'] = {}
     context.user_data['broadcast_type'] = 'scheduled'
     context.user_data['broadcast_step'] = 'title'
     context.user_data['awaiting_message'] = True
     
+    # ✅ اول پیام رو نشون بده
     await query.edit_message_text(
         "📝 <b>پیام همگانی زمان‌بندی شده - مرحله ۱/۴</b>\n\n"
         "لطفاً <b>عنوان</b> پیام را ارسال کنید:\n"
@@ -277,7 +275,7 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
         reply_markup=back_to_admin_keyboard(),
         parse_mode='HTML'
     )
-    return BROADCAST_TITLE
+    return BROADCAST_TITLE  # ✅ بعد از نمایش پیام
 
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام برای زمان‌بندی"""
