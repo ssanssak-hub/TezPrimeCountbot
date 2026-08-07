@@ -126,8 +126,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("bc_btn_"):
         await handle_broadcast_button_click(update, context)
         return 
-    
-    # ============ ✅ پایان دکمه‌های ارسال پیشرفته ============
+
+    if data.startswith("bc_"):
+        await handle_broadcast_button_click(update, context)
+        return
     
     # ✅ اضافه کردن شرط برای دکمه‌های تاریخ (مرحله ۳)
     if data.startswith("broadcast_date_"):
