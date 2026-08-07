@@ -310,6 +310,134 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
+async def handle_broadcast_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    مدیریت کلیک کاربران روی دکمه‌های شیشه‌ای پیام همگانی
+    
+    عملکردها:
+    - show_alert: نمایش پیام
+    - notify_admin: ارسال به ادمین
+    - show_stats: نمایش آمار کلیک
+    """
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name or 'کاربر'
+    
+    data = query.data
+    logger.info(f"📣 Button clicked: {data} by {user_name} ({user_id})")
+    
+    # ✅ پیدا کردن اطلاعات دکمه از دیتابیس
+    message_to_show = "✅ با تشکر از شما! ❤️"
+    action = "show_alert"
+    
+    try:
+        # جستجو در دیتابیس برای پیدا کردن دکمه
+        from database import get_db_connection
+        import json
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # همه broadcast هایی که دکمه دارن
+        cursor.execute('''
+            SELECT id, inline_buttons, title 
+            FROM broadcasts 
+            WHERE inline_buttons IS NOT NULL 
+            AND status IN ('completed', 'sending')
+            ORDER BY created_at DESC
+        ''')
+        
+        broadcasts = cursor.fetchall()
+        conn.close()
+        
+        for broadcast in broadcasts:
+            try:
+                buttons = json.loads(broadcast['inline_buttons'])
+                for btn in buttons:
+                    if isinstance(btn, dict) and btn.get('callback_data') == data:
+                        message_to_show = btn.get('message', message_to_show)
+                        action = btn.get('action', 'show_alert')
+                        break
+            except:
+                continue
+    except Exception as e:
+        logger.error(f"Error finding button info: {e}")
+    
+    # ✅ ذخیره آمار کلیک
+    try:
+        from database import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # ایجاد جدول آمار
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS button_clicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                callback_data TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                user_name TEXT,
+                clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT INTO button_clicks (callback_data, user_id, user_name)
+            VALUES (?, ?, ?)
+        ''', (data, user_id, user_name))
+        conn.commit()
+        
+        # دریافت آمار
+        cursor.execute('''
+            SELECT COUNT(DISTINCT user_id) as unique_clicks
+            FROM button_clicks
+            WHERE callback_data = ?
+        ''', (data,))
+        stats = cursor.fetchone()
+        conn.close()
+        
+        unique_clicks = stats['unique_clicks'] if stats else 1
+        
+    except Exception as e:
+        logger.warning(f"Could not save click: {e}")
+        unique_clicks = 1
+    
+    # ✅ اجرای عملکرد بر اساس action
+    if action == "show_alert":
+        # نمایش پیام ساده
+        final_message = message_to_show.replace('{name}', user_name)
+        await query.answer(text=final_message, show_alert=True)
+        
+    elif action == "show_stats":
+        # نمایش آمار
+        final_message = f"{message_to_show}\n\n👥 {unique_clicks} نفر کلیک کرده‌اند"
+        await query.answer(text=final_message, show_alert=True)
+        
+    elif action == "notify_admin":
+        # ارسال نوتیفیکیشن به ادمین
+        try:
+            admin_id = int(os.getenv('ADMIN_ID'))
+            await query.message.bot.send_message(
+                chat_id=admin_id,
+                text=f"📣 <b>کلیک روی دکمه!</b>\n\n"
+                     f"👤 کاربر: {user_name} (<code>{user_id}</code>)\n"
+                     f"💬 پیام: {message_to_show}\n"
+                     f"⏰ زمان: {datetime.now(pytz.timezone('Asia/Tehran')).strftime('%H:%M:%S')}",
+                parse_mode='HTML'
+            )
+            await query.answer(text="✅ پیام شما به پشتیبانی ارسال شد.", show_alert=True)
+        except Exception as e:
+            logger.error(f"Error notifying admin: {e}")
+            await query.answer(text="❌ خطا در ارسال پیام. لطفاً دوباره تلاش کنید.", show_alert=True)
+    
+    elif action == "go_to_reminders":
+        # هدایت به بخش ریمایندرها
+        await query.answer(text="🔔 به بخش اعلان‌ها بروید: /start", show_alert=True)
+    
+    else:
+        # پیش‌فرض
+        await query.answer(text=message_to_show, show_alert=True)
+    
+    logger.info(f"✅ Button handled: {action} | {unique_clicks} clicks")
 
 async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست لغو ریمایندر"""
