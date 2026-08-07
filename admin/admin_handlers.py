@@ -944,7 +944,8 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         from_chat_id = None
         from_message_id = None
         forward_type = 'hidden'
-    
+    # بعد از تشخیص فوروارد، این لاگ رو اضافه کن:
+    logger.info(f"📤 FORWARD DETECTED: from_chat_id={from_chat_id}, from_message_id={from_message_id}, is_forward={is_forward}")
     try:
         # ✅ استخراج file_id - با بررسی None
         if content_type == 'photo':
