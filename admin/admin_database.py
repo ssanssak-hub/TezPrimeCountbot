@@ -175,7 +175,8 @@ def save_broadcast(admin_id, title, message, send_date=None, send_time=None):
 
 def save_broadcast_advanced(admin_id, title, content_type='text', 
                            message=None, file_id=None, file_caption=None, 
-                           inline_buttons=None, send_date=None, send_time=None):
+                           inline_buttons=None, send_date=None, send_time=None
+                           from_chat_id=None, from_message_id=None):
     """
     ذخیره پیام همگانی با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
     
@@ -199,7 +200,7 @@ def save_broadcast_advanced(admin_id, title, content_type='text',
     import json
     
     # تبدیل دکمه‌ها به JSON
-    buttons_json = None
+    buttons_json = json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None
     if inline_buttons:
         try:
             buttons_json = json.dumps(inline_buttons, ensure_ascii=False)
@@ -210,19 +211,18 @@ def save_broadcast_advanced(admin_id, title, content_type='text',
         INSERT INTO broadcasts (
             admin_id, title, content_type, message, 
             file_id, file_caption, inline_buttons,
-            send_date, send_time, status
+            send_date, send_time, from_chat_id, from_message_id, status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     ''', (admin_id, title, content_type, message, 
           file_id, file_caption, buttons_json,
-          send_date, send_time))
+          send_date, send_time, from_chat_id, from_message_id))
     
     broadcast_id = cursor.lastrowid
     conn.commit()
     conn.close()
     logger.info(f"📝 Advanced broadcast {broadcast_id} saved (type: {content_type}, buttons: {len(inline_buttons) if inline_buttons else 0})")
     return broadcast_id
-
 
 def get_pending_broadcasts():
     """دریافت پیام‌های همگانی در انتظار ارسال"""
