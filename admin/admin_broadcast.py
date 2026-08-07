@@ -439,15 +439,16 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         # برای متن: هدر + عنوان + متن + فوتر
         full_message = (
             f"{header}"
-            f"📌 <b>{title}</b>\n"
+            f"📌 عنوان پیام: <b>{title}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"{message_text}\n"
+            f"📄 متن پیام: <b>{message_text}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
-            f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
-            f"⏰ ساعت: <b>{time_str}</b>\n"
+            f"👤 مدیر ارسال کننده: <b>{admin_name}</b>\n"
+            f"📅 تاریخ ارسال: <b>{persian_date}</b> ({persian_weekday_fa})\n"
+            f"⏰ ساعت ارسال: <b>{time_str}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"🤖 @TezPrimeCountbot"
+            f"🤖 Id Bot:@TezPrimeCountbot"
+            f"🤖 Id Channel:@video_amouzeshi"
         )
     else:
         # برای مدیا: کپشن شامل اطلاعات کامل
