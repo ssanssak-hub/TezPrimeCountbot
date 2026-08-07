@@ -92,6 +92,59 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
+async def handle_send_now_from_scheduled(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ارسال فوری یه پیام زمان‌بندی شده"""
+    query = update.callback_query
+    await query.answer()
+    
+    broadcast_id = int(query.data.split("_")[-1])
+    broadcast = get_broadcast_by_id(broadcast_id)
+    
+    if not broadcast:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    b = dict(broadcast)
+    
+    # ✅ حذف زمان‌بندی (اگه job داره)
+    try:
+        from reminders.reminder_scheduler import scheduler
+        job_id = f"broadcast_{broadcast_id}"
+        if scheduler.get_job(job_id):
+            scheduler.remove_job(job_id)
+    except:
+        pass
+    
+    # ✅ تغییر وضعیت به pending و حذف تاریخ
+    from admin.admin_database import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE broadcasts 
+        SET send_date = NULL, send_time = NULL, status = 'pending', job_id = NULL
+        WHERE id = ?
+    ''', (broadcast_id,))
+    conn.commit()
+    conn.close()
+    
+    # ✅ ارسال فوری با تابع پیشرفته
+    from admin.admin_broadcast import send_broadcast_advanced
+    
+    progress_msg = await query.edit_message_text("⏳ در حال ارسال...", parse_mode='HTML')
+    
+    try:
+        sent, failed, total = await send_broadcast_advanced(broadcast_id, b['admin_id'], b)
+        
+        from admin.admin_broadcast import send_broadcast_report
+        await send_broadcast_report(update.effective_user.id, b['title'], sent, failed, total)
+        
+        await progress_msg.edit_text(
+            f"✅ ارسال به پایان رسید!\n\n{sent}/{total} موفق",
+            reply_markup=back_to_admin_keyboard()
+        )
+    except Exception as e:
+        await progress_msg.edit_text(f"❌ خطا: {str(e)[:200]}", reply_markup=back_to_admin_keyboard())
+        
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت همه دکمه‌ها"""
     query = update.callback_query
@@ -189,6 +242,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_broadcast_handler(update, context)
     elif data.startswith("admin_broadcast_stats_"):
         await broadcast_stats(update, context)
+    elif data.startswith("admin_send_now_"):
+        await handle_send_now_from_scheduled(update, context)
     
     # ---- آمار و وضعیت ----
     elif data == "admin_stats":
