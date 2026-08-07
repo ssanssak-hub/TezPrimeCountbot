@@ -376,7 +376,7 @@ import json
 async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=None):
     """
     ارسال پیشرفته با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
-    گزینه ۳: فوروارد واقعی + متن جداگانه (فوتر)
+    با پشتیبانی کامل از فوروارد برای متن و فایل
     
     Args:
         broadcast_id: شناسه broadcast
@@ -421,8 +421,10 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
     is_forward = broadcast_data.get('is_forward', False)
     from_chat_id = broadcast_data.get('from_chat_id')
     from_message_id = broadcast_data.get('from_message_id')
-    # بعد از دریافت broadcast_data:
+    
+    # لاگ اطلاعات فوروارد
     logger.info(f"📤 SENDING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}")
+
     # اطلاعات ادمین
     admin_info = get_admin_info_from_db(admin_id)
     admin_name = admin_info.get('first_name', 'ادمین') if admin_info else 'ادمین'
@@ -458,19 +460,15 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
         f"📺 Channel: @video_amouzeshi"
     )
 
-    # ============ ساخت متن کامل (برای حالت text) ============
-    if content_type == 'text':
-        full_message = (
-            f"📢 <b>پیام همگانی</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📌 عنوان: <b>{title}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📄 متن پیام:\n{message_text}\n"
-            f"{footer_text}"
-        )
-    else:
-        # برای مدیا، فوتر رو به‌عنوان پیام جداگانه ارسال می‌کنیم
-        full_message = footer_text
+    # ============ ساخت متن کامل ============
+    full_message = (
+        f"📢 <b>پیام همگانی</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 عنوان: <b>{title}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📄 متن پیام:\n{message_text}\n"
+        f"{footer_text}"
+    )
 
     # ============ ساخت دکمه‌های شیشه‌ای ============
     reply_markup = None
@@ -511,9 +509,11 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
         nonlocal consecutive_errors, sent, failed
 
         try:
-            # ========== گزینه ۳: فوروارد + متن جداگانه ==========
-            if content_type != 'text' and from_chat_id and from_message_id:
-                # مرحله ۱: فوروارد پیام اصلی
+            # ============================================================
+            # ========== حالت فوروارد (برای همه نوع محتوا) ==========
+            # ============================================================
+            if from_chat_id and from_message_id:
+                # ----- مرحله ۱: فوروارد پیام اصلی -----
                 try:
                     await bot.forward_message(
                         chat_id=user_id,
@@ -522,8 +522,8 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
                     )
                     logger.debug(f"📤 Forwarded message to {user_id}")
                 except Exception as forward_error:
-                    # اگر فوروارد خطا داد (مثلاً محدودیت کانال)، به کپی برگرد
-                    logger.warning(f"⚠️ Forward failed, trying copy: {forward_error}")
+                    # اگر فوروارد خطا داد، copy_message را امتحان کن
+                    logger.warning(f"⚠️ Forward failed for {user_id}: {forward_error}, trying copy...")
                     try:
                         await bot.copy_message(
                             chat_id=user_id,
@@ -532,34 +532,50 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
                         )
                         logger.debug(f"📤 Copied message to {user_id}")
                     except Exception as copy_error:
-                        # اگر کپی هم خطا داد، با file_id ارسال کن
-                        logger.warning(f"⚠️ Copy failed, sending with file_id: {copy_error}")
-                        if content_type == 'photo':
-                            await bot.send_photo(user_id, photo=file_id)
+                        # اگر کپی هم خطا داد، با file_id یا متن ارسال کن
+                        logger.warning(f"⚠️ Copy failed for {user_id}: {copy_error}, sending with file_id/text...")
+                        if content_type == 'text':
+                            await bot.send_message(user_id, text=full_message, parse_mode='HTML')
+                        elif content_type == 'photo':
+                            await bot.send_photo(user_id, photo=file_id, caption=full_message, parse_mode='HTML')
                         elif content_type == 'video':
-                            await bot.send_video(user_id, video=file_id)
+                            await bot.send_video(user_id, video=file_id, caption=full_message, parse_mode='HTML')
                         elif content_type == 'document':
-                            await bot.send_document(user_id, document=file_id)
+                            await bot.send_document(user_id, document=file_id, caption=full_message, parse_mode='HTML')
                         elif content_type == 'audio':
-                            await bot.send_audio(user_id, audio=file_id)
+                            await bot.send_audio(user_id, audio=file_id, caption=full_message, parse_mode='HTML')
                         elif content_type == 'voice':
-                            await bot.send_voice(user_id, voice=file_id)
+                            await bot.send_voice(user_id, voice=file_id, caption=full_message, parse_mode='HTML')
                         elif content_type == 'video_note':
                             await bot.send_video_note(user_id, video_note=file_id)
+                            await bot.send_message(user_id, text=full_message, parse_mode='HTML')
                         else:
-                            # fallback به متن
                             await bot.send_message(user_id, text=full_message, parse_mode='HTML')
 
-                # مرحله ۲: ارسال فوتر با دکمه‌ها (به‌صورت پیام جداگانه)
-                await bot.send_message(
-                    chat_id=user_id,
-                    text=full_message,
-                    parse_mode='HTML',
-                    reply_markup=reply_markup,
-                    disable_web_page_preview=True
-                )
+                # ----- مرحله ۲: ارسال فوتر با دکمه‌ها (به‌صورت پیام جداگانه) -----
+                # برای متن، فوتر جداگانه ارسال می‌شود تا هدر فوروارد حفظ شود
+                if content_type == 'text':
+                    # فقط فوتر را ارسال کن (بدون تکرار متن)
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=footer_text,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=True
+                    )
+                else:
+                    # برای فایل‌ها، فوتر را به عنوان پیام جداگانه ارسال کن
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=footer_text,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=True
+                    )
 
-            # ========== حالت‌های عادی (بدون فوروارد) ==========
+            # ============================================================
+            # ========== حالت عادی (بدون فوروارد) ====================
+            # ============================================================
             else:
                 if content_type == 'text':
                     await bot.send_message(
@@ -598,7 +614,6 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
                         parse_mode='HTML', reply_markup=reply_markup, disable_web_page_preview=True
                     )
                 else:
-                    # fallback
                     await bot.send_message(
                         chat_id=user_id, text=full_message,
                         parse_mode='HTML', reply_markup=reply_markup, disable_web_page_preview=True
