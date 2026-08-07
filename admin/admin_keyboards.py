@@ -301,25 +301,38 @@ def search_results_keyboard(user_id, is_banned):
     return InlineKeyboardMarkup(keyboard)
 
 def date_selection_keyboard():
-    """کیبورد انتخاب تاریخ - امروز یا دستی"""
+    """کیبورد انتخاب تاریخ - امروز یا دستی (با منطقه زمانی تهران)"""
     import jdatetime
+    from datetime import datetime
+    import pytz
     
-    today = jdatetime.date.today()
-    today_str = today.strftime("%Y/%m/%d")
-    weekday = today.weekday()
+    # ✅ استفاده از منطقه زمانی تهران
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    now_tehran = datetime.now(tehran_tz)
     
+    # ✅ تبدیل به تاریخ شمسی
+    today_jalali = jdatetime.date.fromgregorian(date=now_tehran.date())
+    today_str = today_jalali.strftime("%Y/%m/%d")
+    
+    # روز هفته به فارسی
     weekdays_fa = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"]
+    weekday_fa = weekdays_fa[today_jalali.weekday()]
+    
+    # ============ لاگ دیباگ ============
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"📅 DATE KEYBOARD: today={today_str} ({weekday_fa})")
     
     keyboard = [
         [InlineKeyboardButton(
-            f"📅 امروز: {today_str} ({weekdays_fa[weekday]})", 
+            f"📅 امروز: {today_str} ({weekday_fa})", 
             callback_data=f"broadcast_date_{today_str}"
         )],
         [InlineKeyboardButton("✏️ وارد کردن تاریخ دلخواه", callback_data="broadcast_date_custom")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
-
+    
 # ============ کیبوردهای جدید برای ارسال پیشرفته ============
 
 def content_type_keyboard():
