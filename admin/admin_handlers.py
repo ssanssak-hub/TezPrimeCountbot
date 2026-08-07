@@ -2341,13 +2341,14 @@ async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return
     
+    # ✅ استخراج broadcast_id با regex
     import re
     match = re.search(r'confirm_adv_broadcast_(\d+)', query.data)
-    if match:
-        broadcast_id = int(match.group(1))
-    else:
-        await query.edit_message_text("❌ خطا در شناسایی پیام!")
+    if not match:
+        await query.edit_message_text("❌ خطا در شناسایی پیام!", reply_markup=back_to_admin_keyboard())
         return
+    
+    broadcast_id = int(match.group(1))
     broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
@@ -2368,6 +2369,9 @@ async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAU
     )
     
     try:
+        # ✅ import تابع ارسال پیشرفته
+        from admin.admin_broadcast import send_broadcast_advanced
+        
         # استفاده از تابع ارسال پیشرفته
         task = asyncio.create_task(
             send_broadcast_advanced(
@@ -2428,7 +2432,6 @@ async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAU
             parse_mode='HTML'
         )
 
-
 # ============ هندلر ویرایش دکمه‌ها ============
 
 async def edit_broadcast_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2436,8 +2439,14 @@ async def edit_broadcast_buttons(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     
-    parts = query.data.split("_")
-    broadcast_id = int(parts[-1])
+    # ✅ استخراج broadcast_id از callback_data جدید
+    import re
+    match = re.search(r'broadcast_edit_buttons_(\d+)', query.data)
+    if not match:
+        await query.edit_message_text("❌ خطا در شناسایی پیام!", reply_markup=back_to_admin_keyboard())
+        return
+    
+    broadcast_id = int(match.group(1))
     broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
@@ -2467,4 +2476,3 @@ async def edit_broadcast_buttons(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode='HTML'
     )
     return BROADCAST_BUTTONS
-
