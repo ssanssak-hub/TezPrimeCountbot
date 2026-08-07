@@ -328,6 +328,7 @@ def content_type_keyboard():
         [InlineKeyboardButton("📝 متن", callback_data="content_type_text")],
         [InlineKeyboardButton("🖼 عکس", callback_data="content_type_photo")],
         [InlineKeyboardButton("🎥 فیلم", callback_data="content_type_video")],
+        [InlineKeyboardButton("📼 ویدئو مسیج", callback_data="content_type_video_note")],
         [InlineKeyboardButton("📄 فایل", callback_data="content_type_document")],
         [InlineKeyboardButton("🎵 صدا/ویس", callback_data="content_type_audio")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
