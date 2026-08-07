@@ -857,7 +857,7 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return BROADCAST_TITLE
         
-    elif content_type in ['photo', 'video', 'document', 'audio']:
+    elif content_type in ['photo', 'video', 'video_note', 'document', 'audio']:
         content_fa = get_content_type_fa(content_type)
         text = (
             f"📎 <b>ارسال {content_fa}</b>\n\n"
@@ -898,6 +898,8 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_id = message.photo[-1].file_id  # بهترین کیفیت
         elif content_type == 'video':
             file_id = message.video.file_id
+        elif content_type == 'video_note':
+            file_id = message.video_note.file_id            
         elif content_type == 'document':
             file_id = message.document.file_id
         elif content_type == 'audio':
