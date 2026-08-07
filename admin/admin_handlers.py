@@ -437,13 +437,27 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         
         context.user_data['broadcast']['time'] = f"{hour:02d}:{minute:02d}"
         
-        title = context.user_data['broadcast']['title']
-        message = context.user_data['broadcast']['message']
+        title = context.user_data['broadcast'].get('title', 'بدون عنوان')
         date_miladi = context.user_data['broadcast']['date']
+        content_type = context.user_data['broadcast'].get('content_type', 'text')
+        message = context.user_data['broadcast'].get('message')
+        file_id = context.user_data['broadcast'].get('file_id')
+        caption = context.user_data['broadcast'].get('caption')
+        buttons = context.user_data.get('inline_buttons', [])
         
-        broadcast_id = save_broadcast(
-            update.effective_user.id, title, message,
-            date_miladi, f"{hour:02d}:{minute:02d}"
+        # ✅ از save_broadcast_advanced استفاده کن
+        from admin.admin_database import save_broadcast_advanced
+        
+        broadcast_id = save_broadcast_advanced(
+            admin_id=update.effective_user.id,
+            title=title,
+            content_type=content_type,
+            message=message,
+            file_id=file_id,
+            file_caption=caption,
+            inline_buttons=buttons,  # 👈 دکمه‌ها ذخیره میشن
+            send_date=date_miladi,
+            send_time=f"{hour:02d}:{minute:02d}"
         )
         
         total_users = get_total_users_count()
@@ -456,9 +470,11 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(
             f"📢 <b>تایید نهایی</b>\n\n"
             f"📌 عنوان: <b>{title}</b>\n"
-            f"📝 پیام: {message[:100]}...\n"
+            f"📎 نوع: <b>{get_content_type_fa(content_type)}</b>\n"
+            f"📝 پیام: {message[:100] if message else 'فایل'}...\n"
             f"📅 تاریخ: <b>{persian_date_str}</b> (شمسی)\n"
             f"🕐 ساعت: <b>{hour:02d}:{minute:02d}</b> (تهران)\n"
+            f"🔘 دکمه‌ها: <b>{len(buttons)} عدد</b>\n"
             f"👥 گیرندگان: <b>{total_users}</b> کاربر\n\n"
             f"آیا تأیید می‌کنید؟",
             reply_markup=keyboard,
