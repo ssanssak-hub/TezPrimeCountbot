@@ -570,14 +570,13 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
         return BROADCAST_TIME
 
 async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مدیریت انتخاب تاریخ (امروز یا دستی)"""
+    """مدیریت انتخاب تاریخ (امروز یا دستی) با منطقه زمانی تهران"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
     
     if data == "broadcast_date_custom":
-        # کاربر می‌خواد دستی وارد کنه
         await query.edit_message_text(
             "📅 <b>وارد کردن تاریخ دلخواه</b>\n\n"
             "لطفاً تاریخ را به صورت شمسی وارد کنید:\n\n"
@@ -593,21 +592,33 @@ async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT
         return BROADCAST_DATE
     
     elif data.startswith("broadcast_date_"):
-        # کاربر امروز رو انتخاب کرده
         persian_date_str = data.replace("broadcast_date_", "")
         
         try:
             import jdatetime
+            from datetime import datetime
+            import pytz
+            
+            # ============ لاگ دیباگ ============
+            logger.info(f"📅 DATE SELECTED: {persian_date_str}")
+            
             parts = persian_date_str.split('/')
             year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
             persian_date = jdatetime.date(year, month, day)
             gregorian_date = persian_date.togregorian()
             
-            # اعتبارسنجی - تاریخ امروز طبیعتاً معتبره
-            today = jdatetime.date.today()
-            if persian_date < today:
+            # ✅ امروز با منطقه زمانی تهران
+            tehran_tz = pytz.timezone('Asia/Tehran')
+            now_tehran = datetime.now(tehran_tz)
+            today_jalali = jdatetime.date.fromgregorian(date=now_tehran.date())
+            
+            # ============ لاگ مقایسه ============
+            logger.info(f"📅 COMPARE: persian_date={persian_date}, today={today_jalali}")
+            
+            if persian_date < today_jalali:
                 await query.edit_message_text(
-                    "❌ خطای سیستمی! تاریخ امروز نامعتبر است.",
+                    f"❌ خطا! تاریخ {persian_date_str} مربوط به گذشته است!\n"
+                    f"📌 امروز: {today_jalali.strftime('%Y/%m/%d')}",
                     reply_markup=back_to_admin_keyboard()
                 )
                 return BROADCAST_DATE
@@ -633,11 +644,12 @@ async def broadcast_date_selection(update: Update, context: ContextTypes.DEFAULT
         except Exception as e:
             logger.error(f"Date processing error: {e}")
             await query.edit_message_text(
-                "❌ خطا در پردازش تاریخ!",
-                reply_markup=back_to_admin_keyboard()
+                f"❌ خطا در پردازش تاریخ!\n\n<code>{str(e)[:100]}</code>",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
             )
             return BROADCAST_DATE
-
+            
 async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تایید نهایی و برنامه‌ریزی"""
     query = update.callback_query
