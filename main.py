@@ -151,7 +151,7 @@ async def handle_send_now_from_scheduled(update: Update, context: ContextTypes.D
         await progress_msg.edit_text(f"❌ خطا: {str(e)[:200]}", reply_markup=back_to_admin_keyboard())
 
 async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش جزئیات کامل یک پیام همگانی"""
+    """نمایش جزئیات کامل یک پیام همگانی (با پشتیبانی از فوروارد/کپی)"""
     query = update.callback_query
     await query.answer("🔍 در حال دریافت جزئیات...")
     
@@ -167,8 +167,6 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     b = dict(broadcast)
-    # ✅ این لاگ رو اضافه کن:
-    logger.info(f"📊 BROADCAST FROM DB: from_chat_id={b.get('from_chat_id')}, from_message_id={b.get('from_message_id')}")
     
     content_type = b.get('content_type', 'text')
     title = b.get('title', 'بدون عنوان') or 'بدون عنوان'
@@ -176,6 +174,8 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     status = b.get('status', 'unknown')
     file_id = b.get('file_id')
     file_caption = b.get('file_caption') or ''
+    from_chat_id = b.get('from_chat_id')
+    from_message_id = b.get('from_message_id')
     
     status_emoji = {
         'pending': '⏰ در انتظار', 'sending': '📤 در حال ارسال',
@@ -234,9 +234,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     send_date = b.get('send_date', '')
     send_time = b.get('send_time', '')
     
-    from_chat_id = b.get('from_chat_id')
-    from_message_id = b.get('from_message_id')
-    
+    # ============ ساخت متن جزئیات ============
     text = f"🔍 جزئیات پیام #{broadcast_id}\n"
     text += f"━━━━━━━━━━━━━━━━\n"
     text += f"📌 عنوان: {title[:50]}\n"
@@ -258,10 +256,9 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
             text += f"📝 کپشن: {file_caption[:200]}{'...' if len(file_caption) > 200 else ''}\n"
         
         if from_chat_id and from_message_id:
-            text += f"📤 نوع ارسال: فوروارد شده\n"
+            text += f"📤 نوع ارسال: فوروارد شده (قابل نمایش با هدر اصلی)\n"
         else:
             text += f"📤 نوع ارسال: آپلود مستقیم\n"
-            text += f"🆔 FileID: {file_id[:30] if file_id else '؟'}...\n"
     
     text += f"━━━━━━━━━━━━━━━━\n"
     text += f"🔘 دکمه‌های شیشه‌ای: {buttons_count} عدد\n"
@@ -281,28 +278,63 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     else:
         text += f"⚡ ارسال فوری\n"
     
+    # ارسال متن جزئیات
     await query.message.reply_text(text)
     
-    # ✅ ارسال فایل اصلی (همیشه با send معمولی)
+    # ============ ارسال فایل اصلی (با پشتیبانی از فوروارد) ============
     if content_type != 'text' and file_id:
         try:
             admin_chat_id = update.effective_user.id
-            caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
             
-            if content_type == 'photo':
-                await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
-            elif content_type == 'video':
-                await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
-            elif content_type == 'video_note':
-                await context.bot.send_video_note(admin_chat_id, file_id)
-                await context.bot.send_message(admin_chat_id, f"📎 ویدئو مسیج پیام #{broadcast_id}: {title[:50]}")
-            elif content_type == 'document':
-                await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
-            elif content_type == 'audio':
-                await context.bot.send_audio(admin_chat_id, file_id, caption=caption_text)
+            # ✅ اگر پیام فورواردی است، از copy_message استفاده کن
+            if from_chat_id and from_message_id:
+                caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
+                
+                # از copy_message برای حفظ هدر اصلی (اما با کپشن جدید)
+                await context.bot.copy_message(
+                    chat_id=admin_chat_id,
+                    from_chat_id=from_chat_id,
+                    message_id=from_message_id,
+                    caption=caption_text,
+                    parse_mode='HTML'
+                )
+                logger.info(f"📤 نمایش فایل با copy_message از {from_chat_id}/{from_message_id}")
+            else:
+                # روش قبلی (ارسال مستقیم با file_id)
+                caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
+                
+                if content_type == 'photo':
+                    await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'video':
+                    await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'video_note':
+                    await context.bot.send_video_note(admin_chat_id, file_id)
+                    await context.bot.send_message(admin_chat_id, f"📎 ویدئو مسیج پیام #{broadcast_id}: {title[:50]}")
+                elif content_type == 'document':
+                    await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'audio':
+                    await context.bot.send_audio(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'voice':
+                    await context.bot.send_voice(admin_chat_id, file_id, caption=caption_text)
+                
         except Exception as e:
-            logger.warning(f"Could not send file: {e}")
-        
+            logger.warning(f"⚠️ Could not display file: {e}")
+            # تلاش با file_id به عنوان Fallback
+            try:
+                caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
+                if content_type == 'photo':
+                    await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'video':
+                    await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'document':
+                    await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'audio':
+                    await context.bot.send_audio(admin_chat_id, file_id, caption=caption_text)
+                elif content_type == 'voice':
+                    await context.bot.send_voice(admin_chat_id, file_id, caption=caption_text)
+            except Exception as fallback_e:
+                logger.error(f"❌ Fallback also failed: {fallback_e}")
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت همه دکمه‌ها"""
     query = update.callback_query
