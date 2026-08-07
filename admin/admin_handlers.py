@@ -901,8 +901,9 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     # ✅ چک کن فوروارد شده یا نه (همه روش‌ها)
     if message.forward_origin:
         is_forward = True
-        from_message_id = origin.message_id
         origin = message.forward_origin
+        from_message_id = origin.message_id
+        
         if hasattr(origin, 'chat') and origin.chat:
             from_chat_id = str(origin.chat.id)
         elif hasattr(origin, 'sender_user') and origin.sender_user:
