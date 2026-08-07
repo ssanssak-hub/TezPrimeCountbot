@@ -920,27 +920,24 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         # ============ پردازش بر اساس نوع محتوا ============
         if content_type == 'text':
-            # ✅ دریافت متن
             if not message.text:
                 await message.reply_text("❌ متن دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
             
-            # ذخیره متن
             caption = message.text
             title = caption[:100] if caption else "پیام متنی"
             if is_forward:
                 title = f"↪️ {title}"
             
-            # برای متن، نیازی به file_id نیست
-            context.user_data['broadcast'].update({
-                'message': caption,
-                'title': title,
-                'caption': caption,
-                'from_chat_id': from_chat_id,
-                'from_message_id': from_message_id,
-                'is_forward': is_forward,
-                'file_id': None,  # متن file_id ندارد
-            })
+            # ✅ ذخیره در context
+            context.user_data['broadcast']['message'] = caption
+            context.user_data['broadcast']['title'] = title
+            context.user_data['broadcast']['caption'] = caption
+            context.user_data['broadcast']['from_chat_id'] = from_chat_id
+            context.user_data['broadcast']['from_message_id'] = from_message_id
+            context.user_data['broadcast']['is_forward'] = is_forward
+            
+            logger.info(f"📝 TEXT SAVED: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
             
             context.user_data['broadcast_step'] = 'buttons'
             context.user_data['awaiting_message'] = False
@@ -956,6 +953,7 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return BROADCAST_BUTTONS
             
+        # ============ پردازش فایل‌ها ============
         elif content_type == 'photo':
             if not message.photo:
                 await message.reply_text("❌ عکس دریافت نشد!", reply_markup=back_to_admin_keyboard())
@@ -996,21 +994,21 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
                 return BROADCAST_TITLE
             caption = message.caption or ''
         
-        # ============ ذخیره اطلاعات برای فایل‌ها ============
+        # ============ ذخیره اطلاعات فایل‌ها ============
         if content_type != 'text' and file_id:
             title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
             if is_forward:
                 title = f"↪️ {title}"
             
-            context.user_data['broadcast'].update({
-                'file_id': file_id,
-                'caption': caption,
-                'title': title,
-                'message': caption,
-                'from_chat_id': from_chat_id,
-                'from_message_id': from_message_id,
-                'is_forward': is_forward,
-            })
+            context.user_data['broadcast']['file_id'] = file_id
+            context.user_data['broadcast']['caption'] = caption
+            context.user_data['broadcast']['title'] = title
+            context.user_data['broadcast']['message'] = caption
+            context.user_data['broadcast']['from_chat_id'] = from_chat_id
+            context.user_data['broadcast']['from_message_id'] = from_message_id
+            context.user_data['broadcast']['is_forward'] = is_forward
+            
+            logger.info(f"📎 FILE SAVED: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
             
             context.user_data['broadcast_step'] = 'buttons'
             context.user_data['awaiting_message'] = False
