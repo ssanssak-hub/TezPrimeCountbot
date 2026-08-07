@@ -1,7 +1,14 @@
 import logging
 import asyncio
+import pytz
+import json
+from datetime import datetime
 from telegram import Bot
-from telegram.error import Forbidden, TelegramError, RetryAfter, BadRequest
+import jdatetime
+from telegram.error import (
+    Forbidden, BadRequest, RetryAfter, 
+    TelegramError, NetworkError, TimedOut
+)
 from telegram.request import HTTPXRequest
 import os
 from dotenv import load_dotenv
@@ -366,11 +373,12 @@ async def send_broadcast_safe(broadcast_id, admin_id, title, message):
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import json
 
-async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
+async def send_broadcast_advanced(bot, broadcast_id, admin_id, broadcast_data):
     """
     ارسال پیشرفته با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
     
     Args:
+        bot: شیء ربات تلگرام
         broadcast_id: شناسه broadcast
         admin_id: شناسه ادمین
         broadcast_data: دیکشنری حاوی اطلاعات broadcast
@@ -378,13 +386,20 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     Returns:
         tuple: (sent, failed, total)
     """
+    # ✅ ثابت‌ها (میتونی به بالای فایل منتقل کنی)
+    MESSAGE_DELAY = 0.05
+    BATCH_SIZE = 30
+    BATCH_DELAY = 1.0
+    DB_UPDATE_FREQUENCY = 20
+    MAX_CONSECUTIVE_ERRORS = 10
+    MAX_CALLBACK_DATA = 64
+    
     users = get_all_active_users()
     total = len(users)
     sent = 0
     failed = 0
     blocked_users = []
     consecutive_errors = 0
-    MAX_CONSECUTIVE_ERRORS = 10
     
     if total == 0:
         logger.warning(f"⚠️ Broadcast {broadcast_id}: No active users")
@@ -392,9 +407,9 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         return 0, 0, 0
     
     content_type = broadcast_data.get('content_type', 'text')
-    message_text = broadcast_data.get('message')
+    message_text = broadcast_data.get('message', '')
     file_id = broadcast_data.get('file_id')
-    caption = broadcast_data.get('file_caption', '')
+    caption = broadcast_data.get('file_caption', '') or broadcast_data.get('caption', '')
     title = broadcast_data.get('title', 'بدون عنوان')
     
     # ✅ دریافت اطلاعات ادمین
@@ -406,7 +421,6 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     import pytz
     tehran_tz = pytz.timezone('Asia/Tehran')
     now_tehran = datetime.now(tehran_tz)
-    date_str = now_tehran.strftime('%Y/%m/%d')
     time_str = now_tehran.strftime('%H:%M:%S')
     
     # ✅ تبدیل تاریخ میلادی به شمسی
@@ -414,7 +428,6 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         import jdatetime
         jalali_date = jdatetime.date.fromgregorian(date=now_tehran.date())
         persian_date = jalali_date.strftime('%Y/%m/%d')
-        persian_weekday = jalali_date.strftime('%A')
         weekdays_fa = {
             'Saturday': 'شنبه',
             'Sunday': 'یکشنبه',
@@ -424,79 +437,144 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             'Thursday': 'پنجشنبه',
             'Friday': 'جمعه'
         }
-        persian_weekday_fa = weekdays_fa.get(persian_weekday, persian_weekday)
-    except:
-        persian_date = date_str
+        persian_weekday_fa = weekdays_fa.get(jalali_date.strftime('%A'), '')
+    except Exception:
+        persian_date = now_tehran.strftime('%Y/%m/%d')
         persian_weekday_fa = ''
     
-    # ✅ ساخت هدر و فوتر پیام
+    # ✅ ساخت متن کامل
     if content_type == 'text':
         full_message = (
-            f"📢 <b>پیام همگانی </b>\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
-            f"📌 عنوان پیام: <b>{title}</b>\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
+            f"📢 <b>پیام همگانی</b>\n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
+            f"📌 عنوان: <b>{title}</b>\n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
             f"📄 متن پیام:\n{message_text}\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
-            f"👤 مدیر ارسال کننده: <b>{admin_name}</b>\n"
-            f"📅 تاریخ ارسال: <b>{persian_date}</b> ({persian_weekday_fa})\n"
-            f"⏰ ساعت ارسال: <b>{time_str}</b>\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
+            f"👤 مدیر: <b>{admin_name}</b>\n"
+            f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
+            f"⏰ ساعت: <b>{time_str}</b>\n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
             f"🤖 Bot: @TezPrimeCountbot\n"
             f"📺 Channel: @video_amouzeshi"
         )
     else:
         full_message = (
-            f"📢 <b>پیام همگانی </b>\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
+            f"📢 <b>پیام همگانی</b>\n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
             f"📌 عنوان: <b>{title}</b>\n"
-            f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
+            f"👤 مدیر: <b>{admin_name}</b>\n"
             f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت: <b>{time_str}</b>\n"
-            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
+            f"━━━ ━━━━━ ━━━━ ━━━━\n"
             f"🤖 Bot: @TezPrimeCountbot\n"
             f"📺 Channel: @video_amouzeshi"
         )
         if caption:
             full_message = f"{caption}\n\n{full_message}"
     
-    # ✅ ساخت reply_markup
+    # ✅ ساخت reply_markup از inline_buttons
     reply_markup = None
     inline_buttons = broadcast_data.get('inline_buttons')
     if inline_buttons:
         try:
             import json
-            if isinstance(inline_buttons, str):
-                buttons = json.loads(inline_buttons)
-            else:
-                buttons = inline_buttons
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
             
-            if buttons:
-                keyboard = []
-                for btn in buttons:
-                    if isinstance(btn, dict):
-                        btn_type = btn.get('type', 'url')
-                        btn_text = btn.get('text', 'دکمه')
-                        if btn_type == 'url':
-                            keyboard.append([InlineKeyboardButton(btn_text, url=btn.get('url', 'https://t.me'))])
-                        elif btn_type == 'callback':
-                            keyboard.append([InlineKeyboardButton(btn_text, callback_data=btn.get('callback_data', 'unknown'))])
-                    elif isinstance(btn, list):
-                        if len(btn) == 2:
-                            keyboard.append([InlineKeyboardButton(btn[0], url=btn[1])])
-                        elif len(btn) == 3:
-                            keyboard.append([InlineKeyboardButton(btn[0], callback_data=btn[1])])
+            buttons = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
+            keyboard = []
+            
+            for btn in buttons:
+                if isinstance(btn, dict):
+                    btn_type = btn.get('type', 'url')
+                    btn_text = btn.get('text', 'دکمه')[:64]
+                    
+                    if btn_type == 'url':
+                        url = btn.get('url', 'https://t.me')
+                        if url and url.startswith(('http://', 'https://', 't.me/')):
+                            keyboard.append([InlineKeyboardButton(btn_text, url=url)])
+                    
+                    elif btn_type == 'callback':
+                        cb_data = btn.get('callback_data') or btn.get('message', 'unknown')
+                        cb_data = str(cb_data)[:MAX_CALLBACK_DATA]
+                        keyboard.append([InlineKeyboardButton(btn_text, callback_data=cb_data)])
                 
-                if keyboard:
-                    reply_markup = InlineKeyboardMarkup(keyboard)
+                elif isinstance(btn, (list, tuple)):
+                    if len(btn) == 2:
+                        keyboard.append([InlineKeyboardButton(str(btn[0])[:64], url=btn[1])])
+                    elif len(btn) >= 3:
+                        cb_data = str(btn[1])[:MAX_CALLBACK_DATA]
+                        keyboard.append([InlineKeyboardButton(str(btn[0])[:64], callback_data=cb_data)])
+            
+            if keyboard:
+                reply_markup = InlineKeyboardMarkup(keyboard)
         except Exception as e:
             logger.error(f"❌ Error parsing inline buttons: {e}")
     
+    # ✅ تابع کمکی برای ارسال به یک کاربر
+    async def send_to_user(user_id):
+        if content_type == 'text':
+            return await bot.send_message(
+                chat_id=user_id,
+                text=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup,
+                disable_web_page_preview=True
+            )
+        elif content_type == 'photo':
+            return await bot.send_photo(
+                chat_id=user_id,
+                photo=file_id,
+                caption=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        elif content_type == 'video':
+            return await bot.send_video(
+                chat_id=user_id,
+                video=file_id,
+                caption=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        elif content_type == 'document':
+            return await bot.send_document(
+                chat_id=user_id,
+                document=file_id,
+                caption=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        elif content_type == 'audio':
+            return await bot.send_audio(
+                chat_id=user_id,
+                audio=file_id,
+                caption=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        elif content_type == 'video_note':
+            # video_note کپشن نداره - دو پیام جدا میفرستیم
+            await bot.send_video_note(
+                chat_id=user_id,
+                video_note=file_id
+            )
+            return await bot.send_message(
+                chat_id=user_id,
+                text=full_message,
+                parse_mode='HTML',
+                reply_markup=reply_markup,
+                disable_web_page_preview=True
+            )
+        else:
+            raise ValueError(f"Unknown content_type: {content_type}")
+    
     mark_broadcast_sent(broadcast_id, total)
-    logger.info(f"🚀 [Admin:{admin_id}] Starting advanced broadcast {broadcast_id} to {total} users (type: {content_type})")
+    logger.info(f"🚀 [Admin:{admin_id}] Starting broadcast {broadcast_id} to {total} users (type: {content_type})")
     
     try:
         for i, user in enumerate(users):
+            # ✅ چک توقف در صورت خطاهای متوالی
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 error_msg = f"Stopped after {MAX_CONSECUTIVE_ERRORS} consecutive errors"
                 logger.error(f"🛑 {error_msg}")
@@ -506,101 +584,75 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             user_id = user['user_id']
             
             try:
-                # ✅ همیشه با send بفرست (forward و copy محدودیت دارن)
-                if content_type == 'text':
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup,
-                        disable_web_page_preview=True
-                    )
-                elif content_type == 'photo':
-                    await bot.send_photo(
-                        chat_id=user_id,
-                        photo=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'video':
-                    await bot.send_video(
-                        chat_id=user_id,
-                        video=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'video_note':
-                    await bot.send_video_note(
-                        chat_id=user_id,
-                        video_note=file_id,
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'document':
-                    await bot.send_document(
-                        chat_id=user_id,
-                        document=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'audio':
-                    await bot.send_audio(
-                        chat_id=user_id,
-                        audio=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                
+                await send_to_user(user_id)
                 add_broadcast_log(broadcast_id, user_id, 'success')
                 sent += 1
                 consecutive_errors = 0
-                logger.debug(f"📤 [{sent}/{total}] Sent to {user_id}")
                 
-            except Forbidden as e:
+                if sent % 50 == 0:
+                    logger.info(f"📤 [{sent}/{total}] sent so far")
+                
+            except Forbidden:
                 deactivate_user(user_id)
-                add_broadcast_log(broadcast_id, user_id, 'failed', f'Forbidden: {str(e)}')
+                add_broadcast_log(broadcast_id, user_id, 'failed', 'Forbidden: blocked bot')
                 failed += 1
                 blocked_users.append(user_id)
                 consecutive_errors += 1
-                logger.warning(f"🚫 User {user_id} blocked - deactivated")
-                
-            except BadRequest as e:
-                add_broadcast_log(broadcast_id, user_id, 'failed', f'BadRequest: {str(e)}')
-                failed += 1
-                consecutive_errors += 1
-                logger.error(f"⚠️ Bad request for {user_id}: {e}")
+                logger.warning(f"🚫 User {user_id} blocked the bot - deactivated")
                 
             except RetryAfter as e:
-                retry_after = e.retry_after
-                logger.warning(f"⏳ Rate limited for {retry_after}s")
+                retry_after = e.retry_after + 1
+                logger.warning(f"⏳ Rate limited, sleeping {retry_after}s")
                 await asyncio.sleep(retry_after)
+                
+                # ✅ retry برای همه انواع محتوا
                 try:
-                    if content_type == 'text':
-                        await bot.send_message(chat_id=user_id, text=full_message, reply_markup=reply_markup)
+                    await send_to_user(user_id)
                     add_broadcast_log(broadcast_id, user_id, 'success')
                     sent += 1
                     consecutive_errors = 0
                 except Exception as retry_e:
-                    add_broadcast_log(broadcast_id, user_id, 'failed', str(retry_e))
+                    add_broadcast_log(broadcast_id, user_id, 'failed', f'Retry failed: {str(retry_e)[:100]}')
                     failed += 1
                     consecutive_errors += 1
-                    
+                
+            except (TimedOut, NetworkError) as e:
+                # ✅ خطای شبکه - موقتیه، retry کن
+                logger.warning(f"🌐 Network error for {user_id}: {e}")
+                await asyncio.sleep(2)
+                try:
+                    await send_to_user(user_id)
+                    add_broadcast_log(broadcast_id, user_id, 'success')
+                    sent += 1
+                    consecutive_errors = 0
+                except Exception:
+                    add_broadcast_log(broadcast_id, user_id, 'failed', f'Network: {str(e)[:100]}')
+                    failed += 1
+                    # network error نباید consecutive_errors رو زیاد کنه
+                
+            except BadRequest as e:
+                error_msg = str(e)[:150]
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'BadRequest: {error_msg}')
+                failed += 1
+                consecutive_errors += 1
+                logger.error(f"⚠️ Bad request for {user_id}: {error_msg}")
+                
             except TelegramError as e:
-                add_broadcast_log(broadcast_id, user_id, 'failed', f'TelegramError: {str(e)}')
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'TelegramError: {str(e)[:100]}')
                 failed += 1
                 consecutive_errors += 1
                 
             except Exception as e:
-                add_broadcast_log(broadcast_id, user_id, 'failed', f'Unexpected: {str(e)}')
+                logger.exception(f"💥 Unexpected error for {user_id}")
+                add_broadcast_log(broadcast_id, user_id, 'failed', f'Unexpected: {str(e)[:100]}')
                 failed += 1
                 consecutive_errors += 1
             
+            # ✅ به‌روزرسانی آمار دیتابیس
             if (i + 1) % DB_UPDATE_FREQUENCY == 0:
                 update_broadcast_count(broadcast_id, sent, failed)
             
+            # ✅ Rate limit
             if (i + 1) % BATCH_SIZE == 0:
                 await asyncio.sleep(BATCH_DELAY)
             else:
@@ -611,12 +663,18 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         
     except Exception as critical_error:
         logger.critical(f"💀 Critical broadcast failure: {critical_error}", exc_info=True)
-        mark_broadcast_failed(broadcast_id, str(critical_error))
+        mark_broadcast_failed(broadcast_id, str(critical_error)[:200])
         raise
     finally:
-        logger.info(f"✅ Broadcast {broadcast_id} finished: {sent}/{total} sent, {failed} failed, {len(blocked_users)} blocked")
+        success_rate = round(sent / total * 100, 1) if total > 0 else 0
+        logger.info(
+            f"✅ Broadcast {broadcast_id} finished: "
+            f"{sent}/{total} sent ({success_rate}%), "
+            f"{failed} failed, {len(blocked_users)} blocked"
+        )
     
     return sent, failed, total
+
 
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
