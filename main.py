@@ -528,10 +528,13 @@ def setup_handlers():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
             ],
             BROADCAST_BUTTONS: [
+                # ✅ دکمه‌های مدیریت دکمه‌های شیشه‌ای (افزودن/حذف/تأیید/رد)
                 CallbackQueryHandler(handle_inline_buttons, pattern="^ib_"),
-                CallbackQueryHandler(confirm_advanced_broadcast, pattern="^admin_confirm_advanced_"),
-                CallbackQueryHandler(edit_broadcast_buttons, pattern="^admin_edit_buttons_"),
-                CallbackQueryHandler(show_final_preview, pattern="^admin_final_preview"),
+                # ✅ تأیید نهایی ارسال پیشرفته (هم برای فوری و هم زمان‌بندی)
+                CallbackQueryHandler(confirm_advanced_broadcast, pattern="^confirm_adv_broadcast_"),
+                # ✅ ویرایش دکمه‌های یک broadcast ذخیره شده
+                CallbackQueryHandler(edit_broadcast_buttons, pattern="^broadcast_edit_buttons_"),
+                # ✅ دریافت متن/لینک دکمه جدید
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button_text_input),
             ],            
             BROADCAST_DATE: [
@@ -594,7 +597,6 @@ def setup_handlers():
     application.add_error_handler(error_handler)
     
     logger.info("✅ All handlers configured")
-
 
 def main():
     """تابع اصلی راه‌اندازی"""
