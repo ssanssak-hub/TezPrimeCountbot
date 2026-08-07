@@ -120,6 +120,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from admin.admin_handlers import edit_broadcast_buttons
         await edit_broadcast_buttons(update, context)
         return
+
+    # ============ ✅ این بخش رو اضافه کن ============
+    # دکمه‌های شیشه‌ای پیام‌های همگانی (کلیک کاربران)
+    if data.startswith("bc_btn_"):
+        await handle_broadcast_button_click(update, context)
+        return 
     
     # ============ ✅ پایان دکمه‌های ارسال پیشرفته ============
     
