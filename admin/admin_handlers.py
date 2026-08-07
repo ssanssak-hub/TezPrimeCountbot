@@ -424,6 +424,11 @@ async def broadcast_scheduled_date(update: Update, context: ContextTypes.DEFAULT
         gregorian_date = persian_date.togregorian()
         
         today = jdatetime.date.today()
+        
+        # ============ لاگ دیباگ ============
+        logger.info(f"📅 DATE CHECK: user_input={date_input}, persian_date={persian_date}, today={today}")
+        logger.info(f"📅 COMPARE: persian_date < today = {persian_date < today}")
+        
         if persian_date < today:
             await update.message.reply_text(
                 f"❌ <b>خطا!</b>\n\n"
