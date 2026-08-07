@@ -897,8 +897,8 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     from_chat_id = None
     from_message_id = None
     
-    # ✅ چک کن فوروارد شده یا نه
-    is_forward = getattr(message, 'forward_from_chat', None) is not None or getattr(message, 'forward_from', None) is not None
+    # ✅ چک کن فوروارد شده یا نه (نسخه جدید)
+    is_forward = message.forward_origin is not None
     
     try:
         if content_type == 'photo':
@@ -922,16 +922,18 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # ✅ اگه فوروارد هست، اطلاعات مبدأ رو ذخیره کن
         if is_forward:
-            if message.forward_from_chat:
-                from_chat_id = str(message.forward_from_chat.id)
-            elif message.forward_from:
-                from_chat_id = str(message.forward_from.id)
-            from_message_id = message.forward_from_message_id or message.message_id
+            from_message_id = message.message_id
+            origin = message.forward_origin
+            
+            if hasattr(origin, 'chat') and origin.chat:
+                from_chat_id = str(origin.chat.id)
+            elif hasattr(origin, 'sender_user') and origin.sender_user:
+                from_chat_id = str(origin.sender_user.id)
         
         caption = message.caption or ''
         title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
         if is_forward:
-            title = f"↪️ {title}"  # نشونه فوروارد
+            title = f"↪️ {title}"
         
         context.user_data['broadcast']['file_id'] = file_id
         context.user_data['broadcast']['caption'] = caption
@@ -960,7 +962,6 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         await message.reply_text("❌ خطا! دوباره تلاش کنید:", reply_markup=back_to_admin_keyboard())
         return BROADCAST_TITLE
 
-        
 async def admin_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عملیات جاری را کنسل کن و به مدیریت پنل برگرد"""
     context.user_data.clear()
