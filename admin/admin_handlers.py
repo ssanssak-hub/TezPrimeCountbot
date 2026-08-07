@@ -882,7 +882,7 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ============ هندلر دریافت فایل ============
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح - نسخه PTB v20+)"""
+    """دریافت فایل یا متن از ادمین (با پشتیبانی از فوروارد برای همه نوع محتوا)"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -897,46 +897,92 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     from_chat_id = None
     from_message_id = None
     is_forward = False
+    caption = None
+    title = None
     
-    # ============ تشخیص فوروارد با PTB v20+ ============
+    # ============ تشخیص فوروارد (برای همه نوع محتوا) ============
     if message.forward_origin:
-        is_forward = True
-        from_chat_id = str(message.chat.id)          # چت فعلی (ادمین با بات)
-        from_message_id = message.message_id         # شناسه پیام در چت ادمین
-        logger.info(f"📤 FORWARD DETECTED: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
-        
-        # لاگ جزئیات منبع فوروارد (برای دیباگ)
         origin = message.forward_origin
+        
+        # اگر از کانال یا گروه باشد
         if hasattr(origin, 'chat') and origin.chat:
-            logger.info(f"   └─ Original chat: {origin.chat.id} (type: {origin.chat.type})")
-        elif hasattr(origin, 'sender_user') and origin.sender_user:
-            logger.info(f"   └─ Original sender: {origin.sender_user.id}")
+            from_chat_id = str(origin.chat.id)
+            from_message_id = origin.message_id
+            is_forward = True
+            logger.info(f"📤 FORWARD FROM CHAT: {from_chat_id}/{from_message_id} (type: {content_type})")
+        else:
+            # اگر از کاربر باشد یا ناشناس
+            is_forward = False
+            logger.info(f"📤 FORWARD NOT FROM CHAT (will use direct send)")
+    else:
+        logger.info(f"📤 NOT A FORWARD MESSAGE")
     
     try:
-        # ============ استخراج file_id بر اساس نوع محتوا ============
-        if content_type == 'photo':
+        # ============ پردازش بر اساس نوع محتوا ============
+        if content_type == 'text':
+            # ✅ دریافت متن
+            if not message.text:
+                await message.reply_text("❌ متن دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
+            
+            # ذخیره متن
+            caption = message.text
+            title = caption[:100] if caption else "پیام متنی"
+            if is_forward:
+                title = f"↪️ {title}"
+            
+            # برای متن، نیازی به file_id نیست
+            context.user_data['broadcast'].update({
+                'message': caption,
+                'title': title,
+                'caption': caption,
+                'from_chat_id': from_chat_id,
+                'from_message_id': from_message_id,
+                'is_forward': is_forward,
+                'file_id': None,  # متن file_id ندارد
+            })
+            
+            context.user_data['broadcast_step'] = 'buttons'
+            context.user_data['awaiting_message'] = False
+            
+            fwd_text = "📤 فوروارد شده - " if is_forward else ""
+            await message.reply_text(
+                f"✅ {fwd_text}متن دریافت شد!\n\n"
+                f"📝 متن: {caption[:200]}{'...' if len(caption) > 200 else ''}\n"
+                f"📏 طول: {len(caption)} کاراکتر\n\n"
+                f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
+                reply_markup=inline_buttons_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_BUTTONS
+            
+        elif content_type == 'photo':
             if not message.photo:
                 await message.reply_text("❌ عکس دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
             file_id = message.photo[-1].file_id
+            caption = message.caption or ''
             
         elif content_type == 'video':
             if not message.video:
                 await message.reply_text("❌ ویدیو دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
             file_id = message.video.file_id
+            caption = message.caption or ''
             
         elif content_type == 'video_note':
             if not message.video_note:
                 await message.reply_text("❌ ویدئو مسیج دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
             file_id = message.video_note.file_id
+            caption = message.caption or ''
             
         elif content_type == 'document':
             if not message.document:
                 await message.reply_text("❌ فایل دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
             file_id = message.document.file_id
+            caption = message.caption or ''
             
         elif content_type == 'audio':
             if message.audio:
@@ -948,43 +994,40 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
             else:
                 await message.reply_text("❌ فایل صوتی/ویس دریافت نشد!", reply_markup=back_to_admin_keyboard())
                 return BROADCAST_TITLE
+            caption = message.caption or ''
         
-        if not file_id:
-            await message.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
-            return BROADCAST_TITLE
-        
-        # ============ ذخیره اطلاعات در context ============
-        caption = message.caption or ''
-        title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
-        if is_forward:
-            title = f"↪️ {title}"
-        
-        context.user_data['broadcast'].update({
-            'file_id': file_id,
-            'caption': caption,
-            'title': title,
-            'message': caption,
-            'from_chat_id': from_chat_id,        # چت فعلی (همان چت ادمین)
-            'from_message_id': from_message_id,  # شناسه پیام در چت ادمین
-            'is_forward': is_forward,
-        })
-        
-        context.user_data['broadcast_step'] = 'buttons'
-        context.user_data['awaiting_message'] = False
-        
-        fwd_text = "📤 فوروارد شده - " if is_forward else ""
-        await message.reply_text(
-            f"✅ {fwd_text}فایل دریافت شد!\n\n"
-            f"📎 نوع: {get_content_type_fa(content_type)}\n"
-            f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
-            f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
-            reply_markup=inline_buttons_keyboard(),
-            parse_mode='HTML'
-        )
-        return BROADCAST_BUTTONS
+        # ============ ذخیره اطلاعات برای فایل‌ها ============
+        if content_type != 'text' and file_id:
+            title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
+            if is_forward:
+                title = f"↪️ {title}"
+            
+            context.user_data['broadcast'].update({
+                'file_id': file_id,
+                'caption': caption,
+                'title': title,
+                'message': caption,
+                'from_chat_id': from_chat_id,
+                'from_message_id': from_message_id,
+                'is_forward': is_forward,
+            })
+            
+            context.user_data['broadcast_step'] = 'buttons'
+            context.user_data['awaiting_message'] = False
+            
+            fwd_text = "📤 فوروارد شده - " if is_forward else ""
+            await message.reply_text(
+                f"✅ {fwd_text}فایل دریافت شد!\n\n"
+                f"📎 نوع: {get_content_type_fa(content_type)}\n"
+                f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
+                f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
+                reply_markup=inline_buttons_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_BUTTONS
         
     except Exception as e:
-        logger.error(f"Error receiving file: {e}")
+        logger.error(f"Error receiving content: {e}")
         await message.reply_text("❌ خطا! دوباره تلاش کنید:", reply_markup=back_to_admin_keyboard())
         return BROADCAST_TITLE
 
