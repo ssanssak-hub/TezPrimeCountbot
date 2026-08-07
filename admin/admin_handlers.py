@@ -326,24 +326,43 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
     return BROADCAST_CONTENT_TYPE
     
 async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و پیام برای زمان‌بندی"""
+    """دریافت عنوان و پیام برای زمان‌بندی (با پشتیبانی از فوروارد)"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
 
     if context.user_data.get('broadcast_type') != 'scheduled':
         return ConversationHandler.END    
     
-    message = update.message.text
+    msg = update.message
+    text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
     
+    # ============ تشخیص فوروارد ============
+    from_chat_id = None
+    from_message_id = None
+    is_forward = False
+    
+    if msg.forward_origin:
+        is_forward = True
+        from_chat_id = str(msg.chat.id)
+        from_message_id = msg.message_id
+        logger.info(f"📤 FORWARD DETECTED (scheduled text): from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+    else:
+        is_forward = False
+        logger.info(f"📤 NOT A FORWARD MESSAGE (scheduled text)")
+    
     if step == 'title':
-        # ✅ ذخیره عنوان
-        context.user_data['broadcast']['title'] = message
+        # ✅ ذخیره عنوان و اطلاعات فوروارد
+        context.user_data['broadcast']['title'] = text_content
+        context.user_data['broadcast']['from_chat_id'] = from_chat_id
+        context.user_data['broadcast']['from_message_id'] = from_message_id
+        context.user_data['broadcast']['is_forward'] = is_forward
         context.user_data['broadcast_step'] = 'message'
         
+        fwd_text = "📤 فوروارد شده - " if is_forward else ""
         await update.message.reply_text(
-            f"📝 <b>مرحله ۲/۴</b>\n\n"
-            f"عنوان: <b>{message}</b>\n\n"
+            f"{fwd_text}📝 <b>مرحله ۲/۴</b>\n\n"
+            f"عنوان: <b>{text_content}</b>\n\n"
             f"حالا لطفاً <b>متن پیام</b> را ارسال کنید:\n\n"
             f"🔙 برای بازگشت /cancel را بزنید",
             reply_markup=back_to_admin_keyboard(),
@@ -352,14 +371,25 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
         return BROADCAST_MESSAGE
     
     elif step == 'message':
+        # ✅ اگر متن فوروارد شده باشد، اطلاعات را به‌روز کن
+        if msg.forward_origin:
+            context.user_data['broadcast']['from_chat_id'] = str(msg.chat.id)
+            context.user_data['broadcast']['from_message_id'] = msg.message_id
+            context.user_data['broadcast']['is_forward'] = True
+            logger.info(f"📤 FORWARD DETECTED (scheduled message): from_chat_id={msg.chat.id}, from_message_id={msg.message_id}")
+        
         # ✅ ذخیره متن پیام و رفتن به مرحله تاریخ
-        context.user_data['broadcast']['message'] = message
+        context.user_data['broadcast']['message'] = text_content
         context.user_data['broadcast_step'] = 'date'
+        
+        # لاگ نهایی برای دیباگ
+        logger.info(f"📝 TEXT SAVED: from_chat_id={context.user_data['broadcast'].get('from_chat_id')}, "
+                   f"from_message_id={context.user_data['broadcast'].get('from_message_id')}")
 
         await update.message.reply_text(
             f"📅 <b>مرحله ۳/۴ - انتخاب تاریخ</b>\n\n"
             f"عنوان: <b>{context.user_data['broadcast']['title']}</b>\n"
-            f"پیام: {message[:50]}...\n\n"
+            f"پیام: {text_content[:50]}...\n\n"
             f"می‌توانید تاریخ <b>امروز</b> را انتخاب کنید\n"
             f"یا یک <b>تاریخ دلخواه</b> وارد نمایید.\n\n"
             f"⚠️ <b>نکات مهم:</b>\n"
