@@ -650,6 +650,10 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     # ✅ تبدیل به دیکشنری برای استفاده از .get()
     broadcast = dict(broadcast_row)
     
+    # ============ لاگ دیباگ ============
+    logger.info(f"⏰ CONFIRM SCHEDULED: send_date={broadcast.get('send_date')}, send_time={broadcast.get('send_time')}")
+    logger.info(f"📊 BROADCAST DATA: {broadcast}")
+    
     # ✅ بررسی با .get() (چون الان دیکشنری هست)
     if broadcast.get('is_cancelled') or broadcast.get('status') == 'cancelled':
         await query.edit_message_text(
@@ -670,6 +674,17 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     
     # ✅ اعتبارسنجی تاریخ و زمان
     try:
+        # ============ لاگ قبل از اعتبارسنجی ============
+        logger.info(f"⏰ VALIDATING: send_date={broadcast.get('send_date')}, send_time={broadcast.get('send_time')}")
+        
+        # بررسی وجود send_date و send_time
+        if not broadcast.get('send_date') or not broadcast.get('send_time'):
+            await query.edit_message_text(
+                "❌ تاریخ یا زمان ارسال مشخص نیست!",
+                reply_markup=back_to_admin_keyboard()
+            )
+            return
+        
         run_date_tehran = datetime.strptime(
             f"{broadcast['send_date']} {broadcast['send_time']}:00",
             "%Y-%m-%d %H:%M:%S"
@@ -689,11 +704,23 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
             )
             return
             
+    except ValueError as e:
+        logger.error(f"❌ ValueError in date/time validation: {e}")
+        await query.edit_message_text(
+            f"❌ فرمت تاریخ یا زمان اشتباه است!\n\n"
+            f"تاریخ باید: YYYY-MM-DD\n"
+            f"زمان باید: HH:MM\n\n"
+            f"<code>{str(e)[:100]}</code>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return
     except Exception as e:
         logger.error(f"❌ Date/time validation error: {e}")
         await query.edit_message_text(
-            "❌ تاریخ یا زمان نامعتبر است!",
-            reply_markup=back_to_admin_keyboard()
+            f"❌ تاریخ یا زمان نامعتبر است!\n\n<code>{str(e)[:200]}</code>",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
         )
         return
     
@@ -744,11 +771,11 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
                 from admin.admin_broadcast import send_broadcast_advanced
                 
                 result = loop.run_until_complete(
-                   send_broadcast_advanced(
-                       broadcast_id=broadcast_id,
-                       admin_id=b['admin_id'], 
-                       broadcast_data=b,
-                       bot=new_bot
+                    send_broadcast_advanced(
+                        broadcast_id=broadcast_id,
+                        admin_id=b['admin_id'], 
+                        broadcast_data=b,
+                        bot=new_bot
                     )
                 )
                 sent, failed, total = result
@@ -775,7 +802,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
                     error_bot.send_message(
                         chat_id=admin_chat_id,
                         text=f"❌ <b>خطا در ارسال زمان‌بندی شده!</b>\n\n"
-                             f"📌 {b['title']}\n"
+                             f"📌 {b.get('title', 'بدون عنوان')}\n"
                              f"<code>{str(e)[:200]}</code>",
                         parse_mode='HTML'
                     )
@@ -818,9 +845,9 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     # ✅ نمایش پیام تایید نهایی
     await query.edit_message_text(
         f"✅ <b>پیام همگانی برنامه‌ریزی شد!</b>\n\n"
-        f"📌 عنوان: <b>{broadcast['title']}</b>\n"
-        f"📅 تاریخ: <b>{broadcast['send_date']}</b>\n"
-        f"🕐 ساعت تهران: <b>{broadcast['send_time']}</b>\n"
+        f"📌 عنوان: <b>{broadcast.get('title', 'بدون عنوان')}</b>\n"
+        f"📅 تاریخ: <b>{broadcast.get('send_date', 'نامشخص')}</b>\n"
+        f"🕐 ساعت تهران: <b>{broadcast.get('send_time', 'نامشخص')}</b>\n"
         f"👥 گیرندگان: <b>{total_users}</b> کاربر\n\n"
         f"⏳ پیام در تاریخ مشخص شده ارسال خواهد شد.\n"
         f"📊 گزارش ارسال برای شما فرستاده می‌شود.",
