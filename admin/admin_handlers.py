@@ -596,6 +596,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
     import pytz
     import asyncio
     from telegram import Bot
+    from telegram.request import HTTPXRequest
     
     tehran_tz = pytz.timezone('Asia/Tehran')
     
@@ -656,34 +657,53 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         try:
             logger.info(f"🚀 Starting scheduled broadcast {broadcast_id}")
             
-            # ✅ استفاده از send_broadcast_advanced به جای send_broadcast_now
-            from admin.admin_broadcast import send_broadcast_advanced
+            # ✅ ساخت bot جدید برای این event loop
+            request = HTTPXRequest(
+                connection_pool_size=5,
+                pool_timeout=30,
+                connect_timeout=10.0,
+                read_timeout=30.0,
+                write_timeout=30.0
+            )
+            new_bot = Bot(token=os.getenv('TOKEN'), request=request)
             
-            result = loop.run_until_complete(
-                send_broadcast_advanced(
-                    broadcast_id, 
-                    b['admin_id'], 
-                    b  # ✅ کل دیکشنری broadcast رو بفرست
+            # ✅ جایگزینی موقت bot در ماژول admin_broadcast
+            import admin.admin_broadcast as broadcast_module
+            original_bot = broadcast_module.bot
+            broadcast_module.bot = new_bot
+            
+            try:
+                from admin.admin_broadcast import send_broadcast_advanced
+                
+                result = loop.run_until_complete(
+                    send_broadcast_advanced(
+                        broadcast_id, 
+                        b['admin_id'], 
+                        b
+                    )
                 )
-            )
-            sent, failed, total = result
-            
-            # ✅ ارسال گزارش به ادمین
-            from admin.admin_broadcast import send_broadcast_report
-            loop.run_until_complete(
-                send_broadcast_report(admin_chat_id, b['title'], sent, failed, total)
-            )
-            
-            logger.info(f"✅ Scheduled broadcast {broadcast_id} completed: {sent}/{total} sent")
+                sent, failed, total = result
+                
+                # ✅ ارسال گزارش به ادمین با bot جدید
+                from admin.admin_broadcast import send_broadcast_report
+                loop.run_until_complete(
+                    send_broadcast_report(admin_chat_id, b['title'], sent, failed, total)
+                )
+                
+                logger.info(f"✅ Scheduled broadcast {broadcast_id} completed: {sent}/{total} sent")
+                
+            finally:
+                # ✅ برگردوندن bot اصلی
+                broadcast_module.bot = original_bot
             
         except Exception as e:
             logger.error(f"❌ Scheduled broadcast error: {e}", exc_info=True)
             
             # ✅ تلاش برای ارسال گزارش خطا به ادمین
             try:
-                bot = Bot(token=os.getenv('TOKEN'))
+                error_bot = Bot(token=os.getenv('TOKEN'))
                 loop.run_until_complete(
-                    bot.send_message(
+                    error_bot.send_message(
                         chat_id=admin_chat_id,
                         text=f"❌ <b>خطا در ارسال زمان‌بندی شده!</b>\n\n"
                              f"📌 {b['title']}\n"
