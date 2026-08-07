@@ -127,20 +127,21 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
     
-    # ============ تشخیص فوروارد ============
+    # ============ تشخیص فوروارد (اصلاح‌شده) ============
     from_chat_id = None
     from_message_id = None
     is_forward = False
     
+    # ✅ بررسی کنید که پیام فوروارد شده است
     if msg.forward_origin:
-        origin = msg.forward_origin
-        if hasattr(origin, 'chat') and origin.chat:
-            from_chat_id = str(origin.chat.id)
-            from_message_id = origin.message_id
-            is_forward = True
-            logger.info(f"📤 FORWARD FROM CHAT (text): {from_chat_id}/{from_message_id}")
-        else:
-            logger.info(f"📤 FORWARD NOT FROM CHAT (text)")
+        is_forward = True
+        # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
+        from_chat_id = str(msg.chat.id)
+        from_message_id = msg.message_id
+        logger.info(f"📤 FORWARD DETECTED (text): from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+    else:
+        is_forward = False
+        logger.info(f"📤 NOT A FORWARD MESSAGE (text)")
     
     if step == 'title':
         # ذخیره عنوان و اطلاعات فوروارد
@@ -166,12 +167,10 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         
         # اگر متن فوروارد شده باشد، اطلاعات را به‌روز کن
         if msg.forward_origin:
-            origin = msg.forward_origin
-            if hasattr(origin, 'chat') and origin.chat:
-                context.user_data['broadcast']['from_chat_id'] = str(origin.chat.id)
-                context.user_data['broadcast']['from_message_id'] = origin.message_id
-                context.user_data['broadcast']['is_forward'] = True
-                logger.info(f"📤 FORWARD FROM CHAT (message text): {origin.chat.id}/{origin.message_id}")
+            context.user_data['broadcast']['from_chat_id'] = str(msg.chat.id)
+            context.user_data['broadcast']['from_message_id'] = msg.message_id
+            context.user_data['broadcast']['is_forward'] = True
+            logger.info(f"📤 FORWARD DETECTED (message text): from_chat_id={msg.chat.id}, from_message_id={msg.message_id}")
         
         # ذخیره متن پیام
         context.user_data['broadcast']['message'] = text_content
@@ -920,7 +919,7 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ============ هندلر دریافت فایل ============
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت فایل یا متن از ادمین (با پشتیبانی از فوروارد برای همه نوع محتوا)"""
+    """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح)"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -938,22 +937,16 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption = None
     title = None
     
-    # ============ تشخیص فوروارد (برای همه نوع محتوا) ============
+    # ============ تشخیص فوروارد (اصلاح‌شده) ============
+    # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
     if message.forward_origin:
-        origin = message.forward_origin
-        
-        # اگر از کانال یا گروه باشد
-        if hasattr(origin, 'chat') and origin.chat:
-            from_chat_id = str(origin.chat.id)
-            from_message_id = origin.message_id
-            is_forward = True
-            logger.info(f"📤 FORWARD FROM CHAT: {from_chat_id}/{from_message_id} (type: {content_type})")
-        else:
-            # اگر از کاربر باشد یا ناشناس
-            is_forward = False
-            logger.info(f"📤 FORWARD NOT FROM CHAT (will use direct send)")
+        is_forward = True
+        from_chat_id = str(message.chat.id)
+        from_message_id = message.message_id
+        logger.info(f"📤 FORWARD DETECTED (file): from_chat_id={from_chat_id}, from_message_id={from_message_id}")
     else:
-        logger.info(f"📤 NOT A FORWARD MESSAGE")
+        is_forward = False
+        logger.info(f"📤 NOT A FORWARD MESSAGE (file)")
     
     try:
         # ============ پردازش بر اساس نوع محتوا ============
