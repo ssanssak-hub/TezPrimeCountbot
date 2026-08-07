@@ -173,40 +173,29 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     file_id = b.get('file_id')
     file_caption = b.get('file_caption', '')
     
-    # ✅ وضعیت
     status_emoji = {
-        'pending': '⏰ در انتظار',
-        'sending': '📤 در حال ارسال',
-        'completed': '✅ تکمیل شده',
-        'failed': '❌ ناموفق',
-        'stopped': '🛑 متوقف شده',
-        'cancelled': '⛔ لغو شده'
+        'pending': '⏰ در انتظار', 'sending': '📤 در حال ارسال',
+        'completed': '✅ تکمیل شده', 'failed': '❌ ناموفق',
+        'stopped': '🛑 متوقف شده', 'cancelled': '⛔ لغو شده'
     }
     status_text = status_emoji.get(status, status)
     
-    # ✅ نوع محتوا
     content_emoji = {
-        'text': '📝 متن',
-        'photo': '🖼 عکس',
-        'video': '🎥 فیلم',
-        'document': '📄 فایل',
-        'audio': '🎵 صدا/ویس'
+        'text': '📝 متن', 'photo': '🖼 عکس', 'video': '🎥 فیلم',
+        'document': '📄 فایل', 'audio': '🎵 صدا/ویس'
     }
     content_text = content_emoji.get(content_type, content_type)
     
-    # ✅ ادمین
     admin_info = get_user_info(b.get('admin_id'))
     admin_name = admin_info.get('first_name', 'ناشناس') if admin_info else 'ناشناس'
     admin_username = admin_info.get('username', '') if admin_info else ''
     
-    # ✅ آمار
     total_users = b.get('total_users', 0) or 0
     sent_count = b.get('sent_count', 0) or 0
     failed_count = b.get('failed_count', 0) or 0
     blocked_count = b.get('blocked_count', 0) or 0
     success_rate = round(sent_count / total_users * 100, 1) if total_users > 0 else 0
     
-    # ✅ دکمه‌ها
     inline_buttons = b.get('inline_buttons')
     buttons_count = 0
     buttons_text = ""
@@ -214,29 +203,26 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         try:
             buttons_data = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
             buttons_count = len(buttons_data)
-            for i, btn in enumerate(buttons_data[:3], 1):  # فقط ۳ تا اول
+            for i, btn in enumerate(buttons_data[:3], 1):
                 if isinstance(btn, dict):
                     btn_text = btn.get('text', '')[:20]
                     if btn.get('type') == 'url':
-                        buttons_text += f"{i}. 🔗 {btn_text}\n"
+                        buttons_text += f"{i}. {btn_text} (لینک)\n"
                     else:
                         msg = btn.get('message', '')[:30]
-                        buttons_text += f"{i}. 🔘 {btn_text} → {msg}\n"
-                elif isinstance(btn, list) and len(btn) >= 1:
-                    buttons_text += f"{i}. 🔘 {btn[0][:20]}\n"
+                        buttons_text += f"{i}. {btn_text} : {msg}\n"
             if buttons_count > 3:
                 buttons_text += f"... و {buttons_count - 3} عدد دیگر\n"
         except:
             pass
     
-    # ✅ تاریخ‌ها
     created_at = str(b.get('created_at', '؟'))[:19]
     send_date = b.get('send_date', '')
     send_time = b.get('send_time', '')
     
-    # ✅ ساخت متن (کوتاه‌تر)
+    # ✅ متن ساده بدون HTML
     text = (
-        f"🔍 <b>جزئیات پیام #{broadcast_id}</b>\n"
+        f"🔍 جزئیات پیام #{broadcast_id}\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"📌 عنوان: {title}\n"
         f"📎 نوع: {content_text}\n"
@@ -246,38 +232,28 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     )
     if admin_username:
         text += f" (@{admin_username})"
-    text += f"\n🆔 شناسه: <code>{b.get('admin_id')}</code>\n"
+    text += f"\n🆔 شناسه: {b.get('admin_id')}\n"
     text += f"━━━━━━━━━━━━━━━━\n"
     
-    # ✅ محتوا
     if content_type == 'text' and message:
-        msg_preview = message[:150].replace('<', '&lt;').replace('>', '&gt;')
-        text += f"📝 متن: {msg_preview}{'...' if len(message) > 150 else ''}\n"
+        msg_preview = message[:200]
+        text += f"📝 متن: {msg_preview}{'...' if len(message) > 200 else ''}\n"
         text += f"📏 طول: {len(message)} کاراکتر\n"
     elif content_type != 'text':
         text += f"📎 فایل: {content_text}\n"
         if file_caption:
-            cap_preview = file_caption[:100].replace('<', '&lt;').replace('>', '&gt;')
+            cap_preview = file_caption[:100]
             text += f"📝 کپشن: {cap_preview}{'...' if len(file_caption) > 100 else ''}\n"
-        text += f"🆔 FileID: <code>{file_id[:15] if file_id else '؟'}...</code>\n"
+        text += f"🆔 FileID: {file_id[:20] if file_id else '؟'}...\n"
     
     text += f"━━━━━━━━━━━━━━━━\n"
-    
-    # ✅ دکمه‌ها
     text += f"🔘 دکمه‌ها: {buttons_count} عدد\n"
     if buttons_text:
         text += buttons_text
-    
     text += f"━━━━━━━━━━━━━━━━\n"
-    
-    # ✅ آمار
-    text += (
-        f"📊 آمار: {sent_count}/{total_users} موفق ({success_rate}%)\n"
-        f"   ❌ ناموفق: {failed_count} | 🚫 بلاک: {blocked_count}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-    )
-    
-    # ✅ زمان
+    text += f"📊 آمار: {sent_count}/{total_users} موفق ({success_rate}%)\n"
+    text += f"   ❌ ناموفق: {failed_count} | 🚫 بلاک: {blocked_count}\n"
+    text += f"━━━━━━━━━━━━━━━━\n"
     text += f"📅 ایجاد: {created_at}\n"
     if send_date and send_time:
         text += f"⏰ زمان‌بندی: {send_date} {send_time}\n"
@@ -291,25 +267,17 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin_broadcast_{broadcast_id}")],
     ])
     
-    try:
-        await query.edit_message_text(
-            text,
-            reply_markup=keyboard,
-            parse_mode='HTML'
-        )
-    except Exception as e:
-        # اگه بازم خطا داد، بدون HTML امتحان کن
-        logger.warning(f"HTML parse error: {e}")
-        await query.edit_message_text(
-            text.replace('<b>', '').replace('</b>', '').replace('<code>', '').replace('</code>', ''),
-            reply_markup=keyboard
-        )
+    # ✅ بدون parse_mode
+    await query.edit_message_text(
+        text,
+        reply_markup=keyboard
+    )
     
     # ✅ ارسال فایل اصلی
     if content_type != 'text' and file_id:
         try:
             admin_chat_id = update.effective_user.id
-            caption_text = f"📎 فایل پیام #{broadcast_id}: {title}"
+            caption_text = f"فایل پیام #{broadcast_id}: {title}"
             
             if content_type == 'photo':
                 await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
