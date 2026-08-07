@@ -896,9 +896,25 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     file_id = None
     from_chat_id = None
     from_message_id = None
+    is_forward = False
     
-    # ✅ چک کن فوروارد شده یا نه (نسخه جدید)
-    is_forward = message.forward_origin is not None
+    # ✅ چک کن فوروارد شده یا نه (همه روش‌ها)
+    if message.forward_origin:
+        is_forward = True
+        from_message_id = message.message_id
+        origin = message.forward_origin
+        if hasattr(origin, 'chat') and origin.chat:
+            from_chat_id = str(origin.chat.id)
+        elif hasattr(origin, 'sender_user') and origin.sender_user:
+            from_chat_id = str(origin.sender_user.id)
+    elif message.forward_from_chat:
+        is_forward = True
+        from_chat_id = str(message.forward_from_chat.id)
+        from_message_id = message.forward_from_message_id
+    elif message.forward_from:
+        is_forward = True
+        from_chat_id = str(message.forward_from.id)
+        from_message_id = message.forward_from_message_id
     
     try:
         if content_type == 'photo':
@@ -919,16 +935,6 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not file_id:
             await message.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
             return BROADCAST_TITLE
-        
-        # ✅ اگه فوروارد هست، اطلاعات مبدأ رو ذخیره کن
-        if is_forward:
-            from_message_id = message.message_id
-            origin = message.forward_origin
-            
-            if hasattr(origin, 'chat') and origin.chat:
-                from_chat_id = str(origin.chat.id)
-            elif hasattr(origin, 'sender_user') and origin.sender_user:
-                from_chat_id = str(origin.sender_user.id)
         
         caption = message.caption or ''
         title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
