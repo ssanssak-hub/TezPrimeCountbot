@@ -430,55 +430,79 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         persian_weekday_fa = ''
     
     # ✅ ساخت هدر و فوتر پیام
-    header = (
-        f"📢 <b>پیام همگانی فوری</b>\n"
-        f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
-    )
-    
     if content_type == 'text':
         # برای متن: هدر + عنوان + متن + فوتر
         full_message = (
-            f"{header}"
+            f"📢 <b>پیام همگانی فوری</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
             f"📌 عنوان پیام: <b>{title}</b>\n"
-            f"━━ ━━━ ━━━━ ━━━ ━━━━ \n"
-            f"📄 متن پیام: <b>{message_text}</b>\n"
-            f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📄 متن پیام:\n{message_text}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 مدیر ارسال کننده: <b>{admin_name}</b>\n"
             f"📅 تاریخ ارسال: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت ارسال: <b>{time_str}</b>\n"
-            f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
-            f"🤖 Id Bot:@TezPrimeCountbot"
-            f"🤖 Id Channel:@video_amouzeshi"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🤖 Bot: @TezPrimeCountbot\n"
+            f"📺 Channel: @video_amouzeshi"
         )
     else:
         # برای مدیا: کپشن شامل اطلاعات کامل
         full_message = (
-            f"{header}"
-            f"📌 <b>{title}</b>\n"
+            f"📢 <b>پیام همگانی فوری</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 عنوان: <b>{title}</b>\n"
             f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
             f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت: <b>{time_str}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"🤖 @TezPrimeCountbot"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🤖 Bot: @TezPrimeCountbot\n"
+            f"📺 Channel: @video_amouzeshi"
         )
         if caption:
             full_message = f"{caption}\n\n{full_message}"
     
-    # ساخت reply_markup از دکمه‌های شیشه‌ای
+    # ✅ ساخت reply_markup از دکمه‌های شیشه‌ای (پشتیبانی از فرمت جدید و قدیمی)
     reply_markup = None
     inline_buttons = broadcast_data.get('inline_buttons')
     if inline_buttons:
         try:
             import json
-            buttons = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
+            # تبدیل از JSON اگه رشته هست
+            if isinstance(inline_buttons, str):
+                buttons = json.loads(inline_buttons)
+            else:
+                buttons = inline_buttons
+            
             if buttons:
                 keyboard = []
                 for btn in buttons:
-                    if len(btn) == 2:  # URL button
-                        keyboard.append([InlineKeyboardButton(btn[0], url=btn[1])])
-                    elif len(btn) == 3:  # Callback button
-                        keyboard.append([InlineKeyboardButton(btn[0], callback_data=btn[1])])
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                    if isinstance(btn, dict):
+                        # ✅ فرمت جدید (دیکشنری)
+                        btn_type = btn.get('type', 'url')
+                        btn_text = btn.get('text', 'دکمه')
+                        
+                        if btn_type == 'url':
+                            keyboard.append([InlineKeyboardButton(
+                                btn_text, 
+                                url=btn.get('url', 'https://t.me')
+                            )])
+                        elif btn_type == 'callback':
+                            keyboard.append([InlineKeyboardButton(
+                                btn_text, 
+                                callback_data=btn.get('callback_data', 'unknown')
+                            )])
+                            
+                    elif isinstance(btn, list):
+                        # ✅ فرمت قدیمی (لیست) - برای سازگاری
+                        if len(btn) == 2:
+                            keyboard.append([InlineKeyboardButton(btn[0], url=btn[1])])
+                        elif len(btn) == 3:
+                            keyboard.append([InlineKeyboardButton(btn[0], callback_data=btn[1])])
+                
+                if keyboard:
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
         except Exception as e:
             logger.error(f"❌ Error parsing inline buttons: {e}")
     
