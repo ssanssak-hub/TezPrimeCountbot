@@ -2195,7 +2195,6 @@ async def handle_inline_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("ℹ️ این دکمه فقط برای نمایش است")
         return BROADCAST_BUTTONS
 
-
 async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت متن/لینک دکمه شیشه‌ای"""
     if not context.user_data.get('awaiting_button'):
@@ -2211,8 +2210,10 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
         if len(parts) != 2:
             await update.message.reply_text(
                 "❌ فرمت اشتباه!\n\n"
-                "لطفاً به این صورت وارد کنید:\n"
-                "<code>متن دکمه | https://...</code>\n\n"
+                "📌 <b>فرمت صحیح:</b>\n"
+                "<code>متن دکمه | https://example.com</code>\n\n"
+                "مثال:\n"
+                "<code>کانال ما | https://t.me/ourchannel</code>\n\n"
                 "دوباره تلاش کنید:",
                 reply_markup=back_to_admin_keyboard(),
                 parse_mode='HTML'
@@ -2230,22 +2231,61 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
             )
             return BROADCAST_BUTTONS
         
-        buttons.append([btn_text, url])
+        buttons.append({
+            'type': 'url',
+            'text': btn_text,
+            'url': url
+        })
     
     elif btn_type == 'callback':
-        btn_text = text
+        # ✅ فرمت جدید: متن دکمه | پیام نمایشی | عملکرد (اختیاری)
+        parts = text.split('|')
+        btn_text = parts[0].strip()
+        
+        # پیام نمایشی (پیش‌فرض)
+        alert_message = "✅ با تشکر از شما! ❤️"
+        action = "show_alert"  # پیش‌فرض: فقط پیام نشون بده
+        
+        if len(parts) > 1:
+            alert_message = parts[1].strip()
+        
+        if len(parts) > 2:
+            action = parts[2].strip()
+        
         callback_data = f"bc_btn_{len(buttons)}_{update.effective_user.id}"
-        buttons.append([btn_text, callback_data, "show_alert"])
+        buttons.append({
+            'type': 'callback',
+            'text': btn_text,
+            'callback_data': callback_data,
+            'message': alert_message,
+            'action': action
+        })
     
     context.user_data['inline_buttons'] = buttons
     context.user_data['awaiting_button'] = False
     context.user_data['adding_button_type'] = None
     
+    # نمایش پیام موفقیت
+    if btn_type == 'callback':
+        success_text = (
+            f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
+            f"📌 متن دکمه: <b>{btn_text}</b>\n"
+            f"💬 پیام: {alert_message[:50]}...\n"
+            f"⚙️ عملکرد: {action}\n"
+            f"🔢 تعداد کل: {len(buttons)}\n\n"
+        )
+    else:
+        success_text = (
+            f"✅ <b>دکمه لینک افزوده شد!</b>\n\n"
+            f"📌 متن: <b>{btn_text}</b>\n"
+            f"🔗 لینک: {url}\n"
+            f"🔢 تعداد کل: {len(buttons)}\n\n"
+        )
+    
+    success_text += "می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:"
+    
     await update.message.reply_text(
-        f"✅ <b>دکمه افزوده شد!</b>\n\n"
-        f"📌 متن: {buttons[-1][0]}\n"
-        f"🔢 تعداد کل دکمه‌ها: {len(buttons)}\n\n"
-        f"می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:",
+        success_text,
         reply_markup=inline_buttons_keyboard(buttons),
         parse_mode='HTML'
     )
