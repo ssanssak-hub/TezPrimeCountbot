@@ -901,6 +901,7 @@ def setup_handlers():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
                 MessageHandler(filters.PHOTO, handle_file_receive),
                 MessageHandler(filters.VIDEO, handle_file_receive),
+                MessageHandler(filters.VIDEO_NOTE, handle_file_receive),
                 MessageHandler(filters.Document.ALL, handle_file_receive),
                 MessageHandler(filters.AUDIO, handle_file_receive),
                 MessageHandler(filters.VOICE, handle_file_receive),
