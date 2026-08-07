@@ -2180,7 +2180,10 @@ async def handle_inline_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         if 0 <= index < len(buttons):
             removed = buttons.pop(index)
             context.user_data['inline_buttons'] = buttons
-            await query.answer(f"🗑️ دکمه '{removed[0][:20]}' حذف شد")
+            
+            # ✅ گرفتن متن دکمه از دیکشنری
+            btn_text = removed.get('text', 'بدون متن')
+            await query.answer(f"🗑️ دکمه '{btn_text[:20]}' حذف شد")
         
         await query.edit_message_text(
             "✏️ <b>مدیریت دکمه‌های شیشه‌ای</b>\n\n"
