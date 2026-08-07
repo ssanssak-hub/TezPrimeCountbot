@@ -167,6 +167,8 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     b = dict(broadcast)
+    # ✅ این لاگ رو اضافه کن:
+    logger.info(f"📊 BROADCAST FROM DB: from_chat_id={b.get('from_chat_id')}, from_message_id={b.get('from_message_id')}")
     
     content_type = b.get('content_type', 'text')
     title = b.get('title', 'بدون عنوان') or 'بدون عنوان'
