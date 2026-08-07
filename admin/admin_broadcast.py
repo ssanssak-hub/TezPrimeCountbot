@@ -421,7 +421,8 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
     is_forward = broadcast_data.get('is_forward', False)
     from_chat_id = broadcast_data.get('from_chat_id')
     from_message_id = broadcast_data.get('from_message_id')
-
+    # بعد از دریافت broadcast_data:
+    logger.info(f"📤 SENDING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}")
     # اطلاعات ادمین
     admin_info = get_admin_info_from_db(admin_id)
     admin_name = admin_info.get('first_name', 'ادمین') if admin_info else 'ادمین'
