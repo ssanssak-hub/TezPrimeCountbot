@@ -521,53 +521,67 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             user_id = user['user_id']
             
             try:
-                # ارسال بر اساس نوع محتوا
-                if content_type == 'text':
-                    await bot.send_message(
+                # ✅ چک کن فوروارد هست یا نه
+                from_chat_id = broadcast_data.get('from_chat_id')
+                from_message_id = broadcast_data.get('from_message_id')
+                
+                if from_chat_id and from_message_id and content_type != 'text':
+                    # ✅ فوروارد شده - copy کن
+                    await bot.copy_message(
                         chat_id=user_id,
-                        text=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup,
-                        disable_web_page_preview=True
-                    )
-                elif content_type == 'photo':
-                    await bot.send_photo(
-                        chat_id=user_id,
-                        photo=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
+                        from_chat_id=from_chat_id,
+                        message_id=from_message_id,
+                        caption=full_message if full_message else None,
                         reply_markup=reply_markup
                     )
-                elif content_type == 'video':
-                    await bot.send_video(
-                        chat_id=user_id,
-                        video=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'video_note':
-                    await bot.send_video_note(
-                        chat_id=user_id,
-                        video_note=file_id,
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'document':
-                    await bot.send_document(
-                        chat_id=user_id,
-                        document=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
-                elif content_type == 'audio':
-                    await bot.send_audio(
-                        chat_id=user_id,
-                        audio=file_id,
-                        caption=full_message,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup
-                    )
+                else:
+                    # ✅ ارسال معمولی
+                    if content_type == 'text':
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup,
+                            disable_web_page_preview=True
+                        )
+                    elif content_type == 'photo':
+                        await bot.send_photo(
+                            chat_id=user_id,
+                            photo=file_id,
+                            caption=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup
+                        )
+                    elif content_type == 'video':
+                        await bot.send_video(
+                            chat_id=user_id,
+                            video=file_id,
+                            caption=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup
+                        )
+                    elif content_type == 'video_note':
+                        await bot.send_video_note(
+                            chat_id=user_id,
+                            video_note=file_id,
+                            reply_markup=reply_markup
+                        )
+                    elif content_type == 'document':
+                        await bot.send_document(
+                            chat_id=user_id,
+                            document=file_id,
+                            caption=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup
+                        )
+                    elif content_type == 'audio':
+                        await bot.send_audio(
+                            chat_id=user_id,
+                            audio=file_id,
+                            caption=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup
+                        )
                 
                 # ثبت موفقیت
                 add_broadcast_log(broadcast_id, user_id, 'success')
