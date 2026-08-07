@@ -457,7 +457,9 @@ async def broadcast_scheduled_time(update: Update, context: ContextTypes.DEFAULT
             file_caption=caption,
             inline_buttons=buttons,  # 👈 دکمه‌ها ذخیره میشن
             send_date=date_miladi,
-            send_time=f"{hour:02d}:{minute:02d}"
+            send_time=f"{hour:02d}:{minute:02d}",
+            from_chat_id=context.user_data['broadcast'].get('from_chat_id'),        # ✅ اضافه
+            from_message_id=context.user_data['broadcast'].get('from_message_id')   # ✅ اضافه            
         )
         
         total_users = get_total_users_count()
@@ -2437,7 +2439,9 @@ async def show_final_preview(update: Update, context: ContextTypes.DEFAULT_TYPE)
         message=broadcast_data.get('message'),
         file_id=broadcast_data.get('file_id'),
         file_caption=broadcast_data.get('caption'),
-        inline_buttons=buttons
+        inline_buttons=buttons,
+        from_chat_id=broadcast_data.get('from_chat_id'),        # ✅ اضافه
+        from_message_id=broadcast_data.get('from_message_id')   # ✅ اضافه
     )
     
     users_count = get_total_users_count()
