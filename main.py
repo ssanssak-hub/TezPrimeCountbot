@@ -288,6 +288,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     await query.message.reply_text(text)
     
     # ✅ ارسال فایل اصلی
+    # ✅ ارسال فایل اصلی
     if content_type != 'text' and file_id:
         try:
             admin_chat_id = update.effective_user.id
@@ -295,14 +296,14 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
             from_message_id = b.get('from_message_id')
             caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
             
-            # ✅ اگه فوروارد هست، copy کن
+            # ✅ اگه فوروارد هست، forward کن
             if from_chat_id and from_message_id:
-                await context.bot.copy_message(
+                await context.bot.forward_message(
                     chat_id=admin_chat_id,
                     from_chat_id=from_chat_id,
-                    message_id=from_message_id,
-                    caption=caption_text
+                    message_id=from_message_id
                 )
+                await context.bot.send_message(admin_chat_id, caption_text)
             else:
                 # ✅ ارسال معمولی
                 if content_type == 'photo':
@@ -311,10 +312,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
                     await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
                 elif content_type == 'video_note':
                     await context.bot.send_video_note(admin_chat_id, file_id)
-                    await context.bot.send_message(
-                        admin_chat_id, 
-                        f"📎 ویدئو مسیج پیام #{broadcast_id}: {title[:50]}"
-                    )
+                    await context.bot.send_message(admin_chat_id, f"📎 ویدئو مسیج پیام #{broadcast_id}: {title[:50]}")
                 elif content_type == 'document':
                     await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
                 elif content_type == 'audio':
