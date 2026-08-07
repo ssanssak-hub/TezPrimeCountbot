@@ -204,14 +204,31 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     blocked_count = b.get('blocked_count', 0) or 0
     success_rate = round(sent_count / total_users * 100, 1) if total_users > 0 else 0
     
+    # ✅ دکمه‌های شیشه‌ای با جزئیات کامل
     inline_buttons = b.get('inline_buttons')
+    buttons_text = ""
     buttons_count = 0
     if inline_buttons:
         try:
             buttons_data = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
             buttons_count = len(buttons_data)
+            for i, btn in enumerate(buttons_data, 1):
+                if isinstance(btn, dict):
+                    btn_text = btn.get('text', 'بدون متن')
+                    btn_type = btn.get('type', '')
+                    if btn_type == 'url':
+                        url = btn.get('url', '')
+                        buttons_text += f"  {i}. 🔗 {btn_text}\n     لینک: {url[:60]}{'...' if len(url) > 60 else ''}\n"
+                    elif btn_type == 'callback':
+                        msg = btn.get('message', 'بدون پیام')
+                        buttons_text += f"  {i}. 🔘 {btn_text}\n     پیام: {msg[:60]}{'...' if len(msg) > 60 else ''}\n"
+                elif isinstance(btn, list):
+                    if len(btn) == 2:
+                        buttons_text += f"  {i}. 🔗 {btn[0]}\n     لینک: {btn[1][:60]}\n"
+                    elif len(btn) >= 3:
+                        buttons_text += f"  {i}. 🔘 {btn[0]}\n     پیام: {btn[2][:60]}\n"
         except:
-            pass
+            buttons_text = "  ⚠️ خطا در خواندن دکمه‌ها\n"
     
     created_at = str(b.get('created_at', '؟'))[:19]
     send_date = b.get('send_date', '')
@@ -219,9 +236,11 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     
     # ✅ ساخت متن
     text = f"🔍 جزئیات پیام #{broadcast_id}\n"
+    text += f"━━━━━━━━━━━━━━━━\n"
     text += f"📌 عنوان: {title[:50]}\n"
     text += f"📎 نوع: {content_text}\n"
     text += f"📊 وضعیت: {status_text}\n"
+    text += f"━━━━━━━━━━━━━━━━\n"
     text += f"👤 ارسال‌کننده: {admin_name}"
     if admin_username:
         text += f" (@{admin_username})"
@@ -229,18 +248,31 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     text += f"━━━━━━━━━━━━━━━━\n"
     
     if content_type == 'text' and message:
-        text += f"📝 متن: {message[:200]}{'...' if len(message) > 200 else ''}\n"
+        text += f"📝 متن پیام:\n{message[:300]}{'...' if len(message) > 300 else ''}\n"
+        text += f"📏 طول: {len(message)} کاراکتر\n"
     elif content_type != 'text':
         text += f"📎 فایل: {content_text}\n"
         if file_caption:
-            text += f"📝 کپشن: {file_caption[:100]}{'...' if len(file_caption) > 100 else ''}\n"
+            text += f"📝 کپشن: {file_caption[:200]}{'...' if len(file_caption) > 200 else ''}\n"
+        text += f"🆔 FileID: {file_id[:30] if file_id else '؟'}...\n"
     
     text += f"━━━━━━━━━━━━━━━━\n"
-    text += f"🔘 دکمه‌ها: {buttons_count} عدد\n"
-    text += f"📊 آمار: {sent_count}/{total_users} ({success_rate}%)\n"
+    
+    # ✅ دکمه‌ها
+    text += f"🔘 دکمه‌های شیشه‌ای: {buttons_count} عدد\n"
+    if buttons_text:
+        text += buttons_text
+    else:
+        text += "  ❌ بدون دکمه\n"
+    
+    text += f"━━━━━━━━━━━━━━━━\n"
+    text += f"📊 آمار ارسال:\n"
+    text += f"  👥 کل: {total_users} | ✅ موفق: {sent_count} ({success_rate}%)\n"
+    text += f"  ❌ ناموفق: {failed_count} | 🚫 بلاک: {blocked_count}\n"
+    text += f"━━━━━━━━━━━━━━━━\n"
     text += f"📅 ایجاد: {created_at}\n"
     if send_date and send_time:
-        text += f"⏰ زمان‌بندی: {send_date} {send_time}\n"
+        text += f"⏰ زمان‌بندی: {send_date} ساعت {send_time}\n"
     else:
         text += f"⚡ ارسال فوری\n"
     
@@ -251,14 +283,16 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     if content_type != 'text' and file_id:
         try:
             admin_chat_id = update.effective_user.id
+            caption_text = f"📎 فایل پیام #{broadcast_id}: {title[:50]}"
+            
             if content_type == 'photo':
-                await context.bot.send_photo(admin_chat_id, file_id, caption=f"فایل پیام #{broadcast_id}")
+                await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
             elif content_type == 'video':
-                await context.bot.send_video(admin_chat_id, file_id, caption=f"فایل پیام #{broadcast_id}")
+                await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
             elif content_type == 'document':
-                await context.bot.send_document(admin_chat_id, file_id, caption=f"فایل پیام #{broadcast_id}")
+                await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
             elif content_type == 'audio':
-                await context.bot.send_audio(admin_chat_id, file_id, caption=f"فایل پیام #{broadcast_id}")
+                await context.bot.send_audio(admin_chat_id, file_id, caption=caption_text)
         except Exception as e:
             logger.warning(f"Could not send file: {e}")
         
