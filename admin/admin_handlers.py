@@ -1,6 +1,7 @@
 import logging
 import os
 import asyncio
+import uuid
 import psutil
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import ContextTypes, ConversationHandler
@@ -2246,37 +2247,44 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
         )
     
     elif btn_type == 'callback':
-        # ✅ فرمت جدید: متن دکمه | پیام نمایشی
-        # مثال: "🎁 کد تخفیف | کد تخفیف: SALE50"
-        # مثال: "📞 پشتیبانی | سلام {name} جان! پیامت رسید."
+        # ✅ فرمت: متن دکمه | پیام نمایشی
         parts = text.split('|')
         btn_text = parts[0].strip()
         
-        # پیام نمایشی (پیش‌فرض اگه وارد نکرده باشه)
+        # پیام نمایشی
         alert_message = "✅ با تشکر از شما! ❤️"
         if len(parts) > 1:
             alert_message = parts[1].strip()
         
-        # ✅ ذخیره پیام در callback_data با base64
-        import base64
-        encoded_message = base64.b64encode(alert_message.encode('utf-8')).decode('utf-8')
-        callback_data = f"bc_btn_{len(buttons)}_{update.effective_user.id}_{encoded_message}"
+        # ✅ یه شناسه کوتاه و یکتا برای دکمه
+        import uuid
+        button_id = uuid.uuid4().hex[:8]  # فقط ۸ کاراکتر
+        
+        # ✅ ذخیره پیام در دیتابیس
+        from admin.admin_database import save_button_message
+        save_button_message(button_id, alert_message)
+        
+        # ✅ callback_data کوتاه و مجاز
+        callback_data = f"bc_{button_id}"
         
         buttons.append({
             'type': 'callback',
             'text': btn_text,
             'callback_data': callback_data,
+            'button_id': button_id,
             'message': alert_message
         })
         
-        # نمایش پیام موفقیت برای دکمه داخلی
-        success_text = (
+        # نمایش پیام موفقیت
+        await update.message.reply_text(
             f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
             f"📌 متن دکمه: <b>{btn_text}</b>\n"
-            f"💬 پیام نمایشی: {alert_message[:100]}{'...' if len(alert_message) > 100 else ''}\n"
+            f"💬 پیام: {alert_message[:100]}{'...' if len(alert_message) > 100 else ''}\n"
+            f"🆔 شناسه: <code>{button_id}</code>\n"
             f"🔢 تعداد کل: {len(buttons)}\n\n"
-            f"👆 کاربر با کلیک روی این دکمه،\n"
-            f"پیام بالا رو به صورت نوتیفیکیشن می‌بینه.\n\n"
+            f"می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:",
+            reply_markup=inline_buttons_keyboard(buttons),
+            parse_mode='HTML'
         )
     
     context.user_data['inline_buttons'] = buttons
