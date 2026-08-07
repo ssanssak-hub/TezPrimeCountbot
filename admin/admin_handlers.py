@@ -1231,7 +1231,7 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     from database import check_admin_permission
     if not check_admin_permission(user_id, admin_id, "perm_broadcast_now"):
-        await query.edit_message_text("⛔ شما دسترسی ندارید!")
+        await query.message.reply_text("⛔ شما دسترسی ندارید!")
         return
     
     broadcast_id = int(query.data.split("_")[-1])
@@ -1240,12 +1240,11 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     broadcast_row, logs = get_broadcast_stats(broadcast_id)
     
     if not broadcast_row:
-        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        await query.message.reply_text("❌ پیام یافت نشد!")
         return
     
     broadcast = dict(broadcast_row)
     
-    # محاسبه آمار از logs
     success_count = 0
     failed_count = 0
     for log in logs:
@@ -1255,7 +1254,7 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             failed_count += log['count']
     
     text = (
-        f"📊 <b>آمار کامل</b>\n\n"
+        f"📊 آمار کامل\n\n"
         f"📌 عنوان: {broadcast.get('title', 'بدون عنوان')}\n"
         f"📝 وضعیت: {broadcast.get('status', 'نامشخص')}\n"
         f"━━━━━━━━━━━━━━━━\n"
@@ -1272,25 +1271,8 @@ async def broadcast_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if broadcast.get('completed_at'):
         text += f"✅ زمان پایان: {broadcast.get('completed_at')}\n"
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="admin_broadcasts_list")],
-        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="admin_panel")]
-    ])
-    
-    # ✅ راه‌حل اصلی: با try/except خطا رو بگیر
-    try:
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
-    except Exception as e:
-        if "Message is not modified" in str(e):
-            # فقط به کاربر بگو تغییری نکرده
-            await query.answer("ℹ️ اطلاعات قبلاً به‌روز است.")
-        else:
-            # خطای دیگه رو نشون بده
-            logger.error(f"❌ Error in broadcast_stats: {e}")
-            await query.edit_message_text(
-                "❌ خطا در نمایش آمار!",
-                reply_markup=back_to_admin_keyboard()
-            )
+    # ✅ به جای edit، پیام جدید بفرست
+    await query.message.reply_text(text)
             
 # ---------- آمار ----------
 
