@@ -880,8 +880,9 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # ============ هندلر دریافت فایل ============
+
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح)"""
+    """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح - نسخه PTB v20+)"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -897,20 +898,19 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     from_message_id = None
     is_forward = False
     
-    # ============ تشخیص فوروارد (اصلاح‌شده) ============
-    # اگر پیام فوروارد شده باشد، از chat.id و message.id استفاده کن
-    if (message.forward_from_chat or message.forward_from or 
-        message.forward_origin or getattr(message, 'forward_from_message_id', None)):
-        
+    # ============ تشخیص فوروارد با PTB v20+ ============
+    if message.forward_origin:
         is_forward = True
-        # ✅ درست: استفاده از چت فعلی و شناسه پیام
-        from_chat_id = str(message.chat.id)
-        from_message_id = message.message_id
+        from_chat_id = str(message.chat.id)          # چت فعلی (ادمین با بات)
+        from_message_id = message.message_id         # شناسه پیام در چت ادمین
         logger.info(f"📤 FORWARD DETECTED: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
-    else:
-        is_forward = False
-        from_chat_id = None
-        from_message_id = None
+        
+        # لاگ جزئیات منبع فوروارد (برای دیباگ)
+        origin = message.forward_origin
+        if hasattr(origin, 'chat') and origin.chat:
+            logger.info(f"   └─ Original chat: {origin.chat.id} (type: {origin.chat.type})")
+        elif hasattr(origin, 'sender_user') and origin.sender_user:
+            logger.info(f"   └─ Original sender: {origin.sender_user.id}")
     
     try:
         # ============ استخراج file_id بر اساس نوع محتوا ============
@@ -943,7 +943,6 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
                 file_id = message.audio.file_id
             elif message.voice:
                 file_id = message.voice.file_id
-                # اگر voice بود، نوع رو به voice تغییر بده
                 context.user_data['broadcast']['content_type'] = 'voice'
                 content_type = 'voice'
             else:
