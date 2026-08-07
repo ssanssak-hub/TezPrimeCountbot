@@ -2249,24 +2249,70 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
         )
     
     elif btn_type == 'callback':
-        # ✅ فرمت: متن دکمه | پیام نمایشی
-        parts = text.split('|')
+        # ✅ فرمت اجباری: متن دکمه | پیام نمایشی
+        
+        if '|' not in text:
+            # ❌ ادمین | نذاشته - راهنمایی کامل
+            await update.message.reply_text(
+                "❌ <b>فرمت اشتباه!</b>\n\n"
+                "برای ساخت دکمه داخلی، باید متن دکمه و پیام را با <b>|</b> جدا کنید.\n\n"
+                "📌 <b>فرمت صحیح:</b>\n"
+                "<code>متن دکمه | پیام نمایشی</code>\n\n"
+                "📋 <b>مثال‌ها:</b>\n"
+                "<code>🎁 کد تخفیف | کد تخفیف: SALE50</code>\n"
+                "<code>📞 پشتیبانی | پیام شما دریافت شد</code>\n"
+                "<code>👍 لایک | ممنون از حمایت شما ❤️</code>\n\n"
+                "⚠️ <b>نکات:</b>\n"
+                "• متن دکمه: متنی که روی دکمه نمایش داده میشه (حداکثر ۳۰ کاراکتر)\n"
+                "• پیام نمایشی: متنی که کاربر بعد از کلیک می‌بینه\n"
+                "  - اگه ≤ ۲۰۰ کاراکتر باشه → به صورت Alert نشون داده میشه\n"
+                "  - اگه بیشتر از ۲۰۰ کاراکتر باشه → به صورت پیام جداگانه ارسال میشه\n"
+                "  - می‌تونی از <code>{name}</code> برای اسم کاربر استفاده کنی\n\n"
+                "دوباره تلاش کنید:",
+                reply_markup=back_to_admin_keyboard(),
+                parse_mode='HTML'
+            )
+            return BROADCAST_BUTTONS
+        
+        # ✅ ادمین درست وارد کرده
+        parts = text.split('|', 1)
         btn_text = parts[0].strip()
+        alert_message = parts[1].strip()
         
-        # پیام نمایشی
-        alert_message = "✅ با تشکر از شما! ❤️"
-        if len(parts) > 1:
-            alert_message = parts[1].strip()
+        # ✅ چک کردن طول متن دکمه
+        if len(btn_text) > 30:
+            await update.message.reply_text(
+                f"⚠️ <b>متن دکمه طولانیه!</b>\n\n"
+                f"متن دکمه: <b>{btn_text}</b> ({len(btn_text)} کاراکتر)\n\n"
+                f"حداکثر پیشنهادی: <b>۳۰ کاراکتر</b>\n"
+                f"با این حال دکمه ساخته میشه، ولی ممکنه ظاهر خوبی نداشته باشه.\n\n"
+                f"می‌خوای ادامه بدی یا متن کوتاه‌تری وارد کنی؟\n\n"
+                f"برای ادامه، دوباره پیام رو بفرست.\n"
+                f"برای لغو، /cancel رو بزن.",
+                reply_markup=back_to_admin_keyboard(),  # ✅ اصلاح شد
+                parse_mode='HTML'
+            )
+            return BROADCAST_BUTTONS
         
-        # ✅ یه شناسه کوتاه و یکتا برای دکمه
+        # ✅ چک کردن طول پیام
+        if len(alert_message) > 200:
+            await update.message.reply_text(
+                f"ℹ️ <b>پیام نمایشی طولانیه!</b> ({len(alert_message)} کاراکتر)\n\n"
+                f"این پیام به صورت <b>Reply</b> ارسال میشه (نه Alert).\n"
+                f"بعد از ۱۵ ثانیه به‌طور خودکار پاک میشه.\n\n"
+                f"ادامه می‌دیم...",
+                parse_mode='HTML'
+            )
+            import asyncio
+            await asyncio.sleep(1)
+        
+        # ✅ ساختن دکمه
         import uuid
-        button_id = uuid.uuid4().hex[:8]  # فقط ۸ کاراکتر
+        button_id = uuid.uuid4().hex[:8]
         
-        # ✅ ذخیره پیام در دیتابیس
         from admin.admin_database import save_button_message
         save_button_message(button_id, alert_message)
         
-        # ✅ callback_data کوتاه و مجاز
         callback_data = f"bc_{button_id}"
         
         buttons.append({
@@ -2280,12 +2326,14 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
         success_text = (
             f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
             f"📌 متن دکمه: <b>{btn_text}</b>\n"
-            f"💬 پیام: {alert_message[:100]}{'...' if len(alert_message) > 100 else ''}\n"
-            f"🔢 تعداد کل: {len(buttons)}\n\n"
+            f"💬 پیام نمایشی:\n"
+            f"<i>{alert_message[:150]}{'...' if len(alert_message) > 150 else ''}</i>\n"
+            f"📏 طول پیام: {len(alert_message)} کاراکتر\n"
+            f"🆔 شناسه: <code>{button_id}</code>\n"
+            f"🔢 تعداد کل دکمه‌ها: {len(buttons)}\n\n"
         )
     
     else:
-        # ✅ اگه btn_type نامعتبر بود
         logger.error(f"❌ Invalid btn_type: {btn_type}")
         await update.message.reply_text(
             "❌ خطا در تشخیص نوع دکمه! لطفاً دوباره تلاش کنید.",
