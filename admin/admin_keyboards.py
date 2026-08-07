@@ -331,6 +331,7 @@ def content_type_keyboard():
         [InlineKeyboardButton("📼 ویدئو مسیج", callback_data="content_type_video_note")],
         [InlineKeyboardButton("📄 فایل", callback_data="content_type_document")],
         [InlineKeyboardButton("🎵 صدا/ویس", callback_data="content_type_audio")],
+        [InlineKeyboardButton("📊 نظرسنجی", callback_data="content_type_poll")],        
         [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
