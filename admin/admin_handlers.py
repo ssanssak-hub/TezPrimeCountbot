@@ -2430,7 +2430,8 @@ async def edit_broadcast_buttons(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     
-    broadcast_id = int(query.data.split("_")[-1])
+    parts = query.data.split("_")
+    broadcast_id = int(parts[-1])
     broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
