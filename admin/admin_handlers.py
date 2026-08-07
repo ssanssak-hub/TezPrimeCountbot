@@ -625,7 +625,7 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         
         b = dict(b_row)  # ✅ تبدیل به دیکشنری
         
-        # ✅ چک کن که لغو نشده باشه (با .get() چون دیکشنری هست)
+        # ✅ چک کن که لغو نشده باشه
         if b.get('is_cancelled') or b.get('status') == 'cancelled':
             logger.info(f"⛔ Broadcast {broadcast_id} was cancelled, skipping...")
             return
@@ -640,17 +640,20 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
         try:
             logger.info(f"🚀 Starting scheduled broadcast {broadcast_id}")
             
+            # ✅ استفاده از send_broadcast_advanced به جای send_broadcast_now
+            from admin.admin_broadcast import send_broadcast_advanced
+            
             result = loop.run_until_complete(
-                send_broadcast_now(
+                send_broadcast_advanced(
                     broadcast_id, 
                     b['admin_id'], 
-                    b['title'], 
-                    b['message']
+                    b  # ✅ کل دیکشنری broadcast رو بفرست
                 )
             )
             sent, failed, total = result
             
             # ✅ ارسال گزارش به ادمین
+            from admin.admin_broadcast import send_broadcast_report
             loop.run_until_complete(
                 send_broadcast_report(admin_chat_id, b['title'], sent, failed, total)
             )
