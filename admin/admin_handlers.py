@@ -34,7 +34,7 @@ from admin.admin_database import (
     mark_broadcast_cancelled, delete_broadcast, get_broadcast_stats,
     get_broadcast_progress, get_broadcast_by_id, save_broadcast_advanced
 )
-from admin.admin_broadcast import send_broadcast_now, get_broadcast_progress_text, send_broadcast_report, send_broadcast_advanced
+from admin.admin_broadcast import send_broadcast_now, get_broadcast_progress_text, send_broadcast_report, send_broadcast_advanced, bot
 from reminders.reminder_utils import get_weekday_name, get_persian_datetime
 
 logger = logging.getLogger(__name__)
@@ -2574,9 +2574,10 @@ async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAU
         # استفاده از تابع ارسال پیشرفته
         task = asyncio.create_task(
             send_broadcast_advanced(
-                broadcast_id,
-                broadcast_dict['admin_id'],
-                broadcast_dict
+                broadcast_id=broadcast_id,
+                admin_id=broadcast_dict['admin_id'],
+                broadcast_data=broadcast_dict,
+                bot=bot
             )
         )
         
