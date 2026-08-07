@@ -2236,51 +2236,52 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
             'text': btn_text,
             'url': url
         })
-    
-    elif btn_type == 'callback':
-        # ✅ فرمت جدید: متن دکمه | پیام نمایشی | عملکرد (اختیاری)
-        parts = text.split('|')
-        btn_text = parts[0].strip()
         
-        # پیام نمایشی (پیش‌فرض)
-        alert_message = "✅ با تشکر از شما! ❤️"
-        action = "show_alert"  # پیش‌فرض: فقط پیام نشون بده
-        
-        if len(parts) > 1:
-            alert_message = parts[1].strip()
-        
-        if len(parts) > 2:
-            action = parts[2].strip()
-        
-        callback_data = f"bc_btn_{len(buttons)}_{update.effective_user.id}"
-        buttons.append({
-            'type': 'callback',
-            'text': btn_text,
-            'callback_data': callback_data,
-            'message': alert_message,
-            'action': action
-        })
-    
-    context.user_data['inline_buttons'] = buttons
-    context.user_data['awaiting_button'] = False
-    context.user_data['adding_button_type'] = None
-    
-    # نمایش پیام موفقیت
-    if btn_type == 'callback':
-        success_text = (
-            f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
-            f"📌 متن دکمه: <b>{btn_text}</b>\n"
-            f"💬 پیام: {alert_message[:50]}...\n"
-            f"⚙️ عملکرد: {action}\n"
-            f"🔢 تعداد کل: {len(buttons)}\n\n"
-        )
-    else:
+        # نمایش پیام موفقیت برای دکمه لینک
         success_text = (
             f"✅ <b>دکمه لینک افزوده شد!</b>\n\n"
             f"📌 متن: <b>{btn_text}</b>\n"
             f"🔗 لینک: {url}\n"
             f"🔢 تعداد کل: {len(buttons)}\n\n"
         )
+    
+    elif btn_type == 'callback':
+        # ✅ فرمت جدید: متن دکمه | پیام نمایشی
+        # مثال: "🎁 کد تخفیف | کد تخفیف: SALE50"
+        # مثال: "📞 پشتیبانی | سلام {name} جان! پیامت رسید."
+        parts = text.split('|')
+        btn_text = parts[0].strip()
+        
+        # پیام نمایشی (پیش‌فرض اگه وارد نکرده باشه)
+        alert_message = "✅ با تشکر از شما! ❤️"
+        if len(parts) > 1:
+            alert_message = parts[1].strip()
+        
+        # ✅ ذخیره پیام در callback_data با base64
+        import base64
+        encoded_message = base64.b64encode(alert_message.encode('utf-8')).decode('utf-8')
+        callback_data = f"bc_btn_{len(buttons)}_{update.effective_user.id}_{encoded_message}"
+        
+        buttons.append({
+            'type': 'callback',
+            'text': btn_text,
+            'callback_data': callback_data,
+            'message': alert_message
+        })
+        
+        # نمایش پیام موفقیت برای دکمه داخلی
+        success_text = (
+            f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
+            f"📌 متن دکمه: <b>{btn_text}</b>\n"
+            f"💬 پیام نمایشی: {alert_message[:100]}{'...' if len(alert_message) > 100 else ''}\n"
+            f"🔢 تعداد کل: {len(buttons)}\n\n"
+            f"👆 کاربر با کلیک روی این دکمه،\n"
+            f"پیام بالا رو به صورت نوتیفیکیشن می‌بینه.\n\n"
+        )
+    
+    context.user_data['inline_buttons'] = buttons
+    context.user_data['awaiting_button'] = False
+    context.user_data['adding_button_type'] = None
     
     success_text += "می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:"
     
