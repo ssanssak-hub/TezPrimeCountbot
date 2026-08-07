@@ -184,7 +184,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     
     content_emoji = {
         'text': '📝 متن', 'photo': '🖼 عکس', 'video': '🎥 فیلم',
-        'document': '📄 فایل', 'audio': '🎵 صدا/ویس'
+        'video_note': '📼 ویدئو مسیج', 'document': '📄 فایل', 'audio': '🎵 صدا/ویس'
     }
     content_text = content_emoji.get(content_type, content_type)
     
@@ -255,7 +255,15 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         if file_caption:
             text += f"📝 کپشن: {file_caption[:200]}{'...' if len(file_caption) > 200 else ''}\n"
         text += f"🆔 FileID: {file_id[:30] if file_id else '؟'}...\n"
-    
+
+        from_chat_id = b.get('from_chat_id')
+        from_message_id = b.get('from_message_id')
+        if from_chat_id and from_message_id:
+            text += f"📤 نوع ارسال: فوروارد شده\n"
+        else:
+            text += f"📤 نوع ارسال: آپلود مستقیم\n"
+            text += f"🆔 FileID: {file_id[:30] if file_id else '؟'}...\n"
+            
     text += f"━━━━━━━━━━━━━━━━\n"
     
     # ✅ دکمه‌ها
