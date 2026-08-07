@@ -615,8 +615,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update and update.effective_message:
             await update.effective_message.reply_text(
-                "❌ خطایی رخ داد! تیم پشتیبانی مطلع شد.\n"
-                "لطفاً /start را بزنید."
+                "❌ عملیات کیر شد! خیالت تخت به سنس اطلاع داده شد از توت درش بیاره.\n"
+                "پفیوز این /start رو بمال روش."
             )
     except Exception:
         pass
