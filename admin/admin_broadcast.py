@@ -521,19 +521,26 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             user_id = user['user_id']
             
             try:
-                # ✅ چک کن فوروارد هست یا نه
+                # ✅ فوروارد یا معمولی؟
                 from_chat_id = broadcast_data.get('from_chat_id')
                 from_message_id = broadcast_data.get('from_message_id')
                 
                 if from_chat_id and from_message_id and content_type != 'text':
-                    # ✅ فوروارد شده - copy کن
-                    await bot.copy_message(
+                    # ✅ فوروارد شده - با forward_message بفرست
+                    await bot.forward_message(
                         chat_id=user_id,
                         from_chat_id=from_chat_id,
-                        message_id=from_message_id,
-                        caption=full_message if full_message else None,
-                        reply_markup=reply_markup
+                        message_id=from_message_id
                     )
+                    # اگه کپشن داره، جداگانه بفرست
+                    if full_message and full_message.strip():
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=full_message,
+                            parse_mode='HTML',
+                            reply_markup=reply_markup,
+                            disable_web_page_preview=True
+                        )
                 else:
                     # ✅ ارسال معمولی
                     if content_type == 'text':
