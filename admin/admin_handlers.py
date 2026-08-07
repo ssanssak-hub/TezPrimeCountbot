@@ -106,7 +106,7 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return BROADCAST_CONTENT_TYPE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت عنوان و پیام - فقط برای نوع text"""
+    """دریافت عنوان و پیام - با پشتیبانی از فوروارد متن"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -122,15 +122,37 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     if content_type != 'text':
         return ConversationHandler.END
     
-    message = update.message.text
+    # ============ دریافت اطلاعات پیام ============
+    msg = update.message
+    text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
     
+    # ============ تشخیص فوروارد ============
+    from_chat_id = None
+    from_message_id = None
+    is_forward = False
+    
+    if msg.forward_origin:
+        origin = msg.forward_origin
+        if hasattr(origin, 'chat') and origin.chat:
+            from_chat_id = str(origin.chat.id)
+            from_message_id = origin.message_id
+            is_forward = True
+            logger.info(f"📤 FORWARD FROM CHAT (text): {from_chat_id}/{from_message_id}")
+        else:
+            logger.info(f"📤 FORWARD NOT FROM CHAT (text)")
+    
     if step == 'title':
-        context.user_data['broadcast']['title'] = message
+        # ذخیره عنوان و اطلاعات فوروارد
+        context.user_data['broadcast']['title'] = text_content
+        context.user_data['broadcast']['from_chat_id'] = from_chat_id
+        context.user_data['broadcast']['from_message_id'] = from_message_id
+        context.user_data['broadcast']['is_forward'] = is_forward
         context.user_data['broadcast_step'] = 'message'
         
+        fwd_text = "📤 فوروارد شده - " if is_forward else ""
         await update.message.reply_text(
-            f"📝 عنوان: <b>{message}</b>\n\n"
+            f"{fwd_text}📝 عنوان: <b>{text_content}</b>\n\n"
             f"حالا <b>متن پیام</b> را ارسال کنید:\n\n"
             f"⚠️ این پیام به <b>همه کاربران</b> ارسال خواهد شد!\n\n"
             f"🔙 برای بازگشت /cancel را بزنید",
@@ -140,16 +162,31 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         return BROADCAST_MESSAGE
     
     elif step == 'message':
-        title = context.user_data['broadcast']['title']
-        context.user_data['broadcast']['message'] = message
+        title = context.user_data['broadcast'].get('title', 'بدون عنوان')
+        
+        # اگر متن فوروارد شده باشد، اطلاعات را به‌روز کن
+        if msg.forward_origin:
+            origin = msg.forward_origin
+            if hasattr(origin, 'chat') and origin.chat:
+                context.user_data['broadcast']['from_chat_id'] = str(origin.chat.id)
+                context.user_data['broadcast']['from_message_id'] = origin.message_id
+                context.user_data['broadcast']['is_forward'] = True
+                logger.info(f"📤 FORWARD FROM CHAT (message text): {origin.chat.id}/{origin.message_id}")
+        
+        # ذخیره متن پیام
+        context.user_data['broadcast']['message'] = text_content
         context.user_data['broadcast_step'] = 'buttons'
         context.user_data['awaiting_message'] = False
+        
+        # لاگ نهایی برای دیباگ
+        logger.info(f"📝 TEXT SAVED: from_chat_id={context.user_data['broadcast'].get('from_chat_id')}, "
+                   f"from_message_id={context.user_data['broadcast'].get('from_message_id')}")
         
         # رفتن به مرحله دکمه‌های شیشه‌ای
         await update.message.reply_text(
             f"📝 <b>متن پیام دریافت شد</b>\n\n"
             f"📌 عنوان: <b>{title}</b>\n"
-            f"📝 متن: {message[:100]}...\n\n"
+            f"📝 متن: {text_content[:100]}...\n\n"
             f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> به پیام اضافه کنید (اختیاری):\n\n"
             f"🔗 دکمه لینک: کاربر را به سایت/کانال هدایت می‌کند\n"
             f"🔘 دکمه داخلی: بعد از کلیک پیام نمایش می‌دهد",
@@ -678,10 +715,11 @@ async def confirm_scheduled_broadcast(update: Update, context: ContextTypes.DEFA
                 from admin.admin_broadcast import send_broadcast_advanced
                 
                 result = loop.run_until_complete(
-                    send_broadcast_advanced(
-                        broadcast_id, 
-                        b['admin_id'], 
-                        b
+                   send_broadcast_advanced(
+                       broadcast_id=broadcast_id,
+                       admin_id=b['admin_id'], 
+                       broadcast_data=b,
+                       bot=new_bot
                     )
                 )
                 sent, failed, total = result
