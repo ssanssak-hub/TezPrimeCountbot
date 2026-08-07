@@ -188,9 +188,15 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     }
     content_text = content_emoji.get(content_type, content_type)
     
+    # ✅ تبدیل sqlite3.Row به dict
     admin_info = get_user_info(b.get('admin_id'))
-    admin_name = admin_info.get('first_name', 'ناشناس') if admin_info else 'ناشناس'
-    admin_username = admin_info.get('username', '') if admin_info else ''
+    if admin_info:
+        admin_info = dict(admin_info)
+        admin_name = admin_info.get('first_name', 'ناشناس')
+        admin_username = admin_info.get('username', '')
+    else:
+        admin_name = 'ناشناس'
+        admin_username = ''
     
     total_users = b.get('total_users', 0) or 0
     sent_count = b.get('sent_count', 0) or 0
@@ -238,7 +244,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     else:
         text += f"⚡ ارسال فوری\n"
     
-    # ✅ ارسال به صورت پیام جدید (نه edit)
+    # ✅ ارسال به صورت پیام جدید
     await query.message.reply_text(text)
     
     # ✅ ارسال فایل اصلی
