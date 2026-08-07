@@ -289,6 +289,12 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
                 await context.bot.send_photo(admin_chat_id, file_id, caption=caption_text)
             elif content_type == 'video':
                 await context.bot.send_video(admin_chat_id, file_id, caption=caption_text)
+            elif content_type == 'video_note':  # ✅ اضافه
+                await context.bot.send_video_note(admin_chat_id, file_id)
+                await context.bot.send_message(
+                    admin_chat_id, 
+                    f"📎 ویدئو مسیج پیام #{broadcast_id}: {title[:50]}"
+                )
             elif content_type == 'document':
                 await context.bot.send_document(admin_chat_id, file_id, caption=caption_text)
             elif content_type == 'audio':
