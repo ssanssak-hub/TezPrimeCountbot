@@ -58,7 +58,7 @@ def init_admin_db():
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_broadcast_logs_broadcast_id 
         ON broadcast_logs(broadcast_id)
-    ''')
+    ''')    
     
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_broadcast_logs_user_id 
@@ -69,6 +69,16 @@ def init_admin_db():
         CREATE INDEX IF NOT EXISTS idx_broadcasts_status 
         ON broadcasts(status)
     ''')
+
+    # ✅ جدول جدید برای پیام‌های دکمه‌های شیشه‌ای
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS button_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            button_id TEXT UNIQUE NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')    
     
     # ============ Migration های موجود ============
     
@@ -653,3 +663,24 @@ def get_broadcast_statistics():
         }
     
     return result
+
+def save_button_message(button_id, message):
+    """ذخیره پیام دکمه در دیتابیس"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO button_messages (button_id, message)
+        VALUES (?, ?)
+    ''', (button_id, message))
+    conn.commit()
+    conn.close()
+    return button_id
+
+def get_button_message(button_id):
+    """دریافت پیام دکمه از دیتابیس"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT message FROM button_messages WHERE button_id = ?', (button_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result['message'] if result else None
