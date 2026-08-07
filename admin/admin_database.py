@@ -206,7 +206,9 @@ def save_broadcast_advanced(admin_id, title, content_type='text',
             buttons_json = json.dumps(inline_buttons, ensure_ascii=False)
         except Exception as e:
             logger.error(f"❌ Error serializing inline_buttons: {e}")
-    
+    # قبل از INSERT:
+    logger.info(f"💾 SAVING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+                               
     cursor.execute('''
         INSERT INTO broadcasts (
             admin_id, title, content_type, message, 
