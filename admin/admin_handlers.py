@@ -897,41 +897,89 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     from_chat_id = None
     from_message_id = None
     is_forward = False
+    forward_type = None  # 'channel', 'user', 'hidden'
     
     # ✅ چک کن فوروارد شده یا نه (همه روش‌ها)
     if message.forward_origin:
         is_forward = True
         origin = message.forward_origin
-        from_message_id = origin.message_id
         
-        if hasattr(origin, 'chat') and origin.chat:
-            from_chat_id = str(origin.chat.id)
-        elif hasattr(origin, 'sender_user') and origin.sender_user:
-            from_chat_id = str(origin.sender_user.id)
-    elif message.forward_from_chat:
+        # origin.type می‌تونه: "user", "channel", "hidden_user", "chat" باشه
+        if origin.type == "channel" and getattr(origin, 'chat', None):
+            from_chat_id = origin.chat.id  # ✅ int نگه دار
+            from_message_id = origin.message_id
+            forward_type = 'channel'
+        elif origin.type == "chat" and getattr(origin, 'chat', None):
+            from_chat_id = origin.chat.id
+            from_message_id = origin.message_id
+            forward_type = 'chat'
+        elif origin.type == "user" and getattr(origin, 'sender_user', None):
+            from_chat_id = origin.sender_user.id
+            from_message_id = None  # همیشه None برای کاربر
+            forward_type = 'user'
+        elif origin.type == "hidden_user":
+            from_chat_id = None
+            from_message_id = None
+            forward_type = 'hidden'
+        else:
+            # نوع ناشناس - فقط file_id ذخیره کن
+            from_chat_id = None
+            from_message_id = None
+            forward_type = 'unknown'
+            
+    elif message.forward_from_chat:  # PTB قدیمی - کانال/گروه
         is_forward = True
-        from_chat_id = str(message.forward_from_chat.id)
+        from_chat_id = message.forward_from_chat.id
         from_message_id = message.forward_from_message_id
-    elif message.forward_from:
+        forward_type = 'channel'
+        
+    elif message.forward_from:  # PTB قدیمی - کاربر
         is_forward = True
-        from_chat_id = str(message.forward_from.id)
-        from_message_id = message.forward_from_message_id
+        from_chat_id = message.forward_from.id
+        from_message_id = None  # ✅ همیشه None
+        forward_type = 'user'
+        
+    elif message.forward_sender_name:  # کاربر مخفی
+        is_forward = True
+        from_chat_id = None
+        from_message_id = None
+        forward_type = 'hidden'
     
     try:
+        # ✅ استخراج file_id - با بررسی None
         if content_type == 'photo':
+            if not message.photo:
+                await message.reply_text("❌ عکس دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
             file_id = message.photo[-1].file_id
+            
         elif content_type == 'video':
+            if not message.video:
+                await message.reply_text("❌ ویدیو دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
             file_id = message.video.file_id
+            
         elif content_type == 'video_note':
+            if not message.video_note:
+                await message.reply_text("❌ ویدیو مسیج دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
             file_id = message.video_note.file_id
+            
         elif content_type == 'document':
+            if not message.document:
+                await message.reply_text("❌ فایل دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
             file_id = message.document.file_id
+            
         elif content_type == 'audio':
             if message.audio:
                 file_id = message.audio.file_id
             elif message.voice:
+                # ⚠️ یا voice رو جدا کن، یا بذار همین باشه ولی هشدار بده
                 file_id = message.voice.file_id
-                content_type = 'audio'
+            else:
+                await message.reply_text("❌ فایل صوتی/ویس دریافت نشد!", reply_markup=back_to_admin_keyboard())
+                return BROADCAST_TITLE
         
         if not file_id:
             await message.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
@@ -942,13 +990,17 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         if is_forward:
             title = f"↪️ {title}"
         
-        context.user_data['broadcast']['file_id'] = file_id
-        context.user_data['broadcast']['caption'] = caption
-        context.user_data['broadcast']['title'] = title
-        context.user_data['broadcast']['message'] = caption
-        context.user_data['broadcast']['from_chat_id'] = from_chat_id
-        context.user_data['broadcast']['from_message_id'] = from_message_id
-        context.user_data['broadcast']['is_forward'] = is_forward
+        # ✅ ذخیره با کلیدهای تمیز
+        context.user_data['broadcast'].update({
+            'file_id': file_id,
+            'caption': caption,
+            'title': title,
+            'message': caption,
+            'from_chat_id': from_chat_id,        # int یا None
+            'from_message_id': from_message_id,  # int یا None
+            'is_forward': is_forward,
+            'forward_type': forward_type,        # 'channel', 'user', 'hidden', 'chat', 'unknown'
+        })
         
         context.user_data['broadcast_step'] = 'buttons'
         context.user_data['awaiting_message'] = False
