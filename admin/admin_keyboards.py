@@ -377,7 +377,7 @@ def broadcast_preview_keyboard(broadcast_id, content_type):
     """کیبورد پیش‌نمایش و تأیید نهایی"""
     keyboard = [
         [InlineKeyboardButton("✅ تأیید و ارسال", callback_data=f"admin_confirm_advanced_{broadcast_id}")],
-        [InlineKeyboardButton("✏️ ویرایش دکمه‌ها", callback_data=f"admin_edit_buttons_{broadcast_id}")],
+        [InlineKeyboardButton("✏️ ویرایش دکمه‌ها", callback_data=f"broadcast_edit_buttons_{broadcast_id}")],
         [InlineKeyboardButton("❌ لغو", callback_data="admin_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
