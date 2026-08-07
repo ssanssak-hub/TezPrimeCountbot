@@ -880,7 +880,7 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ============ هندلر دریافت فایل ============
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت فایل (عکس/فیلم/فایل/صدا) از ادمین"""
+    """دریافت فایل از ادمین"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -892,14 +892,19 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = update.message
     
     file_id = None
+    from_chat_id = None
+    from_message_id = None
+    
+    # ✅ چک کن فوروارد شده یا نه
+    is_forward = message.forward_from_chat is not None or message.forward_from is not None
     
     try:
         if content_type == 'photo':
-            file_id = message.photo[-1].file_id  # بهترین کیفیت
+            file_id = message.photo[-1].file_id
         elif content_type == 'video':
             file_id = message.video.file_id
         elif content_type == 'video_note':
-            file_id = message.video_note.file_id            
+            file_id = message.video_note.file_id
         elif content_type == 'document':
             file_id = message.document.file_id
         elif content_type == 'audio':
@@ -907,37 +912,42 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
                 file_id = message.audio.file_id
             elif message.voice:
                 file_id = message.voice.file_id
-                content_type = 'audio'  # ویس هم به عنوان audio ذخیره میشه
+                content_type = 'audio'
         
         if not file_id:
-            await message.reply_text(
-                f"❌ فایل نامعتبر! لطفاً یک <b>{get_content_type_fa(content_type)}</b> واقعی ارسال کنید:",
-                reply_markup=back_to_admin_keyboard(),
-                parse_mode='HTML'
-            )
+            await message.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
             return BROADCAST_TITLE
         
-        # ذخیره اطلاعات فایل
+        # ✅ اگه فوروارد هست، اطلاعات مبدأ رو ذخیره کن
+        if is_forward:
+            if message.forward_from_chat:
+                from_chat_id = str(message.forward_from_chat.id)
+            elif message.forward_from:
+                from_chat_id = str(message.forward_from.id)
+            from_message_id = message.forward_from_message_id or message.message_id
+        
         caption = message.caption or ''
         title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
+        if is_forward:
+            title = f"↪️ {title}"  # نشونه فوروارد
         
         context.user_data['broadcast']['file_id'] = file_id
         context.user_data['broadcast']['caption'] = caption
         context.user_data['broadcast']['title'] = title
-        context.user_data['broadcast']['message'] = caption  # برای سازگاری
+        context.user_data['broadcast']['message'] = caption
+        context.user_data['broadcast']['from_chat_id'] = from_chat_id
+        context.user_data['broadcast']['from_message_id'] = from_message_id
+        context.user_data['broadcast']['is_forward'] = is_forward
         
-        # رفتن به مرحله دکمه‌های شیشه‌ای
         context.user_data['broadcast_step'] = 'buttons'
         context.user_data['awaiting_message'] = False
-        context.user_data['awaiting_button'] = False
         
+        fwd_text = "📤 فوروارد شده - " if is_forward else ""
         await message.reply_text(
-            f"✅ <b>فایل دریافت شد!</b>\n\n"
-            f"📎 نوع: <b>{get_content_type_fa(content_type)}</b>\n"
+            f"✅ {fwd_text}فایل دریافت شد!\n\n"
+            f"📎 نوع: {get_content_type_fa(content_type)}\n"
             f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
-            f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> به پیام اضافه کنید (اختیاری):\n\n"
-            f"🔗 دکمه لینک: کاربر را به سایت/کانال هدایت می‌کند\n"
-            f"🔘 دکمه داخلی: بعد از کلیک پیام نمایش می‌دهد",
+            f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
             reply_markup=inline_buttons_keyboard(),
             parse_mode='HTML'
         )
@@ -945,10 +955,7 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     except Exception as e:
         logger.error(f"Error receiving file: {e}")
-        await message.reply_text(
-            "❌ خطا در دریافت فایل! دوباره تلاش کنید:",
-            reply_markup=back_to_admin_keyboard()
-        )
+        await message.reply_text("❌ خطا! دوباره تلاش کنید:", reply_markup=back_to_admin_keyboard())
         return BROADCAST_TITLE
 
         
