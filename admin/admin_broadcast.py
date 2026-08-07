@@ -546,6 +546,12 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                         parse_mode='HTML',
                         reply_markup=reply_markup
                     )
+                elif content_type == 'video_note':
+                    await bot.send_video_note(
+                        chat_id=user_id,
+                        video_note=file_id,
+                        reply_markup=reply_markup
+                    )
                 elif content_type == 'document':
                     await bot.send_document(
                         chat_id=user_id,
