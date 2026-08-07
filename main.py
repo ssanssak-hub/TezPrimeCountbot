@@ -392,147 +392,88 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     """
     مدیریت کلیک کاربران روی دکمه‌های شیشه‌ای پیام همگانی
     
-    عملکردها:
-    - show_alert: نمایش پیام
-    - notify_admin: ارسال به ادمین
-    - show_stats: نمایش آمار کلیک
+    پیام نمایشی از callback_data استخراج و به کاربر نشون داده میشه
     """
     query = update.callback_query
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name or 'کاربر'
     
     data = query.data
-    logger.info(f"📣 Button clicked: {data} by {user_name} ({user_id})")
+    logger.info(f"📣 Broadcast button clicked: {data} by {user_name} ({user_id})")
     
-    # ✅ پیدا کردن اطلاعات دکمه از دیتابیس
+    # ✅ استخراج پیام از callback_data
+    # فرمت: bc_btn_{index}_{admin_id}_{base64_message}
     message_to_show = "✅ با تشکر از شما! ❤️"
-    action = "show_alert"
     
     try:
-        # جستجو در دیتابیس برای پیدا کردن دکمه
-        from database import get_db_connection
-        import json
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # همه broadcast هایی که دکمه دارن
-        cursor.execute('''
-            SELECT id, inline_buttons, title 
-            FROM broadcasts 
-            WHERE inline_buttons IS NOT NULL 
-            AND status IN ('completed', 'sending')
-            ORDER BY created_at DESC
-        ''')
-        
-        broadcasts = cursor.fetchall()
-        conn.close()
-        
-        for broadcast in broadcasts:
+        import base64
+        # جدا کردن base64 از انتهای callback_data
+        parts = data.split('_', 4)  # ['bc', 'btn', 'index', 'admin_id', 'base64...']
+        if len(parts) >= 5:
+            encoded_message = parts[4]
             try:
-                buttons = json.loads(broadcast['inline_buttons'])
-                for btn in buttons:
-                    # ✅ پشتیبانی از فرمت دیکشنری (جدید)
-                    if isinstance(btn, dict) and btn.get('callback_data') == data:
-                        message_to_show = btn.get('message', message_to_show)
-                        action = btn.get('action', 'show_alert')
-                        break
-                    # ✅ پشتیبانی از فرمت لیست (قدیمی)
-                    elif isinstance(btn, list) and len(btn) >= 2:
-                        if btn[1] == data:
-                            if len(btn) >= 3:
-                                message_to_show = btn[2]
-                            break
-            except:
-                continue
+                decoded = base64.b64decode(encoded_message).decode('utf-8')
+                if decoded.strip():
+                    message_to_show = decoded
+                    logger.info(f"📝 Decoded message: {message_to_show[:80]}...")
+            except Exception as e:
+                logger.warning(f"⚠️ Base64 decode failed: {e}")
     except Exception as e:
-        logger.error(f"Error finding button info: {e}")
+        logger.error(f"❌ Error parsing callback_data: {e}")
     
-    # ✅ ذخیره آمار کلیک
-    unique_clicks = 1
+    # ✅ جایگزینی نام کاربر (اگه {name} توی پیام باشه)
+    message_to_show = message_to_show.replace('{name}', user_name)
+    
+    # ✅ نمایش به کاربر - بهترین روش
+    try:
+        # اگه پیام کوتاهه (کمتر از ۲۰۰ کاراکتر)، show_alert عالیه
+        if len(message_to_show) <= 200:
+            await query.answer(text=message_to_show, show_alert=True)
+            logger.info(f"✅ Alert shown to {user_name}")
+        else:
+            # اگه طولانیه، به صورت reply بفرست که کاربر حتماً ببینه
+            await query.message.reply_text(
+                f"💬 {message_to_show}",
+                reply_to_message_id=query.message.message_id
+            )
+            # یه تیک هم بزن که بدونن کلیک ثبت شد
+            await query.answer(text="✅ دریافت شد ✓")
+            logger.info(f"✅ Long message sent as reply to {user_name}")
+            
+    except Exception as e:
+        logger.error(f"❌ Error showing message: {e}")
+        # تلاش آخری - یه پاسخ ساده
+        try:
+            await query.answer(text="✅ دریافت شد!", show_alert=False)
+        except:
+            pass
+    
+    # ✅ ذخیره آمار کلیک (اختیاری)
     try:
         from database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # ایجاد جدول آمار (اگه وجود نداشته باشه)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS button_clicks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 callback_data TEXT NOT NULL,
                 user_id INTEGER NOT NULL,
                 user_name TEXT,
+                message_shown TEXT,
                 clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # ذخیره کلیک
         cursor.execute('''
-            INSERT INTO button_clicks (callback_data, user_id, user_name)
-            VALUES (?, ?, ?)
-        ''', (data, user_id, user_name))
+            INSERT INTO button_clicks (callback_data, user_id, user_name, message_shown)
+            VALUES (?, ?, ?, ?)
+        ''', (data, user_id, user_name, message_to_show[:200]))
+        
         conn.commit()
-        
-        # دریافت آمار
-        cursor.execute('''
-            SELECT COUNT(DISTINCT user_id) as unique_clicks
-            FROM button_clicks
-            WHERE callback_data = ?
-        ''', (data,))
-        stats = cursor.fetchone()
         conn.close()
-        
-        if stats:
-            unique_clicks = stats['unique_clicks']
-        
     except Exception as e:
         logger.warning(f"Could not save click: {e}")
-    
-    # ✅ اجرای عملکرد بر اساس action
-    if action == "show_alert":
-        # نمایش پیام ساده
-        final_message = message_to_show.replace('{name}', user_name)
-        await query.answer(text=final_message, show_alert=True)
-        
-    elif action == "show_stats":
-        # نمایش آمار
-        final_message = f"{message_to_show}\n\n👥 {unique_clicks} نفر کلیک کرده‌اند"
-        await query.answer(text=final_message, show_alert=True)
-        
-    elif action == "notify_admin":
-        # ارسال نوتیفیکیشن به ادمین
-        try:
-            from datetime import datetime
-            import pytz
-            
-            admin_id = int(os.getenv('ADMIN_ID'))
-            tehran_tz = pytz.timezone('Asia/Tehran')
-            now_time = datetime.now(tehran_tz).strftime('%H:%M:%S')
-            
-            await context.bot.send_message(
-                chat_id=admin_id,
-                text=(
-                    f"📣 <b>کلیک روی دکمه!</b>\n\n"
-                    f"👤 کاربر: {user_name} (<code>{user_id}</code>)\n"
-                    f"💬 پیام: {message_to_show}\n"
-                    f"⏰ زمان: {now_time}"
-                ),
-                parse_mode='HTML'
-            )
-            await query.answer(text="✅ پیام شما به پشتیبانی ارسال شد.", show_alert=True)
-        except Exception as e:
-            logger.error(f"Error notifying admin: {e}")
-            await query.answer(text="❌ خطا در ارسال پیام. لطفاً دوباره تلاش کنید.", show_alert=True)
-    
-    elif action == "go_to_reminders":
-        # هدایت به بخش ریمایندرها
-        await query.answer(text="🔔 به بخش اعلان‌ها بروید و /start را بزنید.", show_alert=True)
-    
-    else:
-        # پیش‌فرض
-        await query.answer(text=message_to_show, show_alert=True)
-    
-    logger.info(f"✅ Button handled: action={action} | unique_clicks={unique_clicks}")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
