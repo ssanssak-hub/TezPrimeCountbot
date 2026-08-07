@@ -433,29 +433,29 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     if content_type == 'text':
         # برای متن: هدر + عنوان + متن + فوتر
         full_message = (
-            f"📢 <b>پیام همگانی فوری</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <b>پیام همگانی </b>\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"📌 عنوان پیام: <b>{title}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"📄 متن پیام:\n{message_text}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"👤 مدیر ارسال کننده: <b>{admin_name}</b>\n"
             f"📅 تاریخ ارسال: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت ارسال: <b>{time_str}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"🤖 Bot: @TezPrimeCountbot\n"
             f"📺 Channel: @video_amouzeshi"
         )
     else:
         # برای مدیا: کپشن شامل اطلاعات کامل
         full_message = (
-            f"📢 <b>پیام همگانی فوری</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <b>پیام همگانی </b>\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"📌 عنوان: <b>{title}</b>\n"
             f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
             f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت: <b>{time_str}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
             f"🤖 Bot: @TezPrimeCountbot\n"
             f"📺 Channel: @video_amouzeshi"
         )
