@@ -431,7 +431,6 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     
     # ✅ ساخت هدر و فوتر پیام
     if content_type == 'text':
-        # برای متن: هدر + عنوان + متن + فوتر
         full_message = (
             f"📢 <b>پیام همگانی </b>\n"
             f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
@@ -447,7 +446,6 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             f"📺 Channel: @video_amouzeshi"
         )
     else:
-        # برای مدیا: کپشن شامل اطلاعات کامل
         full_message = (
             f"📢 <b>پیام همگانی </b>\n"
             f"━━━ ━━━━━ ━━━━━━ ━━━━ ━━━━ ━━━━ \n"
@@ -462,13 +460,12 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         if caption:
             full_message = f"{caption}\n\n{full_message}"
     
-    # ✅ ساخت reply_markup از دکمه‌های شیشه‌ای (پشتیبانی از فرمت جدید و قدیمی)
+    # ✅ ساخت reply_markup
     reply_markup = None
     inline_buttons = broadcast_data.get('inline_buttons')
     if inline_buttons:
         try:
             import json
-            # تبدیل از JSON اگه رشته هست
             if isinstance(inline_buttons, str):
                 buttons = json.loads(inline_buttons)
             else:
@@ -478,23 +475,13 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                 keyboard = []
                 for btn in buttons:
                     if isinstance(btn, dict):
-                        # ✅ فرمت جدید (دیکشنری)
                         btn_type = btn.get('type', 'url')
                         btn_text = btn.get('text', 'دکمه')
-                        
                         if btn_type == 'url':
-                            keyboard.append([InlineKeyboardButton(
-                                btn_text, 
-                                url=btn.get('url', 'https://t.me')
-                            )])
+                            keyboard.append([InlineKeyboardButton(btn_text, url=btn.get('url', 'https://t.me'))])
                         elif btn_type == 'callback':
-                            keyboard.append([InlineKeyboardButton(
-                                btn_text, 
-                                callback_data=btn.get('callback_data', 'unknown')
-                            )])
-                            
+                            keyboard.append([InlineKeyboardButton(btn_text, callback_data=btn.get('callback_data', 'unknown'))])
                     elif isinstance(btn, list):
-                        # ✅ فرمت قدیمی (لیست) - برای سازگاری
                         if len(btn) == 2:
                             keyboard.append([InlineKeyboardButton(btn[0], url=btn[1])])
                         elif len(btn) == 3:
@@ -502,11 +489,9 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                 
                 if keyboard:
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    
         except Exception as e:
             logger.error(f"❌ Error parsing inline buttons: {e}")
     
-    # شروع ارسال
     mark_broadcast_sent(broadcast_id, total)
     logger.info(f"🚀 [Admin:{admin_id}] Starting advanced broadcast {broadcast_id} to {total} users (type: {content_type})")
     
@@ -521,76 +506,54 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
             user_id = user['user_id']
             
             try:
-                # ✅ فوروارد یا معمولی؟
-                from_chat_id = broadcast_data.get('from_chat_id')
-                from_message_id = broadcast_data.get('from_message_id')
-                
-                if from_chat_id and from_message_id and content_type != 'text':
-                    # ✅ فوروارد شده - با forward_message بفرست
-                    await bot.forward_message(
+                # ✅ همیشه با send بفرست (forward و copy محدودیت دارن)
+                if content_type == 'text':
+                    await bot.send_message(
                         chat_id=user_id,
-                        from_chat_id=from_chat_id,
-                        message_id=from_message_id
+                        text=full_message,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=True
                     )
-                    # اگه کپشن داره، جداگانه بفرست
-                    if full_message and full_message.strip():
-                        await bot.send_message(
-                            chat_id=user_id,
-                            text=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup,
-                            disable_web_page_preview=True
-                        )
-                else:
-                    # ✅ ارسال معمولی
-                    if content_type == 'text':
-                        await bot.send_message(
-                            chat_id=user_id,
-                            text=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup,
-                            disable_web_page_preview=True
-                        )
-                    elif content_type == 'photo':
-                        await bot.send_photo(
-                            chat_id=user_id,
-                            photo=file_id,
-                            caption=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup
-                        )
-                    elif content_type == 'video':
-                        await bot.send_video(
-                            chat_id=user_id,
-                            video=file_id,
-                            caption=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup
-                        )
-                    elif content_type == 'video_note':
-                        await bot.send_video_note(
-                            chat_id=user_id,
-                            video_note=file_id,
-                            reply_markup=reply_markup
-                        )
-                    elif content_type == 'document':
-                        await bot.send_document(
-                            chat_id=user_id,
-                            document=file_id,
-                            caption=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup
-                        )
-                    elif content_type == 'audio':
-                        await bot.send_audio(
-                            chat_id=user_id,
-                            audio=file_id,
-                            caption=full_message,
-                            parse_mode='HTML',
-                            reply_markup=reply_markup
-                        )
+                elif content_type == 'photo':
+                    await bot.send_photo(
+                        chat_id=user_id,
+                        photo=file_id,
+                        caption=full_message,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'video':
+                    await bot.send_video(
+                        chat_id=user_id,
+                        video=file_id,
+                        caption=full_message,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'video_note':
+                    await bot.send_video_note(
+                        chat_id=user_id,
+                        video_note=file_id,
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'document':
+                    await bot.send_document(
+                        chat_id=user_id,
+                        document=file_id,
+                        caption=full_message,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
+                    )
+                elif content_type == 'audio':
+                    await bot.send_audio(
+                        chat_id=user_id,
+                        audio=file_id,
+                        caption=full_message,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
+                    )
                 
-                # ثبت موفقیت
                 add_broadcast_log(broadcast_id, user_id, 'success')
                 sent += 1
                 consecutive_errors = 0
@@ -614,49 +577,35 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                 retry_after = e.retry_after
                 logger.warning(f"⏳ Rate limited for {retry_after}s")
                 await asyncio.sleep(retry_after)
-                
                 try:
-                    # تلاش مجدد با متن ساده
                     if content_type == 'text':
-                        await bot.send_message(
-                            chat_id=user_id,
-                            text=full_message,
-                            reply_markup=reply_markup
-                        )
+                        await bot.send_message(chat_id=user_id, text=full_message, reply_markup=reply_markup)
                     add_broadcast_log(broadcast_id, user_id, 'success')
                     sent += 1
                     consecutive_errors = 0
-                    logger.info(f"✅ Retry successful for {user_id}")
                 except Exception as retry_e:
                     add_broadcast_log(broadcast_id, user_id, 'failed', str(retry_e))
                     failed += 1
                     consecutive_errors += 1
-                    logger.error(f"❌ Retry failed for {user_id}: {retry_e}")
                     
             except TelegramError as e:
                 add_broadcast_log(broadcast_id, user_id, 'failed', f'TelegramError: {str(e)}')
                 failed += 1
                 consecutive_errors += 1
-                logger.error(f"❌ Telegram error for {user_id}: {e}")
                 
             except Exception as e:
                 add_broadcast_log(broadcast_id, user_id, 'failed', f'Unexpected: {str(e)}')
                 failed += 1
                 consecutive_errors += 1
-                logger.error(f"💥 Unexpected error for {user_id}: {e}", exc_info=True)
             
-            # آپدیت دیتابیس
             if (i + 1) % DB_UPDATE_FREQUENCY == 0:
                 update_broadcast_count(broadcast_id, sent, failed)
             
-            # مدیریت Delay
             if (i + 1) % BATCH_SIZE == 0:
-                logger.debug(f"😴 Batch pause: {sent}/{total} sent")
                 await asyncio.sleep(BATCH_DELAY)
             else:
                 await asyncio.sleep(MESSAGE_DELAY)
         
-        # آپدیت نهایی
         update_broadcast_count(broadcast_id, sent, failed)
         mark_broadcast_completed(broadcast_id, sent, failed)
         
@@ -665,14 +614,97 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         mark_broadcast_failed(broadcast_id, str(critical_error))
         raise
     finally:
-        logger.info(
-            f"✅ Broadcast {broadcast_id} finished: "
-            f"{sent}/{total} sent, {failed} failed, "
-            f"{len(blocked_users)} blocked"
-        )
+        logger.info(f"✅ Broadcast {broadcast_id} finished: {sent}/{total} sent, {failed} failed, {len(blocked_users)} blocked")
     
     return sent, failed, total
 
+
+async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت فایل از ادمین"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
+    broadcast_type = context.user_data.get('broadcast_type')
+    if broadcast_type not in ['now', 'scheduled']:
+        return ConversationHandler.END
+    
+    content_type = context.user_data['broadcast']['content_type']
+    message = update.message
+    
+    file_id = None
+    from_chat_id = None
+    from_message_id = None
+    is_forward = False
+    
+    # ✅ چک کن فوروارد شده یا نه (چک مستقیم)
+    if message.forward_from_chat:
+        is_forward = True
+        from_chat_id = str(message.forward_from_chat.id)
+        from_message_id = message.forward_from_message_id
+    elif message.forward_from:
+        is_forward = True
+        from_chat_id = str(message.forward_from.id)
+        from_message_id = message.forward_from_message_id
+    elif message.forward_origin:
+        is_forward = True
+        from_message_id = message.message_id
+        origin = message.forward_origin
+        if hasattr(origin, 'chat') and origin.chat:
+            from_chat_id = str(origin.chat.id)
+        elif hasattr(origin, 'sender_user') and origin.sender_user:
+            from_chat_id = str(origin.sender_user.id)
+    
+    try:
+        if content_type == 'photo':
+            file_id = message.photo[-1].file_id
+        elif content_type == 'video':
+            file_id = message.video.file_id
+        elif content_type == 'video_note':
+            file_id = message.video_note.file_id
+        elif content_type == 'document':
+            file_id = message.document.file_id
+        elif content_type == 'audio':
+            if message.audio:
+                file_id = message.audio.file_id
+            elif message.voice:
+                file_id = message.voice.file_id
+                content_type = 'audio'
+        
+        if not file_id:
+            await message.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
+            return BROADCAST_TITLE
+        
+        caption = message.caption or ''
+        title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
+        if is_forward:
+            title = f"↪️ {title}"
+        
+        context.user_data['broadcast']['file_id'] = file_id
+        context.user_data['broadcast']['caption'] = caption
+        context.user_data['broadcast']['title'] = title
+        context.user_data['broadcast']['message'] = caption
+        context.user_data['broadcast']['from_chat_id'] = from_chat_id
+        context.user_data['broadcast']['from_message_id'] = from_message_id
+        context.user_data['broadcast']['is_forward'] = is_forward
+        
+        context.user_data['broadcast_step'] = 'buttons'
+        context.user_data['awaiting_message'] = False
+        
+        fwd_text = "📤 فوروارد شده - " if is_forward else ""
+        await message.reply_text(
+            f"✅ {fwd_text}فایل دریافت شد!\n\n"
+            f"📎 نوع: {get_content_type_fa(content_type)}\n"
+            f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
+            f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+        
+    except Exception as e:
+        logger.error(f"Error receiving file: {e}")
+        await message.reply_text("❌ خطا! دوباره تلاش کنید:", reply_markup=back_to_admin_keyboard())
+        return BROADCAST_TITLE
 
 def get_admin_info_from_db(admin_id):
     """
