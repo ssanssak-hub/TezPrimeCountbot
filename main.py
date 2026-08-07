@@ -316,6 +316,78 @@ async def show_delete_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
+async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش لیست لغو ریمایندر"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    reminders = get_user_reminders(user_id)
+    
+    if not reminders:
+        await query.edit_message_text(
+            "📭 هیچ اعلان فعالی برای لغو وجود ندارد!", 
+            reply_markup=reminder_menu_keyboard()
+        )
+        return
+    
+    keyboard = []
+    for r in reminders:
+        title = r['title'] if r['title'] else 'بدون عنوان'
+        text = f"⛔ {title[:30]}"
+        if len(title) > 30:
+            text += "..."
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"cancel_{r['id']}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
+    
+    await query.edit_message_text(
+        "⛔ <b>لغو اعلان</b>\n\n"
+        "اعلان غیرفعال می‌شود ولی پاک نمی‌شود.\n"
+        "بعداً می‌توانید دوباره فعالش کنید.\n\n"
+        "اعلان مورد نظر برای لغو را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode='HTML'
+    )
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پاسخ به پیام‌های متنی"""
+    user_id = update.effective_user.id
+    is_admin, _ = is_user_admin(user_id, ADMIN_ID)
+    
+    if not is_bot_active() and not is_admin:
+        return
+    
+    if db_is_banned(user_id):
+        await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
+        return
+    
+    # ✅ چک کن awaiting_message ولی broadcast نباشه
+    if context.user_data.get('awaiting_message'):
+        broadcast_type = context.user_data.get('broadcast_type')
+        
+        # ⚠️ برای broadcast ها هیچ کاری نکن - بذار ConversationHandler هندل کنه
+        if broadcast_type in ['now', 'scheduled']:
+            return  # اما این بار return خالی، چون ConversationHandler قبلاً ثبت شده
+        
+        if context.user_data.get('awaiting_admin'):
+            await add_admin_execute(update, context)
+            return
+        
+        if context.user_data.get('awaiting_ban'):
+            await ban_user_execute(update, context)
+            return
+        
+        if context.user_data.get('awaiting_search'):
+            await search_user_result(update, context)
+            return
+        
+        if context.user_data.get('step') in ['title', 'message']:
+            await set_reminder_message(update, context)
+            return
+    
+    await update.message.reply_text(
+        "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
+    )
+
 async def handle_broadcast_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     مدیریت کلیک کاربران روی دکمه‌های شیشه‌ای پیام همگانی
@@ -360,22 +432,30 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
             try:
                 buttons = json.loads(broadcast['inline_buttons'])
                 for btn in buttons:
+                    # ✅ پشتیبانی از فرمت دیکشنری (جدید)
                     if isinstance(btn, dict) and btn.get('callback_data') == data:
                         message_to_show = btn.get('message', message_to_show)
                         action = btn.get('action', 'show_alert')
                         break
+                    # ✅ پشتیبانی از فرمت لیست (قدیمی)
+                    elif isinstance(btn, list) and len(btn) >= 2:
+                        if btn[1] == data:
+                            if len(btn) >= 3:
+                                message_to_show = btn[2]
+                            break
             except:
                 continue
     except Exception as e:
         logger.error(f"Error finding button info: {e}")
     
     # ✅ ذخیره آمار کلیک
+    unique_clicks = 1
     try:
         from database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # ایجاد جدول آمار
+        # ایجاد جدول آمار (اگه وجود نداشته باشه)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS button_clicks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -386,6 +466,7 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
             )
         ''')
         
+        # ذخیره کلیک
         cursor.execute('''
             INSERT INTO button_clicks (callback_data, user_id, user_name)
             VALUES (?, ?, ?)
@@ -401,11 +482,11 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
         stats = cursor.fetchone()
         conn.close()
         
-        unique_clicks = stats['unique_clicks'] if stats else 1
+        if stats:
+            unique_clicks = stats['unique_clicks']
         
     except Exception as e:
         logger.warning(f"Could not save click: {e}")
-        unique_clicks = 1
     
     # ✅ اجرای عملکرد بر اساس action
     if action == "show_alert":
@@ -421,13 +502,21 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     elif action == "notify_admin":
         # ارسال نوتیفیکیشن به ادمین
         try:
+            from datetime import datetime
+            import pytz
+            
             admin_id = int(os.getenv('ADMIN_ID'))
-            await query.message.bot.send_message(
+            tehran_tz = pytz.timezone('Asia/Tehran')
+            now_time = datetime.now(tehran_tz).strftime('%H:%M:%S')
+            
+            await context.bot.send_message(
                 chat_id=admin_id,
-                text=f"📣 <b>کلیک روی دکمه!</b>\n\n"
-                     f"👤 کاربر: {user_name} (<code>{user_id}</code>)\n"
-                     f"💬 پیام: {message_to_show}\n"
-                     f"⏰ زمان: {datetime.now(pytz.timezone('Asia/Tehran')).strftime('%H:%M:%S')}",
+                text=(
+                    f"📣 <b>کلیک روی دکمه!</b>\n\n"
+                    f"👤 کاربر: {user_name} (<code>{user_id}</code>)\n"
+                    f"💬 پیام: {message_to_show}\n"
+                    f"⏰ زمان: {now_time}"
+                ),
                 parse_mode='HTML'
             )
             await query.answer(text="✅ پیام شما به پشتیبانی ارسال شد.", show_alert=True)
@@ -437,86 +526,13 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     
     elif action == "go_to_reminders":
         # هدایت به بخش ریمایندرها
-        await query.answer(text="🔔 به بخش اعلان‌ها بروید: /start", show_alert=True)
+        await query.answer(text="🔔 به بخش اعلان‌ها بروید و /start را بزنید.", show_alert=True)
     
     else:
         # پیش‌فرض
         await query.answer(text=message_to_show, show_alert=True)
     
-    logger.info(f"✅ Button handled: {action} | {unique_clicks} clicks")
-
-async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست لغو ریمایندر"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    reminders = get_user_reminders(user_id)
-    
-    if not reminders:
-        await query.edit_message_text(
-            "📭 هیچ اعلان فعالی برای لغو وجود ندارد!", 
-            reply_markup=reminder_menu_keyboard()
-        )
-        return
-    
-    keyboard = []
-    for r in reminders:
-        title = r['title'] if r['title'] else 'بدون عنوان'
-        text = f"⛔ {title[:30]}"
-        if len(title) > 30:
-            text += "..."
-        keyboard.append([InlineKeyboardButton(text, callback_data=f"cancel_{r['id']}")])
-    
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_notifications")])
-    
-    await query.edit_message_text(
-        "⛔ <b>لغو اعلان</b>\n\n"
-        "اعلان غیرفعال می‌شود ولی پاک نمی‌شود.\n"
-        "بعداً می‌توانید دوباره فعالش کنید.\n\n"
-        "اعلان مورد نظر برای لغو را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard), 
-        parse_mode='HTML'
-    )
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """پاسخ به پیام‌های متنی"""
-    user_id = update.effective_user.id
-    is_admin, _ = is_user_admin(user_id, ADMIN_ID)
-    
-    if not is_bot_active() and not is_admin:
-        return
-    
-    if db_is_banned(user_id):
-        await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
-        return
-    
-    # ✅ چک کن awaiting_message ولی broadcast نباشه
-    if context.user_data.get('awaiting_message'):
-        broadcast_type = context.user_data.get('broadcast_type')
-        
-        # ⚠️ برای broadcast ها هیچ کاری نکن - بذار ConversationHandler هندل کنه
-        if broadcast_type in ['now', 'scheduled']:
-            return  # اما این بار return خالی، چون ConversationHandler قبلاً ثبت شده
-        
-        if context.user_data.get('awaiting_admin'):
-            await add_admin_execute(update, context)
-            return
-        
-        if context.user_data.get('awaiting_ban'):
-            await ban_user_execute(update, context)
-            return
-        
-        if context.user_data.get('awaiting_search'):
-            await search_user_result(update, context)
-            return
-        
-        if context.user_data.get('step') in ['title', 'message']:
-            await set_reminder_message(update, context)
-            return
-    
-    await update.message.reply_text(
-        "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
-    )
+    logger.info(f"✅ Button handled: action={action} | unique_clicks={unique_clicks}")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
