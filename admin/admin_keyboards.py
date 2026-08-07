@@ -244,9 +244,8 @@ def broadcast_action_keyboard(broadcast_id, status_or_is_sent, is_cancelled=None
     elif status == 'completed':
         keyboard.append([InlineKeyboardButton("📊 آمار کامل", callback_data=f"admin_broadcast_stats_{broadcast_id}")])
     
-    # ✅ دکمه جزئیات کامل برای همه وضعیت‌ها (جز completed که بالا داره)
-    if status != 'completed':
-        keyboard.append([InlineKeyboardButton("🔍 جزئیات کامل", callback_data=f"admin_broadcast_details_{broadcast_id}")])
+    # ✅ دکمه جزئیات کامل برای همه
+    keyboard.append([InlineKeyboardButton("🔍 جزئیات کامل", callback_data=f"admin_broadcast_details_{broadcast_id}")])
     
     # دکمه‌های مشترک
     keyboard.append([InlineKeyboardButton("🗑️ حذف", callback_data=f"admin_delete_broadcast_{broadcast_id}")])
