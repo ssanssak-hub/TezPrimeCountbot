@@ -408,23 +408,26 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     try:
         import base64
         # جدا کردن base64 از انتهای callback_data
-        parts = data.split('_', 4)  # ['bc', 'btn', 'index', 'admin_id', 'base64...']
+        # split با maxsplit=4: ['bc', 'btn', 'index', 'admin_id', 'base64...']
+        parts = data.split('_', 4)
         if len(parts) >= 5:
             encoded_message = parts[4]
             try:
                 decoded = base64.b64decode(encoded_message).decode('utf-8')
                 if decoded.strip():
                     message_to_show = decoded
-                    logger.info(f"📝 Decoded message: {message_to_show[:80]}...")
+                    logger.info(f"📝 Message decoded: {message_to_show[:80]}...")
             except Exception as e:
                 logger.warning(f"⚠️ Base64 decode failed: {e}")
+        else:
+            logger.warning(f"⚠️ Unexpected callback_data format: {data}")
     except Exception as e:
         logger.error(f"❌ Error parsing callback_data: {e}")
     
     # ✅ جایگزینی نام کاربر (اگه {name} توی پیام باشه)
     message_to_show = message_to_show.replace('{name}', user_name)
     
-    # ✅ نمایش به کاربر - بهترین روش
+    # ✅ نمایش به کاربر
     try:
         # اگه پیام کوتاهه (کمتر از ۲۰۰ کاراکتر)، show_alert عالیه
         if len(message_to_show) <= 200:
@@ -436,19 +439,18 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
                 f"💬 {message_to_show}",
                 reply_to_message_id=query.message.message_id
             )
-            # یه تیک هم بزن که بدونن کلیک ثبت شد
-            await query.answer(text="✅ دریافت شد ✓")
+            # یه تیک هم بزن
+            await query.answer(text="✅ پیام دریافت شد ✓")
             logger.info(f"✅ Long message sent as reply to {user_name}")
             
     except Exception as e:
         logger.error(f"❌ Error showing message: {e}")
-        # تلاش آخری - یه پاسخ ساده
         try:
             await query.answer(text="✅ دریافت شد!", show_alert=False)
         except:
             pass
     
-    # ✅ ذخیره آمار کلیک (اختیاری)
+    # ✅ ذخیره آمار کلیک
     try:
         from database import get_db_connection
         conn = get_db_connection()
