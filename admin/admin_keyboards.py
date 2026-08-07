@@ -341,31 +341,34 @@ def inline_buttons_keyboard(current_buttons=None, is_editing=False):
     
     # نمایش دکمه‌های فعلی
     for i, btn in enumerate(current_buttons):
-        if len(btn) == 2:  # دکمه URL
-            text, url = btn
+        btn_type = btn.get('type', 'url')
+        btn_text = btn.get('text', 'بدون متن')
+        
+        if btn_type == 'url':
             keyboard.append([
-                InlineKeyboardButton(f"🔗 {text[:20]}", url=url),
+                InlineKeyboardButton(f"🔗 {btn_text[:30]}", url=btn.get('url')),
                 InlineKeyboardButton("❌", callback_data=f"ib_remove_{i}")
             ])
-        elif len(btn) == 3:  # دکمه Callback
-            text, data, _ = btn
+        elif btn_type == 'callback':
+            message = btn.get('message', '')
+            preview = message[:20] + '...' if len(message) > 20 else message
             keyboard.append([
-                InlineKeyboardButton(f"🔘 {text[:20]}", callback_data=f"ib_noop"),
+                InlineKeyboardButton(f"🔘 {btn_text[:20]} 💬{preview}", callback_data=f"ib_noop"),
                 InlineKeyboardButton("❌", callback_data=f"ib_remove_{i}")
             ])
     
     # دکمه‌های مدیریت
-    if len(current_buttons) < 10:  # حداکثر ۱۰ دکمه
+    if len(current_buttons) < 10:
         keyboard.append([
             InlineKeyboardButton("➕ لینک", callback_data="ib_add_url"),
-            InlineKeyboardButton("➕ دکمه", callback_data="ib_add_callback")
+            InlineKeyboardButton("➕ دکمه داخلی", callback_data="ib_add_callback")
         ])
     
     # دکمه‌های تأیید/رد
     action_row = []
     if current_buttons:
-        action_row.append(InlineKeyboardButton("✅ تأیید دکمه‌ها", callback_data="ib_confirm"))
-    action_row.append(InlineKeyboardButton("⏭ رد کردن", callback_data="ib_skip"))
+        action_row.append(InlineKeyboardButton("✅ تأیید", callback_data="ib_confirm"))
+    action_row.append(InlineKeyboardButton("⏭ بدون دکمه", callback_data="ib_skip"))
     keyboard.append(action_row)
     
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")])
