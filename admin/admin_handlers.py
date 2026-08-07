@@ -2341,7 +2341,13 @@ async def confirm_advanced_broadcast(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text("⛔ شما دسترسی ندارید!")
         return
     
-    broadcast_id = int(query.data.split("_")[-1])
+    import re
+    match = re.search(r'confirm_adv_broadcast_(\d+)', query.data)
+    if match:
+        broadcast_id = int(match.group(1))
+    else:
+        await query.edit_message_text("❌ خطا در شناسایی پیام!")
+        return
     broadcast = get_broadcast_by_id(broadcast_id)
     
     if not broadcast:
