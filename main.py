@@ -353,8 +353,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await broadcast_stats(update, context)
     elif data.startswith("admin_send_now_"):
         await handle_send_now_from_scheduled(update, context)
+        return
     elif data.startswith("admin_broadcast_details_"):
         await show_broadcast_details(update, context)
+        return
     
     # ---- آمار و وضعیت ----
     elif data == "admin_stats":
