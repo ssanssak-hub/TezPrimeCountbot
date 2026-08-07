@@ -432,28 +432,35 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     # ✅ جایگزینی {name} با اسم کاربر
     message_to_show = message_to_show.replace('{name}', user_name)
     
-    # ✅ نمایش پیام به کاربر
+    # ✅ نمایش پیام به کاربر - روش ترکیبی (Toast + Reply)
     try:
-        if len(message_to_show) <= 200:
-            # پیام کوتاه → Alert
-            await query.answer(text=message_to_show, show_alert=True)
-            logger.info(f"✅ Alert shown to {user_name}: {message_to_show[:50]}...")
+        # ۱. همیشه یه Toast نشون بده (تأیید کلیک)
+        if len(message_to_show) <= 100:
+            await query.answer(text=message_to_show, show_alert=False)
         else:
-            # پیام بلند → Reply
-            await query.message.reply_text(
-                f"💬 {message_to_show}",
-                reply_to_message_id=query.message.message_id
-            )
-            await query.answer(text="✅ پیام دریافت شد ✓")
-            logger.info(f"✅ Long message sent as reply to {user_name}")
-            
+            await query.answer(text=message_to_show[:100] + "...", show_alert=False)
+        
+        # ۲. پیام کامل رو به صورت Reply بفرست (کاربر حتماً ببینه)
+        sent_msg = await query.message.reply_text(
+            f"💬 {message_to_show}",
+            reply_to_message_id=query.message.message_id
+        )
+        
+        # ۳. پاک کردن خودکار پیام Reply بعد از ۱۵ ثانیه (اختیاری)
+        asyncio.create_task(delete_message_later(sent_msg, 15))
+        
+        logger.info(f"✅ Message sent to {user_name}: {message_to_show[:50]}...")
+        
     except Exception as e:
-        logger.error(f"❌ Error showing message to user: {e}")
-        # تلاش آخر - پاسخ ساده
+        logger.error(f"❌ Error showing message: {e}")
+        # تلاش آخر - فقط Alert
         try:
-            await query.answer(text="✅ دریافت شد!", show_alert=False)
+            await query.answer(text=message_to_show[:200], show_alert=True)
         except:
-            pass
+            try:
+                await query.answer(text="✅ دریافت شد!", show_alert=False)
+            except:
+                pass
     
     # ✅ ذخیره آمار کلیک (فقط اگه button_id معتبر باشه)
     if button_id:
@@ -499,6 +506,14 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
         logger.warning("⚠️ Click not saved - no valid button_id")
     
     logger.info(f"✅ Button handled: button_id={button_id}, user={user_name}")
+
+async def delete_message_later(message, delay=10):
+    """پاک کردن پیام بعد از delay ثانیه"""
+    try:
+        await asyncio.sleep(delay)
+        await message.delete()
+    except:
+        pass
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
