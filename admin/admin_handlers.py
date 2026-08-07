@@ -283,7 +283,7 @@ async def broadcast_scheduled_start(update: Update, context: ContextTypes.DEFAUL
         "📢 <b>ارسال پیام همگانی زمان‌بندی شده</b>\n\n"
         "📌 <b>مرحله ۱/۴: انتخاب نوع پیام</b>\n\n"
         "لطفاً نوع محتوایی که می‌خواهید ارسال کنید را انتخاب نمایید:\n\n"
-        "📝 متن | 🖼 عکس | 🎥 فیلم | 📄 فایل | 🎵 صدا",
+        "📝 متن | 🖼 عکس | 🎥 فیلم | 📼 ویدئو مسیج | 📄 فایل | 🎵 صدا | 📊 نظرسنجی" ,
         reply_markup=content_type_keyboard(),
         parse_mode='HTML'
     )
