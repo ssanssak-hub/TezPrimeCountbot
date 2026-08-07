@@ -71,6 +71,8 @@ flask_app = Flask(__name__)
 application: Application = None
 bot_loop: asyncio.AbstractEventLoop = None
 
+import time
+processed_updates = {}  # دیکشنری برای ذخیره update_id های پردازش شده
 
 # ============ هندلرهای اصلی ============
 
@@ -775,6 +777,21 @@ def webhook():
             if not json_data:
                 logger.warning("⚠️ Empty request body")
                 return jsonify({'status': 'error', 'message': 'Empty body'}), 400
+            
+            # ✅ جلوگیری از پردازش تکراری
+            update_id = json_data.get('update_id')
+            if update_id and update_id in processed_updates:
+                logger.warning(f"⚠️ Duplicate update {update_id}, skipping...")
+                return jsonify({'status': 'ok', 'message': 'duplicate'}), 200
+            
+            if update_id:
+                processed_updates[update_id] = time.time()
+            
+            # پاکسازی update_id های قدیمی (بیشتر از ۶۰ ثانیه)
+            now = time.time()
+            for uid in list(processed_updates.keys()):
+                if now - processed_updates[uid] > 60:
+                    del processed_updates[uid]
             
             success = process_update(json_data)
             
