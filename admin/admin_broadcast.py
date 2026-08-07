@@ -431,8 +431,8 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     
     # ✅ ساخت هدر و فوتر پیام
     header = (
-        f"📢 <b>پیام همگانی</b>\n"
-        f"━━━━━━━━━━━━━━━━\n"
+        f"📢 <b>پیام همگانی فوری</b>\n"
+        f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
     )
     
     if content_type == 'text':
@@ -440,13 +440,13 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         full_message = (
             f"{header}"
             f"📌 عنوان پیام: <b>{title}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━ ━━━ ━━━━ ━━━ ━━━━ \n"
             f"📄 متن پیام: <b>{message_text}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
             f"👤 مدیر ارسال کننده: <b>{admin_name}</b>\n"
             f"📅 تاریخ ارسال: <b>{persian_date}</b> ({persian_weekday_fa})\n"
             f"⏰ ساعت ارسال: <b>{time_str}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━ ━━━ ━━━ ━━━ ━━━ ━━ \n"
             f"🤖 Id Bot:@TezPrimeCountbot"
             f"🤖 Id Channel:@video_amouzeshi"
         )
