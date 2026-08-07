@@ -395,12 +395,80 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
     message_text = broadcast_data.get('message')
     file_id = broadcast_data.get('file_id')
     caption = broadcast_data.get('file_caption', '')
+    title = broadcast_data.get('title', 'بدون عنوان')
+    
+    # ✅ دریافت اطلاعات ادمین
+    admin_info = get_admin_info_from_db(admin_id)
+    admin_name = admin_info.get('first_name', 'ادمین') if admin_info else 'ادمین'
+    
+    # ✅ دریافت زمان فعلی به وقت تهران
+    from datetime import datetime
+    import pytz
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    now_tehran = datetime.now(tehran_tz)
+    date_str = now_tehran.strftime('%Y/%m/%d')
+    time_str = now_tehran.strftime('%H:%M:%S')
+    
+    # ✅ تبدیل تاریخ میلادی به شمسی
+    try:
+        import jdatetime
+        jalali_date = jdatetime.date.fromgregorian(date=now_tehran.date())
+        persian_date = jalali_date.strftime('%Y/%m/%d')
+        persian_weekday = jalali_date.strftime('%A')
+        weekdays_fa = {
+            'Saturday': 'شنبه',
+            'Sunday': 'یکشنبه',
+            'Monday': 'دوشنبه',
+            'Tuesday': 'سه‌شنبه',
+            'Wednesday': 'چهارشنبه',
+            'Thursday': 'پنجشنبه',
+            'Friday': 'جمعه'
+        }
+        persian_weekday_fa = weekdays_fa.get(persian_weekday, persian_weekday)
+    except:
+        persian_date = date_str
+        persian_weekday_fa = ''
+    
+    # ✅ ساخت هدر و فوتر پیام
+    header = (
+        f"📢 <b>پیام همگانی</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+    )
+    
+    if content_type == 'text':
+        # برای متن: هدر + عنوان + متن + فوتر
+        full_message = (
+            f"{header}"
+            f"📌 <b>{title}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"{message_text}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
+            f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
+            f"⏰ ساعت: <b>{time_str}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🤖 @TezPrimeCountbot"
+        )
+    else:
+        # برای مدیا: کپشن شامل اطلاعات کامل
+        full_message = (
+            f"{header}"
+            f"📌 <b>{title}</b>\n"
+            f"👤 ارسال‌کننده: <b>{admin_name}</b>\n"
+            f"📅 تاریخ: <b>{persian_date}</b> ({persian_weekday_fa})\n"
+            f"⏰ ساعت: <b>{time_str}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🤖 @TezPrimeCountbot"
+        )
+        if caption:
+            full_message = f"{caption}\n\n{full_message}"
     
     # ساخت reply_markup از دکمه‌های شیشه‌ای
     reply_markup = None
     inline_buttons = broadcast_data.get('inline_buttons')
     if inline_buttons:
         try:
+            import json
             buttons = json.loads(inline_buttons) if isinstance(inline_buttons, str) else inline_buttons
             if buttons:
                 keyboard = []
@@ -432,7 +500,7 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                 if content_type == 'text':
                     await bot.send_message(
                         chat_id=user_id,
-                        text=message_text,
+                        text=full_message,
                         parse_mode='HTML',
                         reply_markup=reply_markup,
                         disable_web_page_preview=True
@@ -441,28 +509,32 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                     await bot.send_photo(
                         chat_id=user_id,
                         photo=file_id,
-                        caption=caption,
+                        caption=full_message,
+                        parse_mode='HTML',
                         reply_markup=reply_markup
                     )
                 elif content_type == 'video':
                     await bot.send_video(
                         chat_id=user_id,
                         video=file_id,
-                        caption=caption,
+                        caption=full_message,
+                        parse_mode='HTML',
                         reply_markup=reply_markup
                     )
                 elif content_type == 'document':
                     await bot.send_document(
                         chat_id=user_id,
                         document=file_id,
-                        caption=caption,
+                        caption=full_message,
+                        parse_mode='HTML',
                         reply_markup=reply_markup
                     )
                 elif content_type == 'audio':
                     await bot.send_audio(
                         chat_id=user_id,
                         audio=file_id,
-                        caption=caption,
+                        caption=full_message,
+                        parse_mode='HTML',
                         reply_markup=reply_markup
                     )
                 
@@ -496,7 +568,7 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
                     if content_type == 'text':
                         await bot.send_message(
                             chat_id=user_id,
-                            text=message_text,
+                            text=full_message,
                             reply_markup=reply_markup
                         )
                     add_broadcast_log(broadcast_id, user_id, 'success')
@@ -548,3 +620,30 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data):
         )
     
     return sent, failed, total
+
+
+def get_admin_info_from_db(admin_id):
+    """
+    دریافت اطلاعات ادمین از دیتابیس
+    
+    Args:
+        admin_id: شناسه ادمین
+    
+    Returns:
+        dict: اطلاعات ادمین یا None
+    """
+    try:
+        from database import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT user_id, first_name, username, last_name 
+            FROM users 
+            WHERE user_id = ?
+        ''', (admin_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return dict(user) if user else None
+    except Exception as e:
+        logger.warning(f"⚠️ Could not get admin info: {e}")
+        return None
