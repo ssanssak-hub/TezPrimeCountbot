@@ -92,7 +92,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت همه دکمه‌ها"""
     query = update.callback_query
@@ -101,6 +100,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = update.effective_user.id
     logger.info(f"🔘 Button: {data} from user {user_id}")
+    
+    # ============ ✅ دکمه‌های ارسال پیشرفته (اولویت اول) ============
+    
+    # دکمه‌های مدیریت دکمه‌های شیشه‌ای (افزودن/حذف/تأیید/رد)
+    if data.startswith("ib_"):
+        from admin.admin_handlers import handle_inline_buttons
+        await handle_inline_buttons(update, context)
+        return
+    
+    # دکمه تأیید نهایی ارسال پیشرفته
+    if data.startswith("confirm_adv_broadcast_"):
+        from admin.admin_handlers import confirm_advanced_broadcast
+        await confirm_advanced_broadcast(update, context)
+        return
+    
+    # دکمه ویرایش دکمه‌های شیشه‌ای
+    if data.startswith("broadcast_edit_buttons_"):
+        from admin.admin_handlers import edit_broadcast_buttons
+        await edit_broadcast_buttons(update, context)
+        return
+    
+    # ============ ✅ پایان دکمه‌های ارسال پیشرفته ============
     
     # ✅ اضافه کردن شرط برای دکمه‌های تاریخ (مرحله ۳)
     if data.startswith("broadcast_date_"):
@@ -159,7 +180,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("admin_confirm_delete_broadcast_"):
         await delete_broadcast_handler(update, context)
     elif data.startswith("admin_broadcast_stats_"):
-        await broadcast_stats(update, context)  # ✅ اضافه کن
+        await broadcast_stats(update, context)
     
     # ---- آمار و وضعیت ----
     elif data == "admin_stats":
@@ -225,7 +246,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     else:
         logger.warning(f"⚠️ Unknown callback: {data}")
-
 
 async def handle_ban_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بن کردن کاربر از نتایج جستجو"""
