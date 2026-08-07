@@ -392,7 +392,8 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     """
     مدیریت کلیک کاربران روی دکمه‌های شیشه‌ای پیام همگانی
     
-    پیام نمایشی از callback_data استخراج و به کاربر نشون داده میشه
+    فرمت callback_data: bc_{button_id}
+    پیام از جدول button_messages خونده میشه
     """
     query = update.callback_query
     user_id = update.effective_user.id
@@ -401,81 +402,101 @@ async def handle_broadcast_button_click(update: Update, context: ContextTypes.DE
     data = query.data
     logger.info(f"📣 Broadcast button clicked: {data} by {user_name} ({user_id})")
     
-    # ✅ استخراج پیام از callback_data
-    # فرمت: bc_btn_{index}_{admin_id}_{base64_message}
+    # ✅ استخراج button_id و دریافت پیام
+    button_id = None
     message_to_show = "✅ با تشکر از شما! ❤️"
     
     try:
-        import base64
-        # جدا کردن base64 از انتهای callback_data
-        # split با maxsplit=4: ['bc', 'btn', 'index', 'admin_id', 'base64...']
-        parts = data.split('_', 4)
-        if len(parts) >= 5:
-            encoded_message = parts[4]
-            try:
-                decoded = base64.b64decode(encoded_message).decode('utf-8')
-                if decoded.strip():
-                    message_to_show = decoded
-                    logger.info(f"📝 Message decoded: {message_to_show[:80]}...")
-            except Exception as e:
-                logger.warning(f"⚠️ Base64 decode failed: {e}")
+        if data.startswith("bc_"):
+            button_id = data[3:]  # حذف "bc_" از ابتدا
+            
+            if button_id:
+                # ✅ دریافت پیام از دیتابیس
+                from admin.admin_database import get_button_message
+                stored_message = get_button_message(button_id)
+                if stored_message:
+                    message_to_show = stored_message
+                    logger.info(f"📝 Message loaded for button {button_id}: {message_to_show[:80]}...")
+                else:
+                    logger.warning(f"⚠️ No message found for button_id: {button_id}")
+            else:
+                logger.warning(f"⚠️ Empty button_id in callback_data: {data}")
         else:
-            logger.warning(f"⚠️ Unexpected callback_data format: {data}")
+            logger.warning(f"⚠️ Invalid callback_data format: {data}")
+            
     except Exception as e:
-        logger.error(f"❌ Error parsing callback_data: {e}")
+        logger.error(f"❌ Error loading button message: {e}", exc_info=True)
     
-    # ✅ جایگزینی نام کاربر (اگه {name} توی پیام باشه)
+    # ✅ جایگزینی {name} با اسم کاربر
     message_to_show = message_to_show.replace('{name}', user_name)
     
-    # ✅ نمایش به کاربر
+    # ✅ نمایش پیام به کاربر
     try:
-        # اگه پیام کوتاهه (کمتر از ۲۰۰ کاراکتر)، show_alert عالیه
         if len(message_to_show) <= 200:
+            # پیام کوتاه → Alert
             await query.answer(text=message_to_show, show_alert=True)
-            logger.info(f"✅ Alert shown to {user_name}")
+            logger.info(f"✅ Alert shown to {user_name}: {message_to_show[:50]}...")
         else:
-            # اگه طولانیه، به صورت reply بفرست که کاربر حتماً ببینه
+            # پیام بلند → Reply
             await query.message.reply_text(
                 f"💬 {message_to_show}",
                 reply_to_message_id=query.message.message_id
             )
-            # یه تیک هم بزن
             await query.answer(text="✅ پیام دریافت شد ✓")
             logger.info(f"✅ Long message sent as reply to {user_name}")
             
     except Exception as e:
-        logger.error(f"❌ Error showing message: {e}")
+        logger.error(f"❌ Error showing message to user: {e}")
+        # تلاش آخر - پاسخ ساده
         try:
             await query.answer(text="✅ دریافت شد!", show_alert=False)
         except:
             pass
     
-    # ✅ ذخیره آمار کلیک
-    try:
-        from database import get_db_connection
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS button_clicks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                callback_data TEXT NOT NULL,
-                user_id INTEGER NOT NULL,
-                user_name TEXT,
-                message_shown TEXT,
-                clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            INSERT INTO button_clicks (callback_data, user_id, user_name, message_shown)
-            VALUES (?, ?, ?, ?)
-        ''', (data, user_id, user_name, message_to_show[:200]))
-        
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.warning(f"Could not save click: {e}")
+    # ✅ ذخیره آمار کلیک (فقط اگه button_id معتبر باشه)
+    if button_id:
+        try:
+            from database import get_db_connection
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # ایجاد جدول اگه وجود نداشته باشه
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS button_clicks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    button_id TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    user_name TEXT,
+                    clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # ذخیره کلیک
+            cursor.execute('''
+                INSERT INTO button_clicks (button_id, user_id, user_name)
+                VALUES (?, ?, ?)
+            ''', (button_id, user_id, user_name))
+            
+            conn.commit()
+            
+            # لاگ آمار
+            cursor.execute('''
+                SELECT COUNT(DISTINCT user_id) as unique_clicks
+                FROM button_clicks
+                WHERE button_id = ?
+            ''', (button_id,))
+            stats = cursor.fetchone()
+            conn.close()
+            
+            unique_clicks = stats['unique_clicks'] if stats else 1
+            logger.info(f"📊 Button {button_id}: {unique_clicks} unique clicks")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not save click stats: {e}")
+    else:
+        logger.warning("⚠️ Click not saved - no valid button_id")
+    
+    logger.info(f"✅ Button handled: button_id={button_id}, user={user_name}")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت خطاهای کلی و ارسال به ادمین"""
