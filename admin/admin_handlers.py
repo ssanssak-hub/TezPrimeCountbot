@@ -896,7 +896,7 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     from_message_id = None
     
     # ✅ چک کن فوروارد شده یا نه
-    is_forward = message.forward_from_chat is not None or message.forward_from is not None
+    is_forward = getattr(message, 'forward_from_chat', None) is not None or getattr(message, 'forward_from', None) is not None
     
     try:
         if content_type == 'photo':
