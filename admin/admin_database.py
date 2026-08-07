@@ -117,7 +117,13 @@ def init_admin_db():
         logger.info("✅ Added job_id column to broadcasts table")
     except sqlite3.OperationalError:
         pass
-    
+    # توی init_admin_db() اضافه کن:
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN from_chat_id TEXT")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN from_message_id INTEGER")
+    except: pass
     # ============ Migration های جدید برای ارسال پیشرفته ============
     
     try:
