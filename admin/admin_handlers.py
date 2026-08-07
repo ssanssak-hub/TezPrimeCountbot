@@ -2205,6 +2205,9 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
     buttons = context.user_data.get('inline_buttons', [])
     btn_type = context.user_data.get('adding_button_type')
     
+    # ✅ تعریف success_text با مقدار پیش‌فرض
+    success_text = ""
+    
     if btn_type == 'url':
         # فرمت: متن دکمه | لینک
         parts = text.split('|')
@@ -2238,7 +2241,6 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
             'url': url
         })
         
-        # نمایش پیام موفقیت برای دکمه لینک
         success_text = (
             f"✅ <b>دکمه لینک افزوده شد!</b>\n\n"
             f"📌 متن: <b>{btn_text}</b>\n"
@@ -2275,17 +2277,21 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
             'message': alert_message
         })
         
-        # نمایش پیام موفقیت
-        await update.message.reply_text(
+        success_text = (
             f"✅ <b>دکمه داخلی افزوده شد!</b>\n\n"
             f"📌 متن دکمه: <b>{btn_text}</b>\n"
             f"💬 پیام: {alert_message[:100]}{'...' if len(alert_message) > 100 else ''}\n"
-            f"🆔 شناسه: <code>{button_id}</code>\n"
             f"🔢 تعداد کل: {len(buttons)}\n\n"
-            f"می‌توانید دکمه دیگری اضافه کنید یا ادامه دهید:",
-            reply_markup=inline_buttons_keyboard(buttons),
-            parse_mode='HTML'
         )
+    
+    else:
+        # ✅ اگه btn_type نامعتبر بود
+        logger.error(f"❌ Invalid btn_type: {btn_type}")
+        await update.message.reply_text(
+            "❌ خطا در تشخیص نوع دکمه! لطفاً دوباره تلاش کنید.",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return BROADCAST_BUTTONS
     
     context.user_data['inline_buttons'] = buttons
     context.user_data['awaiting_button'] = False
@@ -2299,7 +2305,6 @@ async def handle_button_text_input(update: Update, context: ContextTypes.DEFAULT
         parse_mode='HTML'
     )
     return BROADCAST_BUTTONS
-
 
 # ============ توابع کمکی برای مرحله بعد ============
 
