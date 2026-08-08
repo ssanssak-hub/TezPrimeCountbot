@@ -782,6 +782,8 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پاسخ به پیام‌های متنی"""
+    # ✅ اینو اول همه چیز بذار
+    logger.info(f"🔵🔵🔵 ECHO CALLED! msg type: {update.message}")    
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     msg = update.message
