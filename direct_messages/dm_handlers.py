@@ -177,7 +177,7 @@ async def dm_admin_receive_content(update: Update, context: ContextTypes.DEFAULT
             context.user_data['dm_message']['from_message_id'] = msg.message_id
 
         context.user_data['dm_step'] = 'buttons'
-        context.user_data['awaiting_message'] = False
+        #context.user_data['awaiting_message'] = False
         context.user_data['awaiting_dm'] = False
 
         await update.message.reply_text(
