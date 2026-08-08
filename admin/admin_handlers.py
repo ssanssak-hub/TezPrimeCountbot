@@ -1050,8 +1050,19 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح)"""
-    # ✅ اینو اول همه چیز بذار
-    logger.info(f"🟡🟡🟡 HANDLE_FILE_RECEIVE CALLED!")    
+    logger.info(f"🟡🟡🟡 HANDLE_FILE_RECEIVE CALLED!")
+    
+    message = update.message
+    
+    # ✅ چک poll - قبل از همه چیز!
+    if message.forward_origin and message.poll:
+        logger.info(f"📊 FORWARD POLL DETECTED in handle_file_receive! Redirecting...")
+        return await handle_poll_forward_receive(update, context)
+    
+    if message.poll:
+        logger.info(f"📊 POLL DETECTED in handle_file_receive! Redirecting...")
+        return await handle_poll_forward_receive(update, context)
+    
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -1060,7 +1071,6 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
     
     content_type = context.user_data['broadcast']['content_type']
-    message = update.message
     
     file_id = None
     from_chat_id = None
@@ -1069,25 +1079,15 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption = None
     title = None
 
-    # ✅ لاگ کامل
+    # ✅ لاگ کامل - از message استفاده کن نه msg
     logger.info(f"📩 handle_file_receive RECEIVED:")
-    logger.info(f"   poll: {msg.poll is not None}")
-    logger.info(f"   forward_origin: {msg.forward_origin is not None}")
-    logger.info(f"   photo: {msg.photo is not None}")
-    logger.info(f"   video: {msg.video is not None}")
-    logger.info(f"   document: {msg.document is not None}")
+    logger.info(f"   poll: {message.poll is not None}")
+    logger.info(f"   forward_origin: {message.forward_origin is not None}")
+    logger.info(f"   photo: {message.photo is not None}")
+    logger.info(f"   video: {message.video is not None}")
+    logger.info(f"   document: {message.document is not None}")
     
-    # ✅ چک poll
-    if msg.forward_origin and msg.poll:
-        logger.info(f"📊 FORWARD POLL DETECTED! Redirecting...")
-        return await handle_poll_forward_receive(update, context)
-    
-    if msg.poll:
-        logger.info(f"📊 POLL DETECTED! Redirecting...")
-        return await handle_poll_forward_receive(update, context)    
-    
-    # ============ تشخیص فوروارد (اصلاح‌شده) ============
-    # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
+    # ============ تشخیص فوروارد ============
     if message.forward_origin:
         is_forward = True
         from_chat_id = str(message.chat.id)
