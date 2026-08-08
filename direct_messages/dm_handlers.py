@@ -671,7 +671,6 @@ async def dm_admin_read_message(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode='HTML'
         )
 
-
 async def dm_admin_delete_user_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حذف پیام کاربر (توسط ادمین)"""
     query = update.callback_query
@@ -700,10 +699,20 @@ async def dm_admin_delete_user_msg(update: Update, context: ContextTypes.DEFAULT
         except:
             pass
 
-        await query.edit_message_text("✅ پیام کاربر حذف شد!", reply_markup=back_to_admin_keyboard())
+        # ✅ به جای edit، یه پیام جدید بفرست (یا reply کن)
+        try:
+            await query.edit_message_text("✅ پیام کاربر حذف شد!", reply_markup=back_to_admin_keyboard())
+        except Exception as e:
+            if "Message to edit not found" in str(e) or "Message is not modified" in str(e):
+                # پیام حذف شده، یه پیام جدید بفرست
+                await query.message.reply_text("✅ پیام کاربر حذف شد!", reply_markup=back_to_admin_keyboard())
+            else:
+                raise
     else:
-        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
-
+        try:
+            await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
+        except:
+            await query.message.reply_text("❌ پیام یافت نشد!", reply_markup=back_to_admin_keyboard())
 
 async def dm_admin_ignore_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نادیده گرفتن پیام کاربر"""
@@ -921,16 +930,111 @@ async def dm_user_handle_content_type(update: Update, context: ContextTypes.DEFA
 
 
 async def dm_user_receive_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت محتوای پیام کاربر (استفاده از منطق مشترک)"""
-    # از تابع مشترک استفاده می‌کنیم
-    result = await dm_admin_receive_content(update, context)
+    """دریافت عنوان/متن یا فایل از کاربر"""
+    if not context.user_data.get('awaiting_dm'):
+        return ConversationHandler.END
 
-    # اگر به مرحله دکمه‌ها رفت، برمی‌گردیم
-    if context.user_data.get('dm_step') == 'buttons':
+    msg = update.message
+    step = context.user_data.get('dm_step', 'title')
+    content_type = context.user_data['dm_message'].get('content_type', 'text')
+
+    # تشخیص فوروارد
+    from_chat_id = None
+    from_message_id = None
+    is_forward = False
+
+    if msg.forward_origin:
+        is_forward = True
+        from_chat_id = str(msg.chat.id)
+        from_message_id = msg.message_id
+        logger.info(f"📤 USER FORWARD: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+
+    # ========== مرحله title (برای متن) ==========
+    if step == 'title' and content_type == 'text':
+        context.user_data['dm_message']['title'] = msg.text
+        context.user_data['dm_message']['from_chat_id'] = from_chat_id
+        context.user_data['dm_message']['from_message_id'] = from_message_id
+        context.user_data['dm_step'] = 'message'
+
+        await update.message.reply_text(
+            f"📝 عنوان: <b>{msg.text}</b>\n\n"
+            f"حالا <b>متن پیام</b> را ارسال کنید:",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return DM_CONTENT
+
+    # ========== مرحله message (برای متن) ==========
+    elif step == 'message' and content_type == 'text':
+        context.user_data['dm_message']['message'] = msg.text
+        
+        # ✅ اگر متن فوروارد شده، اطلاعات فوروارد رو ذخیره کن
+        if msg.forward_origin:
+            context.user_data['dm_message']['from_chat_id'] = str(msg.chat.id)
+            context.user_data['dm_message']['from_message_id'] = msg.message_id
+            logger.info(f"📤 USER FORWARD MESSAGE: from_chat_id={msg.chat.id}, from_message_id={msg.message_id}")
+
+        context.user_data['dm_step'] = 'buttons'
+        context.user_data['awaiting_dm'] = False
+
+        await update.message.reply_text(
+            f"📝 <b>متن پیام دریافت شد</b>\n\n"
+            f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> اضافه کنید:",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
         return DM_BUTTONS
 
-    return result
+    # ========== فایل ==========
+    elif step == 'file' and content_type != 'text':
+        file_id = None
+        caption = msg.caption or ''
 
+        if content_type == 'photo' and msg.photo:
+            file_id = msg.photo[-1].file_id
+        elif content_type == 'video' and msg.video:
+            file_id = msg.video.file_id
+        elif content_type == 'video_note' and msg.video_note:
+            file_id = msg.video_note.file_id
+        elif content_type == 'document' and msg.document:
+            file_id = msg.document.file_id
+        elif content_type == 'audio':
+            if msg.audio:
+                file_id = msg.audio.file_id
+            elif msg.voice:
+                file_id = msg.voice.file_id
+                context.user_data['dm_message']['content_type'] = 'voice'
+
+        if not file_id:
+            await msg.reply_text("❌ فایل نامعتبر!", reply_markup=back_to_admin_keyboard())
+            return DM_TITLE
+
+        title = caption[:100] if caption else f"پیام {get_content_type_fa(content_type)}"
+        if is_forward:
+            title = f"↪️ {title}"
+
+        context.user_data['dm_message']['file_id'] = file_id
+        context.user_data['dm_message']['caption'] = caption
+        context.user_data['dm_message']['title'] = title
+        context.user_data['dm_message']['message'] = caption
+        context.user_data['dm_message']['from_chat_id'] = from_chat_id
+        context.user_data['dm_message']['from_message_id'] = from_message_id
+
+        context.user_data['dm_step'] = 'buttons'
+        context.user_data['awaiting_dm'] = False
+
+        fwd_text = "📤 فوروارد شده - " if is_forward else ""
+        await msg.reply_text(
+            f"✅ {fwd_text}فایل دریافت شد!\n\n"
+            f"📎 نوع: {get_content_type_fa(content_type)}\n"
+            f"📝 کپشن: {caption[:100] if caption else 'ندارد'}\n\n"
+            f"حالا می‌توانید دکمه‌های شیشه‌ای اضافه کنید:",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
+        return DM_BUTTONS
+
+    return ConversationHandler.END
 
 async def dm_user_handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مدیریت دکمه‌های شیشه‌ای (کاربر)"""
