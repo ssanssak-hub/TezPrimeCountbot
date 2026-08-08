@@ -41,7 +41,11 @@ from admin.admin_handlers import (
     edit_admin_start, edit_admin_permissions, back_to_admin,
     broadcast_stats,
     BROADCAST_TITLE, BROADCAST_MESSAGE, BROADCAST_DATE, BROADCAST_TIME,
-    BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
+    BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID,
+    handle_poll_type_selection, handle_poll_question,
+    handle_poll_options, handle_poll_forward_receive,
+    BROADCAST_CONTENT_TYPE, BROADCAST_BUTTONS,
+    BROADCAST_POLL_TYPE, BROADCAST_POLL_QUESTION, BROADCAST_POLL_OPTIONS
 )
 
 from direct_messages import init_dm_db
@@ -1083,6 +1087,15 @@ def setup_handlers():
             ],
             BAN_USER_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ban_user_execute)
+            ],
+            BROADCAST_POLL_TYPE: [
+                CallbackQueryHandler(handle_poll_type_selection, pattern=r"^poll_"),
+            ],
+            BROADCAST_POLL_QUESTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_poll_question),
+            ],
+            BROADCAST_POLL_OPTIONS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_poll_options),
             ],
             ADD_ADMIN_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_execute),
