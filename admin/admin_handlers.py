@@ -110,13 +110,24 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     """دریافت عنوان و پیام - با پشتیبانی از فوروارد متن"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
-
+        
+    # ✅ لاگ کامل
+    logger.info(f"📩 broadcast_now_message RECEIVED:")
+    logger.info(f"   text: {msg.text[:100] if msg.text else None}")
+    logger.info(f"   caption: {msg.caption[:100] if msg.caption else None}")
+    logger.info(f"   poll: {msg.poll is not None}")
+    logger.info(f"   forward_origin: {msg.forward_origin is not None}")
+    logger.info(f"   step: {context.user_data.get('broadcast_step')}")
+    logger.info(f"   content_type: {context.user_data.get('broadcast', {}).get('content_type')}")
+    
     # ✅ چک کن پیام فوروارد شده شامل poll باشه
     if msg.forward_origin and msg.poll:
+        logger.info(f"📊 FORWARD POLL DETECTED! Redirecting...")
         return await handle_poll_forward_receive(update, context)
     
     # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
     if msg.poll:
+        logger.info(f"📊 POLL DETECTED! Redirecting...")
         return await handle_poll_forward_receive(update, context)  
     
     broadcast_type = context.user_data.get('broadcast_type')
@@ -346,13 +357,21 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
     text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
 
-    # ✅ چک کن پیام فوروارد شده شامل poll باشه
+    # ✅ لاگ کامل
+    logger.info(f"📩 broadcast_scheduled_message RECEIVED:")
+    logger.info(f"   text: {msg.text[:100] if msg.text else None}")
+    logger.info(f"   poll: {msg.poll is not None}")
+    logger.info(f"   forward_origin: {msg.forward_origin is not None}")
+    logger.info(f"   step: {context.user_data.get('broadcast_step')}")
+    
+    # ✅ چک poll
     if msg.forward_origin and msg.poll:
+        logger.info(f"📊 FORWARD POLL DETECTED! Redirecting...")
         return await handle_poll_forward_receive(update, context)
     
-    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
     if msg.poll:
-        return await handle_poll_forward_receive(update, context)    
+        logger.info(f"📊 POLL DETECTED! Redirecting...")
+        return await handle_poll_forward_receive(update, context)   
     
     # ============ تشخیص فوروارد ============
     from_chat_id = None
@@ -1045,13 +1064,22 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption = None
     title = None
 
-    # ✅ چک کن پیام فوروارد شده شامل poll باشه
+    # ✅ لاگ کامل
+    logger.info(f"📩 handle_file_receive RECEIVED:")
+    logger.info(f"   poll: {msg.poll is not None}")
+    logger.info(f"   forward_origin: {msg.forward_origin is not None}")
+    logger.info(f"   photo: {msg.photo is not None}")
+    logger.info(f"   video: {msg.video is not None}")
+    logger.info(f"   document: {msg.document is not None}")
+    
+    # ✅ چک poll
     if msg.forward_origin and msg.poll:
+        logger.info(f"📊 FORWARD POLL DETECTED! Redirecting...")
         return await handle_poll_forward_receive(update, context)
     
-    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
     if msg.poll:
-        return await handle_poll_forward_receive(update, context)     
+        logger.info(f"📊 POLL DETECTED! Redirecting...")
+        return await handle_poll_forward_receive(update, context)    
     
     # ============ تشخیص فوروارد (اصلاح‌شده) ============
     # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
