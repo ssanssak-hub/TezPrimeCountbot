@@ -123,15 +123,14 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     logger.info(f"   step: {context.user_data.get('broadcast_step')}")
     logger.info(f"   content_type: {context.user_data.get('broadcast', {}).get('content_type')}")
     
-    # ✅ چک کن پیام فوروارد شده شامل poll باشه
+    # ✅ چک poll - قبل از همه چیز!
     if msg.forward_origin and msg.poll:
         logger.info(f"📊 FORWARD POLL DETECTED! Redirecting...")
         return await handle_poll_forward_receive(update, context)
     
-    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
     if msg.poll:
         logger.info(f"📊 POLL DETECTED! Redirecting...")
-        return await handle_poll_forward_receive(update, context)  
+        return await handle_poll_forward_receive(update, context)
     
     broadcast_type = context.user_data.get('broadcast_type')
     content_type = context.user_data['broadcast'].get('content_type', 'text')
