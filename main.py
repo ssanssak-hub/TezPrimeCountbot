@@ -785,7 +785,12 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     msg = update.message
-    
+
+    # ✅ این لاگ رو اول تابع بذار - قبل از همه چک‌ها
+    logger.info(f"📢 ECHO START: user={user_id}, "
+                f"has_text={msg.text is not None if msg else False}, "
+                f"has_poll={msg.poll is not None if msg else False}, "
+                f"has_forward={msg.forward_origin is not None if msg else False}")    
     # ✅ لاگ دیباگ
     logger.info(f"📢 ECHO: awaiting_message={context.user_data.get('awaiting_message')}, "
                 f"broadcast_type={context.user_data.get('broadcast_type')}, "
