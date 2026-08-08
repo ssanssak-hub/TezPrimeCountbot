@@ -1175,9 +1175,9 @@ async def dm_handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYP
     # pagination لیست ارسالی ادمین
     if data.startswith("dm_admin_page_"):
         page = int(data.split("_")[-1])
-        messages = context.user_data.get('dm_admin_msgs', [])
+        messages = get_all_admin_messages()
         await query.edit_message_text(
-            "📋 <b>پیام‌های ارسالی</b>",
+            "📋 <b>پیام‌های ارسالی به کاربران</b>",
             reply_markup=dm_admin_sent_list_keyboard(messages, page),
             parse_mode='HTML'
         )
@@ -1185,6 +1185,42 @@ async def dm_handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYP
     # pagination لیست حذف ادمین
     elif data.startswith("dm_del_page_"):
         page = int(data.split("_")[-1])
-        messages = context.user_data.get('dm_admin_msgs', [])
+        messages = get_all_admin_messages()
         await query.edit_message_text(
-            "🗑️ <
+            "🗑️ <b>انتخاب پیام برای حذف</b>",
+            reply_markup=dm_admin_delete_list_keyboard(messages, page),
+            parse_mode='HTML'
+        )
+
+    # pagination لیست دریافتی کاربر
+    elif data.startswith("dm_ur_page_"):
+        page = int(data.split("_")[-1])
+        user_id = update.effective_user.id
+        messages = get_admin_messages_for_user(user_id)
+        await query.edit_message_text(
+            "📥 <b>پیام‌های دریافتی از مدیر</b>",
+            reply_markup=dm_user_received_list_keyboard(messages, page),
+            parse_mode='HTML'
+        )
+
+    # pagination لیست ارسالی کاربر
+    elif data.startswith("dm_us_page_"):
+        page = int(data.split("_")[-1])
+        user_id = update.effective_user.id
+        messages = get_user_messages_from_user(user_id)
+        await query.edit_message_text(
+            "📤 <b>پیام‌های ارسالی به مدیر</b>",
+            reply_markup=dm_user_sent_list_keyboard(messages, page),
+            parse_mode='HTML'
+        )
+
+    # pagination لیست حذف کاربر
+    elif data.startswith("dm_ud_page_"):
+        page = int(data.split("_")[-1])
+        user_id = update.effective_user.id
+        messages = get_user_messages_from_user(user_id)
+        await query.edit_message_text(
+            "🗑️ <b>انتخاب پیام برای حذف</b>",
+            reply_markup=dm_user_delete_list_keyboard(messages, page),
+            parse_mode='HTML'
+        )
