@@ -996,13 +996,18 @@ async def dm_user_toggle_admin(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data['selected_admins'] = selected
 
-    await query.edit_message_text(
-        f"👥 <b>انتخاب مدیر گیرنده</b>\n\n"
-        f"انتخاب شده: <b>{len(selected)}</b> مدیر\n"
-        f"مدیر(ان) مورد نظر را انتخاب کنید:",
-        reply_markup=dm_admin_select_keyboard(context.user_data['dm_admins'], selected),
-        parse_mode='HTML'
-    )
+    try:
+        await query.edit_message_text(
+            f"👥 <b>انتخاب مدیر گیرنده</b>\n\n"
+            f"انتخاب شده: <b>{len(selected)}</b> مدیر\n"
+            f"مدیر(ان) مورد نظر را انتخاب کنید:",
+            reply_markup=dm_admin_select_keyboard(context.user_data['dm_admins'], selected),
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
+
     return DM_SELECT_ADMINS
 
 async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
