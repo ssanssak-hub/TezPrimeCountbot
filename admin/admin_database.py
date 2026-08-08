@@ -81,7 +81,25 @@ def init_admin_db():
     ''')    
     
     # ============ Migration های موجود ============
+    # ✅ اضافه کردن ستون‌های نظرسنجی
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN poll_mode TEXT")
+        logger.info("✅ Added poll_mode column to broadcasts table")
+    except:
+        pass
     
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN poll_question TEXT")
+        logger.info("✅ Added poll_question column to broadcasts table")
+    except:
+        pass
+    
+    try:
+        cursor.execute("ALTER TABLE broadcasts ADD COLUMN poll_options TEXT")
+        logger.info("✅ Added poll_options column to broadcasts table")
+    except:
+        pass
+        
     try:
         cursor.execute("ALTER TABLE broadcasts ADD COLUMN status TEXT DEFAULT 'pending'")
         logger.info("✅ Added status column to broadcasts table")
