@@ -1034,6 +1034,19 @@ def process_update(update_json: dict) -> bool:
         
         update = Update.de_json(update_json, application.bot)
         
+        # ✅ لاگ هر update که میرسه
+        if update.message:
+            msg = update.message
+            logger.info(f"🔴 UPDATE RECEIVED: msg_id={msg.message_id}, "
+                        f"poll={msg.poll is not None}, "
+                        f"forward={msg.forward_origin is not None}, "
+                        f"text={msg.text[:50] if msg.text else 'None'}, "
+                        f"caption={msg.caption[:50] if msg.caption else 'None'}")
+        elif update.callback_query:
+            logger.info(f"🔵 CALLBACK RECEIVED: {update.callback_query.data}")
+        else:
+            logger.info(f"⚪ OTHER UPDATE: {update}")
+        
         # استفاده از run_coroutine_threadsafe بدون timeout
         # این متد non-blocking هست و سریع برمی‌گرده
         asyncio.run_coroutine_threadsafe(
@@ -1046,7 +1059,6 @@ def process_update(update_json: dict) -> bool:
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {e}", exc_info=True)
         return False
-
 
 # ============ Flask Routes ============
 
