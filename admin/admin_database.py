@@ -184,13 +184,18 @@ def save_broadcast_advanced(admin_id, title, content_type='text',
     Args:
         admin_id: شناسه ادمین
         title: عنوان پیام
-        content_type: نوع محتوا (text, photo, video, document, audio)
+        content_type: نوع محتوا (text, photo, video, document, audio, poll)
         message: متن پیام (برای content_type='text')
         file_id: شناسه فایل تلگرام (برای مدیا)
         file_caption: کپشن فایل
         inline_buttons: لیست دکمه‌های شیشه‌ای [[text, url], [text, callback_data, type]]
         send_date: تاریخ ارسال (برای زمان‌بندی)
         send_time: ساعت ارسال (برای زمان‌بندی)
+        from_chat_id: شناسه چت مبدا (برای فوروارد)
+        from_message_id: شناسه پیام مبدا (برای فوروارد)
+        poll_mode: حالت نظرسنجی ('create' یا 'forward')
+        poll_question: سوال نظرسنجی
+        poll_options: گزینه‌های نظرسنجی
     
     Returns:
         int: broadcast_id
@@ -201,32 +206,55 @@ def save_broadcast_advanced(admin_id, title, content_type='text',
     import json
     
     # تبدیل دکمه‌ها به JSON
-    buttons_json = json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None
+    buttons_json = None
     if inline_buttons:
         try:
             buttons_json = json.dumps(inline_buttons, ensure_ascii=False)
         except Exception as e:
             logger.error(f"❌ Error serializing inline_buttons: {e}")
-    # قبل از INSERT:
-    logger.info(f"💾 SAVING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}")
-                               
+    
+    # ✅ مقدار پیش‌فرض برای message (برای poll که message نداره)
+    if message is None:
+        if content_type == 'poll':
+            message = poll_question or 'نظرسنجی'
+        else:
+            message = ''
+    
+    # ✅ تبدیل poll_options به JSON
+    poll_options_json = None
+    if poll_options:
+        try:
+            poll_options_json = json.dumps(poll_options, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"❌ Error serializing poll_options: {e}")
+    
+    # لاگ برای دیباگ
+    logger.info(f"💾 SAVING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, "
+                f"content_type={content_type}, poll_mode={poll_mode}")
+    
+    # ✅ اضافه کردن فیلدهای poll به INSERT
     cursor.execute('''
         INSERT INTO broadcasts (
             admin_id, title, content_type, message, 
             file_id, file_caption, inline_buttons,
-            send_date, send_time, from_chat_id, from_message_id, status
+            send_date, send_time, from_chat_id, from_message_id,
+            poll_mode, poll_question, poll_options,
+            status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     ''', (admin_id, title, content_type, message, 
           file_id, file_caption, buttons_json,
-          send_date, send_time, from_chat_id, from_message_id))
+          send_date, send_time, from_chat_id, from_message_id,
+          poll_mode, poll_question, poll_options_json))
     
     broadcast_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    logger.info(f"📝 Advanced broadcast {broadcast_id} saved (type: {content_type}, buttons: {len(inline_buttons) if inline_buttons else 0})")
+    logger.info(f"📝 Advanced broadcast {broadcast_id} saved (type: {content_type}, "
+                f"buttons: {len(inline_buttons) if inline_buttons else 0}, "
+                f"poll_mode: {poll_mode})")
     return broadcast_id
-
+                               
 def get_pending_broadcasts():
     """دریافت پیام‌های همگانی در انتظار ارسال"""
     conn = get_db_connection()
