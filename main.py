@@ -1121,9 +1121,9 @@ def setup_handlers():
     
     dm_admin_conv = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(dm_admin_menu, pattern="^dm_admin_menu$"),
-            CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_send$"),
-            CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_send_to_\d+$"),
+            CallbackQueryHandler(dm_admin_menu, pattern=r"^dm_admin_menu$"),
+            CallbackQueryHandler(dm_admin_send_start, pattern=r"^dm_admin_send$"),
+            CallbackQueryHandler(dm_admin_send_start, pattern=r"^dm_admin_reply_\d+$"),
         ],
         states={
             DM_TITLE: [
