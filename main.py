@@ -1141,6 +1141,7 @@ def setup_handlers():
             ],            
             BROADCAST_TITLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
+                MessageHandler(filters.POLL, handle_poll_forward_receive),  # ✅ اضافه شد
                 MessageHandler(filters.PHOTO, handle_file_receive),
                 MessageHandler(filters.VIDEO, handle_file_receive),
                 MessageHandler(filters.VIDEO_NOTE, handle_file_receive),
@@ -1194,7 +1195,7 @@ def setup_handlers():
         ],
         name="admin_conversation",
         allow_reentry=True,
-        per_message=False  # ✅ تغییر به False
+        per_message=False
     )
     application.add_handler(admin_conv)
     
@@ -1219,7 +1220,7 @@ def setup_handlers():
         ],
         name="reminder_conversation",
         allow_reentry=True,
-        per_message=False  # ✅ تغییر به False
+        per_message=False
     )
     application.add_handler(reminder_conv)
     
@@ -1260,7 +1261,7 @@ def setup_handlers():
         ],
         name="dm_admin_conversation",
         allow_reentry=True,
-        per_message=False  # ✅ تغییر به False
+        per_message=False
     )
     application.add_handler(dm_admin_conv)
     
@@ -1302,7 +1303,7 @@ def setup_handlers():
         ],
         name="dm_user_conversation",
         allow_reentry=True,
-        per_message=False  # ✅ تغییر به False
+        per_message=False
     )
     application.add_handler(dm_user_conv)
     
@@ -1325,6 +1326,10 @@ def setup_handlers():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    
+    # ✅ Handler برای poll (نظرسنجی)
+    application.add_handler(MessageHandler(filters.POLL, handle_poll_forward_receive))
+    
     application.add_error_handler(error_handler)
     
     logger.info("✅ All handlers configured")
