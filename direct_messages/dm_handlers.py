@@ -1085,42 +1085,74 @@ async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
-async def dm_user_view_sent_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مشاهده جزئیات پیام ارسالی به مدیر"""
+async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مشاهده جزئیات پیام دریافتی از مدیر"""
     query = update.callback_query
     await query.answer()
 
     msg_id = int(query.data.split("_")[-1])
-    msg = get_user_message_by_id(msg_id)
+    msg = get_admin_message_by_id(msg_id)
 
     if not msg:
         await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=dm_user_menu_keyboard())
         return
 
-    status_text = {
-        'pending': '⏳ در انتظار مشاهده',
-        'read': '👁 مشاهده شده',
-        'ignored': '👀 دیده شده',
-        'deleted': '🗑️ حذف شده توسط مدیر',
-        'replied': '💬 پاسخ داده شده',
-    }.get(msg['status'], msg['status'])
+    mark_admin_message_read(msg_id)
+
+    admin_info = get_user_info(msg['admin_id'])
+    admin_name = admin_info['first_name'] if admin_info else 'ادمین'
 
     text = (
-        f"📋 <b>پیام ارسالی به مدیر</b>\n"
+        f"📋 <b>پیام از مدیر</b>\n"
         f"━━━━━━━━━━━━━━━━\n"
+        f"👤 فرستنده: <b>{admin_name}</b>\n"
         f"📌 عنوان: <b>{msg['title']}</b>\n"
         f"📎 نوع: <b>{get_content_type_fa(msg['content_type'])}</b>\n"
-        f"📊 وضعیت: {status_text}\n"
         f"📅 تاریخ: {msg['created_at']}\n"
         f"━━━━━━━━━━━━━━━━\n"
     )
 
     if msg['content_type'] == 'text' and msg['message']:
-        text += f"📝 متن:\n{msg['message'][:300]}\n"
+        text += f"📝 متن:\n{msg['message'][:500]}\n"
+
+    # 🆕 ساخت reply_markup از دکمه‌های شیشه‌ای
+    reply_markup = None
+    if msg.get('inline_buttons'):
+        try:
+            import json
+            buttons_data = json.loads(msg['inline_buttons']) if isinstance(msg['inline_buttons'], str) else msg['inline_buttons']
+            keyboard = []
+            for btn in buttons_data:
+                if isinstance(btn, dict):
+                    if btn.get('type') == 'url':
+                        keyboard.append([InlineKeyboardButton(btn['text'][:64], url=btn['url'])])
+                    elif btn.get('type') == 'callback':
+                        keyboard.append([InlineKeyboardButton(btn['text'][:64], callback_data=btn['callback_data'])])
+            if keyboard:
+                # دکمه بازگشت رو اضافه کن
+                keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="dm_user_view_received")])
+                reply_markup = InlineKeyboardMarkup(keyboard)
+        except Exception as e:
+            logger.error(f"Error parsing inline buttons: {e}")
+
+    # اگه دکمه‌ای نبود، فقط دکمه بازگشت
+    if not reply_markup:
+        reply_markup = dm_user_detail_keyboard(msg_id)
+
+    # نمایش محتوای فوروارد شده
+    if msg.get('from_chat_id') and msg.get('from_message_id'):
+        try:
+            await context.bot.copy_message(
+                chat_id=update.effective_user.id,
+                from_chat_id=msg['from_chat_id'],
+                message_id=msg['from_message_id']
+            )
+        except:
+            pass
 
     await query.edit_message_text(
         text,
-        reply_markup=dm_user_sent_detail_keyboard(msg_id),
+        reply_markup=reply_markup,
         parse_mode='HTML'
     )
 
