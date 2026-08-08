@@ -1097,12 +1097,12 @@ def setup_handlers():
         },
         fallbacks=[
             CommandHandler("cancel", admin_cancel),
-            CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),  # ✅ اضافه کن
+            CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),
             CallbackQueryHandler(back_to_main, pattern=r"^back_to_main$"),
         ],
         name="admin_conversation",
         allow_reentry=True,
-        per_message=True
+        per_message=False  # ✅ تغییر به False
     )
     application.add_handler(admin_conv)
     
@@ -1127,7 +1127,7 @@ def setup_handlers():
         ],
         name="reminder_conversation",
         allow_reentry=True,
-        per_message=True
+        per_message=False  # ✅ تغییر به False
     )
     application.add_handler(reminder_conv)
     
@@ -1168,7 +1168,7 @@ def setup_handlers():
         ],
         name="dm_admin_conversation",
         allow_reentry=True,
-        per_message=True
+        per_message=False  # ✅ تغییر به False
     )
     application.add_handler(dm_admin_conv)
     
@@ -1210,7 +1210,7 @@ def setup_handlers():
         ],
         name="dm_user_conversation",
         allow_reentry=True,
-        per_message=True
+        per_message=False  # ✅ تغییر به False
     )
     application.add_handler(dm_user_conv)
     
@@ -1236,7 +1236,6 @@ def setup_handlers():
     application.add_error_handler(error_handler)
     
     logger.info("✅ All handlers configured")
-
 
 def main():
     """تابع اصلی راه‌اندازی"""
