@@ -111,10 +111,13 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
 
-    # ✅ تشخیص نظرسنجی فوروارد شده در مرحله title
-    msg = update.message
+    # ✅ چک کن پیام فوروارد شده شامل poll باشه
     if msg.forward_origin and msg.poll:
-        return await handle_poll_forward_receive(update, context)    
+        return await handle_poll_forward_receive(update, context)
+    
+    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
+    if msg.poll:
+        return await handle_poll_forward_receive(update, context)  
     
     broadcast_type = context.user_data.get('broadcast_type')
     content_type = context.user_data['broadcast'].get('content_type', 'text')
@@ -342,6 +345,14 @@ async def broadcast_scheduled_message(update: Update, context: ContextTypes.DEFA
     msg = update.message
     text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
+
+    # ✅ چک کن پیام فوروارد شده شامل poll باشه
+    if msg.forward_origin and msg.poll:
+        return await handle_poll_forward_receive(update, context)
+    
+    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
+    if msg.poll:
+        return await handle_poll_forward_receive(update, context)    
     
     # ============ تشخیص فوروارد ============
     from_chat_id = None
@@ -1034,9 +1045,13 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption = None
     title = None
 
-    # ✅ تشخیص نظرسنجی فوروارد شده
-    if message.forward_origin and message.poll:
-        return await handle_poll_forward_receive(update, context)    
+    # ✅ چک کن پیام فوروارد شده شامل poll باشه
+    if msg.forward_origin and msg.poll:
+        return await handle_poll_forward_receive(update, context)
+    
+    # ✅ چک کن پیام poll باشه (برای حالت forward بدون forward_origin)
+    if msg.poll:
+        return await handle_poll_forward_receive(update, context)     
     
     # ============ تشخیص فوروارد (اصلاح‌شده) ============
     # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
