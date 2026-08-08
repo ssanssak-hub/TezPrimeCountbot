@@ -1201,31 +1201,31 @@ def setup_handlers():
     
     # ============ 🆕 هندلرهای standalone برای دکمه‌های DM ============
     # جزئیات پیام ارسالی ادمین
-    application.add_handler(CallbackQueryHandler(dm_admin_view_detail, pattern="^dm_admin_detail_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_view_detail, pattern="r^dm_admin_detail_\d+$"))
     # حذف پیام ارسالی ادمین
-    application.add_handler(CallbackQueryHandler(dm_admin_delete_message, pattern="^dm_admin_delete_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_delete_message, pattern=r"^dm_admin_delete_\d+$"))
     # علامت‌گذاری خوانده شده
-    application.add_handler(CallbackQueryHandler(dm_admin_read_message, pattern="^dm_admin_read_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_read_message, pattern="r^dm_admin_read_\d+$"))
     # حذف پیام کاربر توسط ادمین
-    application.add_handler(CallbackQueryHandler(dm_admin_delete_user_msg, pattern="^dm_admin_delete_umsg_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_delete_user_msg, pattern=r"^dm_admin_delete_umsg_\d+$"))
     # نادیده گرفتن پیام کاربر
-    application.add_handler(CallbackQueryHandler(dm_admin_ignore_message, pattern="^dm_admin_ignore_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_ignore_message, pattern=r"^dm_admin_ignore_\d+$"))
     # بن کردن کاربر از طریق پیام
-    application.add_handler(CallbackQueryHandler(dm_admin_ban_user, pattern="^dm_admin_ban_\d+_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_ban_user, pattern=r"^dm_admin_ban_\d+_\d+$"))
     # مشاهده پیام‌های یک کاربر خاص
-    application.add_handler(CallbackQueryHandler(dm_admin_view_user_messages, pattern="^dm_admin_user_msgs_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_view_user_messages, pattern=r"^dm_admin_user_msgs_\d+$"))
     # مشاهده جزئیات پیام کاربر توسط ادمین
-    application.add_handler(CallbackQueryHandler(dm_admin_view_umsg_detail, pattern="^dm_admin_view_umsg_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_view_umsg_detail, pattern=r"^dm_admin_view_umsg_\d+$"))
     # پاسخ به کاربر (ارسال پیام)
-    application.add_handler(CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_reply_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_send_start, pattern=r"^dm_admin_reply_\d+$"))
     # جزئیات پیام دریافتی کاربر
-    application.add_handler(CallbackQueryHandler(dm_user_view_detail, pattern="^dm_user_detail_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_user_view_detail, pattern=r"^dm_user_detail_\d+$"))
     # جزئیات پیام ارسالی کاربر
-    application.add_handler(CallbackQueryHandler(dm_user_view_sent_detail, pattern="^dm_user_sent_detail_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_user_view_sent_detail, pattern=r"^dm_user_sent_detail_\d+$"))
     # حذف پیام توسط کاربر
-    application.add_handler(CallbackQueryHandler(dm_user_delete_message, pattern="^dm_user_delete_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_user_delete_message, pattern=r"^dm_user_delete_\d+$"))
     # pagination ها
-    application.add_handler(CallbackQueryHandler(dm_handle_pagination, pattern="^dm_.*_page_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_handle_pagination, pattern=r"^dm_.*_page_\d+$"))
     
     # ============ هندلرهای اصلی ============
     application.add_handler(CommandHandler("start", start))
