@@ -431,7 +431,7 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                 from_message_id=from_message_id
             )
 
-            # ✅ جدید - forward با هدر:
+            # ۲. ارسال محتوای اصلی - اولویت با forward_message (با هدر فوروارد)
             if from_chat_id and from_message_id:
                 try:
                     await bot.forward_message(
@@ -439,15 +439,24 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                         from_chat_id=from_chat_id,
                         message_id=from_message_id
                     )
-                    logger.info(f"📤 forwarded message to user {user_id}")
-                    
-                except Exception as copy_error:
-                    logger.warning(f"⚠️ forward failed for user {user_id}: {copy_error}")
-                    # Fallback: ارسال متن یا فایل
-                    if content_type == 'text' and dm_data.get('message'):
-                        await bot.send_message(user_id, text=dm_data.get('message'))
-                    elif dm_data.get('file_id'):
-                        await _send_file_by_type(bot, user_id, content_type, dm_data)
+                    logger.info(f"📤 Forwarded message to user {user_id}")
+                except Exception as forward_error:
+                    logger.warning(f"⚠️ Forward failed for user {user_id}: {forward_error}")
+                    # Fallback 1: تلاش با copy_message (بدون هدر)
+                    try:
+                        await bot.copy_message(
+                            chat_id=user_id,
+                            from_chat_id=from_chat_id,
+                            message_id=from_message_id
+                        )
+                        logger.info(f"📤 Copied message to user {user_id} (fallback)")
+                    except Exception as copy_error:
+                        logger.warning(f"⚠️ Copy also failed for user {user_id}: {copy_error}")
+                        # Fallback 2: ارسال متن/فایل ساده
+                        if content_type == 'text' and dm_data.get('message'):
+                            await bot.send_message(user_id, text=dm_data.get('message'))
+                        elif dm_data.get('file_id'):
+                            await _send_file_by_type(bot, user_id, content_type, dm_data)
             elif content_type == 'text' and dm_data.get('message'):
                 await bot.send_message(user_id, text=dm_data.get('message'))
             elif dm_data.get('file_id'):
@@ -497,7 +506,7 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.clear()
     await update.message.reply_text(report, reply_markup=dm_admin_menu_keyboard(), parse_mode='HTML')
     return ConversationHandler.END
-
+    
 # ============ توابع کمکی ============
 
 def _build_inline_keyboard(buttons):
@@ -1164,10 +1173,11 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
     from_chat_id = dm_data.get('from_chat_id')
     from_message_id = dm_data.get('from_message_id')
     
-    logger.info(f"📤 SENDING: content_type={content_type}, from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+    logger.info(f"📤 USER SENDING: content_type={content_type}, from_chat_id={from_chat_id}, from_message_id={from_message_id}")
 
     for admin_id in selected:
         try:
+            # ۱. ذخیره در دیتابیس
             msg_id = save_user_message(
                 user_id=user_id,
                 admin_id=admin_id,
@@ -1181,26 +1191,38 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
                 from_message_id=from_message_id
             )
 
-            #ارسال محتوای اصلی - اولویت با فوروارد/کپی
+            # ۲. ارسال محتوای اصلی - اولویت با forward_message (با هدر فوروارد)
             if from_chat_id and from_message_id:
                 try:
                     await bot.forward_message(
-                        chat_id=user_id,
+                        chat_id=admin_id,
                         from_chat_id=from_chat_id,
                         message_id=from_message_id
                     )
                     logger.info(f"📤 Forwarded message to admin {admin_id}")
-                except Exception as copy_error:
-                    logger.warning(f"⚠️ Forward failed for admin {admin_id}: {copy_error}")
-                    # Fallback: ارسال متن ساده
-                    if content_type == 'text' and dm_data.get('message'):
-                        await bot.send_message(admin_id, text=dm_data.get('message'))
+                except Exception as forward_error:
+                    logger.warning(f"⚠️ Forward failed for admin {admin_id}: {forward_error}")
+                    # Fallback 1: تلاش با copy_message (بدون هدر)
+                    try:
+                        await bot.copy_message(
+                            chat_id=admin_id,
+                            from_chat_id=from_chat_id,
+                            message_id=from_message_id
+                        )
+                        logger.info(f"📤 Copied message to admin {admin_id} (fallback)")
+                    except Exception as copy_error:
+                        logger.warning(f"⚠️ Copy also failed for admin {admin_id}: {copy_error}")
+                        # Fallback 2: ارسال متن/فایل ساده
+                        if content_type == 'text' and dm_data.get('message'):
+                            await bot.send_message(admin_id, text=dm_data.get('message'))
+                        elif dm_data.get('file_id'):
+                            await _send_file_by_type(bot, admin_id, content_type, dm_data)
             elif content_type == 'text' and dm_data.get('message'):
                 await bot.send_message(admin_id, text=dm_data.get('message'))
             elif dm_data.get('file_id'):
                 await _send_file_by_type(bot, admin_id, content_type, dm_data)
 
-            # ✅ ارسال فوتر
+            # ۳. ارسال فوتر با نوتیفیکیشن
             notif_text = (
                 f"📨 <b>پیام جدید از کاربر</b>\n\n"
                 f"👤 <b>{user_name}</b> با آیدی <code>{user_id}</code>{username}\n"
@@ -1216,6 +1238,7 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode='HTML'
             )
 
+            # ذخیره message_id نوتیفیکیشن
             save_notif_msg_id('user_messages', msg_id, 'admin_notif_msg_id', notif_msg.message_id)
             sent_count += 1
 
