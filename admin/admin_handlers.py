@@ -108,6 +108,8 @@ async def broadcast_now_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت عنوان و پیام - با پشتیبانی از فوروارد متن"""
+    # ✅ اینو اول همه چیز بذار
+    logger.info(f"🟢🟢🟢 BROADCAST_NOW_MESSAGE CALLED!")    
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
@@ -1048,6 +1050,8 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت فایل از ادمین (با پشتیبانی از فوروارد صحیح)"""
+    # ✅ اینو اول همه چیز بذار
+    logger.info(f"🟡🟡🟡 HANDLE_FILE_RECEIVE CALLED!")    
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
     
