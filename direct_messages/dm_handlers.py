@@ -908,6 +908,7 @@ async def dm_user_handle_content_type(update: Update, context: ContextTypes.DEFA
         )
         return DM_TITLE
 
+    await query.edit_message_text("❌ نوع محتوا نامعتبر!", reply_markup=back_to_admin_keyboard())
     return ConversationHandler.END
 
 
