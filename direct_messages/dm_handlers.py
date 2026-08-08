@@ -371,7 +371,6 @@ async def dm_admin_ask_user_ids(update: Update, context: ContextTypes.DEFAULT_TY
 
     return DM_USER_IDS
 
-
 async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ارسال پیام به کاربر(ان) مشخص شده"""
     if not context.user_data.get('awaiting_dm'):
@@ -410,6 +409,12 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
     sent_count = 0
     failed_ids = []
 
+    content_type = dm_data.get('content_type', 'text')
+    from_chat_id = dm_data.get('from_chat_id')
+    from_message_id = dm_data.get('from_message_id')
+    
+    logger.info(f"📤 ADMIN SENDING: content_type={content_type}, from_chat_id={from_chat_id}, from_message_id={from_message_id}")
+
     for user_id in user_ids:
         try:
             # ۱. ذخیره در دیتابیس
@@ -417,51 +422,40 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                 admin_id=admin_id,
                 user_id=user_id,
                 title=dm_data.get('title', 'بدون عنوان'),
-                content_type=dm_data.get('content_type', 'text'),
+                content_type=content_type,
                 message=dm_data.get('message'),
                 file_id=dm_data.get('file_id'),
                 file_caption=dm_data.get('caption'),
                 inline_buttons=buttons,
-                from_chat_id=dm_data.get('from_chat_id'),
-                from_message_id=dm_data.get('from_message_id')
+                from_chat_id=from_chat_id,
+                from_message_id=from_message_id
             )
 
-            # ۲. 🆕 ارسال محتوای اصلی (فوروارد/کپی/فایل/متن)
-            content_type = dm_data.get('content_type', 'text')
-            from_chat_id = dm_data.get('from_chat_id')
-            from_message_id = dm_data.get('from_message_id')
-
+            # ۲. ارسال محتوای اصلی - اولویت با copy_message
             if from_chat_id and from_message_id:
-                # فوروارد یا کپی
                 try:
-                    await bot.forward_message(
+                    await bot.copy_message(
                         chat_id=user_id,
                         from_chat_id=from_chat_id,
                         message_id=from_message_id
                     )
-                except Exception:
-                    try:
-                        await bot.copy_message(
-                            chat_id=user_id,
-                            from_chat_id=from_chat_id,
-                            message_id=from_message_id
-                        )
-                    except Exception as copy_error:
-                        logger.warning(f"⚠️ Copy failed for {user_id}: {copy_error}")
-                        # Fallback: ارسال با file_id یا متن
-                        if content_type == 'text':
-                            await bot.send_message(user_id, text=dm_data.get('message', ''))
-                        elif dm_data.get('file_id'):
-                            await _send_file_by_type(bot, user_id, content_type, dm_data)
-            elif content_type == 'text':
-                await bot.send_message(user_id, text=dm_data.get('message', ''))
+                    logger.info(f"📤 Copied message to user {user_id}")
+                except Exception as copy_error:
+                    logger.warning(f"⚠️ Copy failed for user {user_id}: {copy_error}")
+                    # Fallback: ارسال متن یا فایل
+                    if content_type == 'text' and dm_data.get('message'):
+                        await bot.send_message(user_id, text=dm_data.get('message'))
+                    elif dm_data.get('file_id'):
+                        await _send_file_by_type(bot, user_id, content_type, dm_data)
+            elif content_type == 'text' and dm_data.get('message'):
+                await bot.send_message(user_id, text=dm_data.get('message'))
             elif dm_data.get('file_id'):
                 await _send_file_by_type(bot, user_id, content_type, dm_data)
 
-            # ۳. 🆕 ساخت reply_markup از دکمه‌های شیشه‌ای
+            # ۳. ساخت reply_markup از دکمه‌های شیشه‌ای
             reply_markup = _build_inline_keyboard(buttons)
 
-            # ۴. 🆕 ارسال فوتر با اطلاعات ادمین
+            # ۴. ارسال فوتر با اطلاعات ادمین
             footer_text = (
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"👤 مدیر: <b>{admin_name}</b>\n"
@@ -477,7 +471,7 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode='HTML'
             )
 
-            # ۵. ارسال نوتیفیکیشن (اختیاری - کوچیک)
+            # ۵. ارسال نوتیفیکیشن
             notif_text = f"📨 پیام جدید از <b>{admin_name}</b> 👆"
             notif_msg = await bot.send_message(
                 chat_id=user_id,
@@ -502,7 +496,6 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.clear()
     await update.message.reply_text(report, reply_markup=dm_admin_menu_keyboard(), parse_mode='HTML')
     return ConversationHandler.END
-
 
 # ============ توابع کمکی ============
 
@@ -620,15 +613,23 @@ async def dm_admin_delete_message(update: Update, context: ContextTypes.DEFAULT_
     if data == "dm_admin_delete":
         messages = get_all_admin_messages()
         if not messages:
-            await query.edit_message_text("📭 پیامی برای حذف نیست!", reply_markup=dm_admin_menu_keyboard())
+            try:
+                await query.edit_message_text("📭 پیامی برای حذف نیست!", reply_markup=dm_admin_menu_keyboard())
+            except Exception as e:
+                if "Message is not modified" not in str(e):
+                    raise
             return
 
         context.user_data['dm_admin_msgs'] = messages
-        await query.edit_message_text(
-            "🗑️ <b>انتخاب پیام برای حذف</b>",
-            reply_markup=dm_admin_delete_list_keyboard(messages),
-            parse_mode='HTML'
-        )
+        try:
+            await query.edit_message_text(
+                "🗑️ <b>انتخاب پیام برای حذف</b>",
+                reply_markup=dm_admin_delete_list_keyboard(messages),
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                raise
         return
 
     # حذف پیام مشخص
@@ -641,19 +642,24 @@ async def dm_admin_delete_message(update: Update, context: ContextTypes.DEFAULT_
             if msg.get('user_notif_msg_id'):
                 try:
                     await context.bot.delete_message(msg['user_id'], msg['user_notif_msg_id'])
-                except:
-                    pass
+                except Exception as e:
+                    # ✅ نادیده گرفتن خطای "message to delete not found"
+                    if "message to delete not found" not in str(e).lower():
+                        logger.warning(f"Could not delete notification: {e}")
 
             mark_admin_message_deleted(msg_id)
             await query.answer("✅ پیام حذف شد!")
 
         messages = get_all_admin_messages()
-        await query.edit_message_text(
-            "🗑️ <b>انتخاب پیام برای حذف</b>",
-            reply_markup=dm_admin_delete_list_keyboard(messages),
-            parse_mode='HTML'
-        )
-
+        try:
+            await query.edit_message_text(
+                "🗑️ <b>انتخاب پیام برای حذف</b>",
+                reply_mup=dm_admin_delete_list_keyboard(messages),
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                raise
 
 async def dm_admin_read_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """علامت‌گذاری به عنوان خوانده شده"""
@@ -1152,6 +1158,12 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
 
     bot = context.bot
     sent_count = 0
+    
+    content_type = dm_data.get('content_type', 'text')
+    from_chat_id = dm_data.get('from_chat_id')
+    from_message_id = dm_data.get('from_message_id')
+    
+    logger.info(f"📤 SENDING: content_type={content_type}, from_chat_id={from_chat_id}, from_message_id={from_message_id}")
 
     for admin_id in selected:
         try:
@@ -1159,15 +1171,35 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
                 user_id=user_id,
                 admin_id=admin_id,
                 title=dm_data.get('title', 'بدون عنوان'),
-                content_type=dm_data.get('content_type', 'text'),
+                content_type=content_type,
                 message=dm_data.get('message'),
                 file_id=dm_data.get('file_id'),
                 file_caption=dm_data.get('caption'),
                 inline_buttons=buttons,
-                from_chat_id=dm_data.get('from_chat_id'),
-                from_message_id=dm_data.get('from_message_id')
+                from_chat_id=from_chat_id,
+                from_message_id=from_message_id
             )
 
+            # ✅ ارسال محتوای اصلی - اولویت با فوروارد/کپی
+            if from_chat_id and from_message_id:
+                try:
+                    await bot.copy_message(
+                        chat_id=admin_id,
+                        from_chat_id=from_chat_id,
+                        message_id=from_message_id
+                    )
+                    logger.info(f"📤 Copied message to admin {admin_id}")
+                except Exception as copy_error:
+                    logger.warning(f"⚠️ Copy failed for admin {admin_id}: {copy_error}")
+                    # Fallback: ارسال متن ساده
+                    if content_type == 'text' and dm_data.get('message'):
+                        await bot.send_message(admin_id, text=dm_data.get('message'))
+            elif content_type == 'text' and dm_data.get('message'):
+                await bot.send_message(admin_id, text=dm_data.get('message'))
+            elif dm_data.get('file_id'):
+                await _send_file_by_type(bot, admin_id, content_type, dm_data)
+
+            # ✅ ارسال فوتر
             notif_text = (
                 f"📨 <b>پیام جدید از کاربر</b>\n\n"
                 f"👤 <b>{user_name}</b> با آیدی <code>{user_id}</code>{username}\n"
