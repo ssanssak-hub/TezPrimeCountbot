@@ -1350,12 +1350,23 @@ def main():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
         
-        # ✅ چک کانال
+        # ✅ چک کن ربات عضو کانال هست یا نه
         try:
             chat = await application.bot.get_chat("@video_amouzeshi")
             logger.info(f"✅ Bot is member of: {chat.title} (@{chat.username}) - Type: {chat.type}")
-            
-            # ✅ چک ادمین بودن و دسترسی‌ها
+        except Exception as e:
+            logger.error(f"❌ Bot is NOT member of @video_amouzeshi: {e}")
+    
+    bot_loop.run_until_complete(setup_webhook())
+    
+    # راه‌اندازی application
+    async def start_app():
+        await application.initialize()
+        await application.start()
+        logger.info("✅ Application started")
+        
+        # ✅ چک ادمین بودن و دسترسی‌ها (بعد از initialize)
+        try:
             bot_member = await application.bot.get_chat_member("@video_amouzeshi", application.bot.id)
             logger.info(f"👑 Bot status: {bot_member.status}")
             logger.info(f"👑 Bot is admin: {bot_member.status == 'administrator'}")
@@ -1373,17 +1384,8 @@ def main():
                 logger.info(f"   can_manage_video_chats: {bot_member.can_manage_video_chats}")
             else:
                 logger.warning(f"⚠️ Bot is NOT admin! Only {bot_member.status}")
-                
         except Exception as e:
-            logger.error(f"❌ Bot check failed for @video_amouzeshi: {e}")
-    
-    bot_loop.run_until_complete(setup_webhook())
-    
-    # راه‌اندازی application
-    async def start_app():
-        await application.initialize()
-        await application.start()
-        logger.info("✅ Application started")
+            logger.error(f"❌ Admin check failed for @video_amouzeshi: {e}")
         
         try:
             from reminders.reminder_scheduler import start_scheduler
@@ -1431,7 +1433,6 @@ def main():
         debug=False,
         threaded=True
     )
-
 
 if __name__ == "__main__":
     main()
