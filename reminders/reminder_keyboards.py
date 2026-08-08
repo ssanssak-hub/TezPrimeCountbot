@@ -2,13 +2,13 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 def main_menu_keyboard(user_id=None, admin_id=None):
     keyboard = [
-        [InlineKeyboardButton("🔔 اعلان‌ها", callback_data="notifications")]
+        [InlineKeyboardButton("🔔 اعلان‌ها", callback_data="notifications")],
+        [InlineKeyboardButton("📨 پیام به مدیر", callback_data="dm_user_menu")],  # ✅ جدا بنویس
     ]
     
-    # دکمه پنل مدیریت برای همه ادمین‌ها
     if user_id and admin_id:
         from database import is_user_admin
-        is_admin, _ = is_user_admin(user_id, admin_id)  # ⚠️ این هم main_admin رو چک می‌کنه هم sub_admin
+        is_admin, _ = is_user_admin(user_id, admin_id)
         if is_admin:
             keyboard.append([InlineKeyboardButton("👑 پنل مدیریت", callback_data="admin_panel")])
     
