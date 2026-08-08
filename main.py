@@ -409,37 +409,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"🔘 Button: {data} from user {user_id}")
     
-    # ============ ✅ دکمه‌های ارسال پیشرفته (اولویت اول) ============
-    
-    # دکمه‌های مدیریت دکمه‌های شیشه‌ای (افزودن/حذف/تأیید/رد)
+    # ============ دکمه‌های اولویت‌دار (قبل از چک ادمین) ============
     if data.startswith("ib_"):
         from admin.admin_handlers import handle_inline_buttons
         await handle_inline_buttons(update, context)
         return
     
-    # دکمه تأیید نهایی ارسال پیشرفته
     if data.startswith("confirm_adv_broadcast_"):
         from admin.admin_handlers import confirm_advanced_broadcast
         await confirm_advanced_broadcast(update, context)
         return
     
-    # دکمه ویرایش دکمه‌های شیشه‌ای
     if data.startswith("broadcast_edit_buttons_"):
         from admin.admin_handlers import edit_broadcast_buttons
         await edit_broadcast_buttons(update, context)
         return
-
-    # ============ ✅ این بخش رو اضافه کن ============
-    # دکمه‌های شیشه‌ای پیام‌های همگانی (کلیک کاربران)
-    if data.startswith("bc_btn_"):
-        await handle_broadcast_button_click(update, context)
-        return 
-
-    if data.startswith("bc_"):
+    
+    if data.startswith("bc_btn_") or data.startswith("bc_"):
         await handle_broadcast_button_click(update, context)
         return
     
-    # ✅ اضافه کردن شرط برای دکمه‌های تاریخ (مرحله ۳)
     if data.startswith("broadcast_date_"):
         await broadcast_date_selection(update, context)
         return
@@ -448,17 +437,52 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_permission_toggle(update, context)
         return
     
+    # ============ چک وضعیت ربات و بن ============
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     
     if not is_bot_active() and not is_admin:
-        await query.edit_message_text("🔴 ربات در حال حاضر غیرفعال است. لطفاً بعداً مراجعه کنید.")
+        await query.edit_message_text("🔴 ربات در حال حاضر غیرفعال است.")
         return
     
     if not is_admin and db_is_banned(user_id):
         await query.edit_message_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ---- دکمه‌های اصلی ----
+    # ============ دکمه‌های DM (قبل از بقیه تا context پاک بشه) ============
+    if data == "dm_admin_menu":
+        await dm_admin_menu(update, context)
+        return
+    elif data == "dm_user_menu":
+        await dm_user_menu(update, context)
+        return
+    elif data == "dm_admin_view_sent":
+        await dm_admin_view_sent(update, context)
+        return
+    elif data == "dm_admin_delete":
+        await dm_admin_delete_message(update, context)
+        return
+    elif data == "dm_user_view_received":
+        await dm_user_view_received(update, context)
+        return
+    elif data == "dm_user_view_sent":
+        await dm_user_view_sent(update, context)
+        return
+    elif data == "dm_user_delete":
+        await dm_user_delete_message(update, context)
+        return
+    # اگه توی DM بود و دکمه‌های پنل ادمین رو زد، context پاک بشه بعد ادامه
+    elif data == "admin_panel" and context.user_data.get('dm_type'):
+        context.user_data.clear()
+        await admin_panel(update, context)
+        return
+    elif data.startswith("admin_") and context.user_data.get('dm_type'):
+        # هر دکمه پنل مدیریت در حالت DM: پاک کن و بعد بذار ادامه بده
+        context.user_data.clear()
+        # حالا مجدداً همین تابع صدا زده میشه ولی بدون dm_type
+        # پس دوباره button_handler رو صدا می‌زنیم:
+        return await button_handler(update, context)
+    
+    # ============ دکمه‌های اصلی ============
     if data == "notifications":
         await reminder_menu(update, context)
     elif data == "set_reminder":
@@ -470,14 +494,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cancel_reminder":
         await show_cancel_list(update, context)
     
-    # ---- پنل ادمین ----
+    # ============ پنل ادمین ============
     elif data == "admin_panel":
         await admin_panel(update, context)
-        return  # ✅ اینو اضافه کن
+        return
     elif data == "back_to_admin_panel":
         await back_to_admin(update, context)
+        return
     
-    # ---- Broadcast ها ----
+    # ============ Broadcast ============
     elif data == "admin_broadcast_now":
         await broadcast_now_start(update, context)
     elif data == "admin_broadcast_scheduled":
@@ -506,95 +531,97 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_send_now_from_scheduled(update, context)
         return
     
-    # ---- آمار و وضعیت ----
+    # ============ آمار و وضعیت ============
     elif data == "admin_stats":
         await admin_stats(update, context)
+        return
     elif data == "admin_bot_status":
         await admin_bot_status_menu(update, context)
+        return
     elif data == "admin_toggle_bot":
         await toggle_bot(update, context)
+        return
     elif data == "admin_delete_all_data":
         await delete_all_data(update, context)
+        return
     elif data == "admin_confirm_delete":
         await confirm_delete_all(update, context)
+        return
     elif data == "admin_server_status":
         await admin_server_status(update, context)
+        return
     
-    # ---- مدیریت ادمین‌ها ----
+    # ============ مدیریت ادمین‌ها ============
     elif data == "admin_manage_admins":
         await manage_admins(update, context)
+        return
     elif data == "admin_add_admin":
         await add_admin_start(update, context)
+        return
     elif data == "admin_remove_admin":
         await remove_admin_start(update, context)
+        return
     elif data.startswith("admin_remove_") and data != "admin_remove_admin":
         await remove_admin_execute(update, context)
+        return
     elif data == "admin_edit_admin":
         await edit_admin_start(update, context)
+        return
     elif data.startswith("admin_edit_") and data != "admin_edit_admin":
         await edit_admin_permissions(update, context)
+        return
     elif data == "admin_list_admins":
         await list_admins(update, context)
+        return
     
-    # ---- مدیریت کاربران ----
+    # ============ مدیریت کاربران ============
     elif data == "admin_manage_users":
         await manage_users(update, context)
+        return
     elif data == "admin_ban_user":
         await ban_user_start(update, context)
+        return
     elif data.startswith("admin_ban_"):
         await handle_ban_from_search(update, context)
+        return
     elif data == "admin_unban_user":
         await unban_user_start(update, context)
+        return
     elif data.startswith("admin_unban_"):
         await unban_user_execute(update, context)
+        return
     elif data == "admin_banned_list":
         await banned_list(update, context)
+        return
     elif data == "admin_search_user":
         await search_user_start(update, context)
+        return
     
-    # ---- ریمایندرها ----
+    # ============ ریمایندرها ============
     elif data.startswith("view_"):
         await view_reminder_detail(update, context)
+        return
     elif data.startswith("delete_"):
         await delete_reminder(update, context)
+        return
     elif data.startswith("cancel_"):
         await cancel_reminder(update, context)
+        return
     elif data.startswith("activate_"):
         await activate_reminder_handler(update, context)
-
-    # ============ 🆕 دکمه‌های DM ============
-    if data == "dm_admin_menu":
-        await dm_admin_menu(update, context)
         return
-    elif data == "dm_user_menu":
-        await dm_user_menu(update, context)
-        return
-    elif data == "dm_admin_view_sent":
-        await dm_admin_view_sent(update, context)
-        return
-    elif data == "dm_admin_delete":
-        await dm_admin_delete_message(update, context)
-        return
-    elif data == "dm_user_view_received":
-        await dm_user_view_received(update, context)
-        return
-    elif data == "dm_user_view_sent":
-        await dm_user_view_sent(update, context)
-        return
-    elif data == "dm_user_delete":
-        await dm_user_delete_message(update, context)
-        return
-
     
-    # ---- بازگشت‌ها ----
+    # ============ بازگشت‌ها ============
     elif data == "back_to_main":
         await back_to_main(update, context)
+        return
     elif data == "back_to_notifications":
         await back_to_notifications(update, context)
+        return
     
     else:
         logger.warning(f"⚠️ Unknown callback: {data}")
-
+        
 async def handle_ban_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بن کردن کاربر از نتایج جستجو"""
     query = update.callback_query
