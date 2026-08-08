@@ -376,7 +376,7 @@ import json
 async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=None):
     """
     ارسال پیشرفته با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
-    با پشتیبانی کامل از فوروارد برای متن و فایل
+    با پشتیبانی کامل از فوروارد برای متن، فایل و نظرسنجی
     
     Args:
         broadcast_id: شناسه broadcast
@@ -422,8 +422,13 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
     from_chat_id = broadcast_data.get('from_chat_id')
     from_message_id = broadcast_data.get('from_message_id')
     
+    # ✅ اطلاعات نظرسنجی
+    poll_mode = broadcast_data.get('poll_mode')
+    poll_question = broadcast_data.get('poll_question')
+    poll_options = broadcast_data.get('poll_options')
+    
     # لاگ اطلاعات فوروارد
-    logger.info(f"📤 SENDING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}")
+    logger.info(f"📤 SENDING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}, poll_mode={poll_mode}")
 
     # اطلاعات ادمین
     admin_info = get_admin_info_from_db(admin_id)
@@ -460,7 +465,7 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
         f"📺 Channel: @video_amouzeshi"
     )
 
-    # ============ ساخت متن کامل ============
+    # ============ ساخت متن کامل (برای حالت non-forward) ============
     full_message = (
         f"📢 <b>پیام همگانی</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -510,9 +515,72 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
 
         try:
             # ============================================================
-            # ========== حالت فوروارد (برای همه نوع محتوا) ==========
+            # ========== حالت نظرسنجی ====================================
             # ============================================================
-            if from_chat_id and from_message_id:
+            if content_type == 'poll':
+                if poll_mode == 'forward' and from_chat_id and from_message_id:
+                    # ✅ فوروارد نظرسنجی (با هدر + زنده)
+                    try:
+                        await bot.forward_message(
+                            chat_id=user_id,
+                            from_chat_id=from_chat_id,
+                            message_id=from_message_id
+                        )
+                        logger.debug(f"📊 Forwarded poll to {user_id}")
+                    except Exception as forward_error:
+                        logger.warning(f"⚠️ Poll forward failed for {user_id}: {forward_error}")
+                        try:
+                            await bot.copy_message(
+                                chat_id=user_id,
+                                from_chat_id=from_chat_id,
+                                message_id=from_message_id
+                            )
+                            logger.debug(f"📊 Copied poll to {user_id}")
+                        except Exception as copy_error:
+                            logger.warning(f"⚠️ Poll copy failed for {user_id}: {copy_error}")
+                            # Fallback: ساخت نظرسنجی جدید
+                            try:
+                                await bot.send_poll(
+                                    chat_id=user_id,
+                                    question=poll_question or 'نظرسنجی',
+                                    options=poll_options or ['بله', 'خیر'],
+                                    is_anonymous=True,
+                                    type='regular'
+                                )
+                                logger.debug(f"📊 Created new poll for {user_id}")
+                            except Exception as poll_error:
+                                logger.error(f"❌ All poll methods failed for {user_id}: {poll_error}")
+                                raise poll_error
+                else:
+                    # ✅ ساخت نظرسنجی جدید
+                    await bot.send_poll(
+                        chat_id=user_id,
+                        question=poll_question or 'نظرسنجی',
+                        options=poll_options or ['بله', 'خیر'],
+                        is_anonymous=True,
+                        type='regular'
+                    )
+                    logger.debug(f"📊 Sent new poll to {user_id}")
+                
+                # ✅ ارسال فوتر با دکمه‌ها (برای نظرسنجی)
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=footer_text,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+                
+                # ثبت موفقیت
+                add_broadcast_log(broadcast_id, user_id, 'success')
+                sent += 1
+                consecutive_errors = 0
+                return True
+
+            # ============================================================
+            # ========== حالت فوروارد (برای متن و فایل) ==========
+            # ============================================================
+            elif from_chat_id and from_message_id:
                 # ----- مرحله ۱: فوروارد پیام اصلی -----
                 try:
                     await bot.forward_message(
@@ -553,25 +621,13 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
                             await bot.send_message(user_id, text=full_message, parse_mode='HTML')
 
                 # ----- مرحله ۲: ارسال فوتر با دکمه‌ها (به‌صورت پیام جداگانه) -----
-                # برای متن، فوتر جداگانه ارسال می‌شود تا هدر فوروارد حفظ شود
-                if content_type == 'text':
-                    # فقط فوتر را ارسال کن (بدون تکرار متن)
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=footer_text,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup,
-                        disable_web_page_preview=True
-                    )
-                else:
-                    # برای فایل‌ها، فوتر را به عنوان پیام جداگانه ارسال کن
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=footer_text,
-                        parse_mode='HTML',
-                        reply_markup=reply_markup,
-                        disable_web_page_preview=True
-                    )
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=footer_text,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
 
             # ============================================================
             # ========== حالت عادی (بدون فوروارد) ====================
