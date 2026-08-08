@@ -990,6 +990,23 @@ async def handle_content_type(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return BROADCAST_TITLE
 
+    # ✅ اضافه کن: هندل نظرسنجی
+    elif content_type == 'poll':
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📊 ساخت نظرسنجی جدید", callback_data="poll_create")],
+            [InlineKeyboardButton("📤 فوروارد نظرسنجی آماده", callback_data="poll_forward")],
+            [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
+        ])
+        
+        await query.edit_message_text(
+            "📊 <b>ارسال نظرسنجی</b>\n\n"
+            "لطفاً نحوه ایجاد نظرسنجی را انتخاب کنید:\n\n"
+            "🔹 <b>ساخت جدید:</b> سوال و گزینه‌ها را وارد می‌کنید\n"
+            "🔹 <b>فوروارد:</b> نظرسنجی آماده را از کانال/گروه فوروارد می‌کنید",
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
+        return BROADCAST_POLL_TYPE
 
 # ============ هندلر دریافت فایل ============
 
