@@ -176,7 +176,8 @@ def save_broadcast(admin_id, title, message, send_date=None, send_time=None):
 def save_broadcast_advanced(admin_id, title, content_type='text', 
                            message=None, file_id=None, file_caption=None, 
                            inline_buttons=None, send_date=None, send_time=None,
-                           from_chat_id=None, from_message_id=None):
+                           from_chat_id=None, from_message_id=None,
+                           poll_mode=None, poll_question=None, poll_options=None):
     """
     ذخیره پیام همگانی با پشتیبانی از انواع محتوا و دکمه‌های شیشه‌ای
     
