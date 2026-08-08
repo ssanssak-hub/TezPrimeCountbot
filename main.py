@@ -702,13 +702,16 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # ✅ چک کن awaiting_message ولی broadcast نباشه
+    # 🆕 اگه توی conversation DM هست، بذار ConversationHandler هندل کنه
+    if context.user_data.get('awaiting_dm'):
+        return
+    
+    # ✅ چک کن awaiting_message
     if context.user_data.get('awaiting_message'):
         broadcast_type = context.user_data.get('broadcast_type')
         
-        # ⚠️ برای broadcast ها هیچ کاری نکن - بذار ConversationHandler هندل کنه
         if broadcast_type in ['now', 'scheduled']:
-            return  # اما این بار return خالی، چون ConversationHandler قبلاً ثبت شده
+            return
         
         if context.user_data.get('awaiting_admin'):
             await add_admin_execute(update, context)
