@@ -1377,3 +1377,11 @@ async def dm_user_view_sent_detail(update: Update, context: ContextTypes.DEFAULT
         reply_markup=dm_user_sent_detail_keyboard(msg_id),
         parse_mode='HTML'
     )
+
+async def safe_edit_message(query, text, **kwargs):
+    """ویرایش امن پیام - خطای تکراری رو ignore میکنه"""
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
