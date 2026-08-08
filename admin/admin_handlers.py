@@ -110,6 +110,11 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     """دریافت عنوان و پیام - با پشتیبانی از فوروارد متن"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
+
+    # ✅ تشخیص نظرسنجی فوروارد شده در مرحله title
+    msg = update.message
+    if msg.forward_origin and msg.poll:
+        return await handle_poll_forward_receive(update, context)    
     
     broadcast_type = context.user_data.get('broadcast_type')
     content_type = context.user_data['broadcast'].get('content_type', 'text')
@@ -1028,6 +1033,10 @@ async def handle_file_receive(update: Update, context: ContextTypes.DEFAULT_TYPE
     is_forward = False
     caption = None
     title = None
+
+    # ✅ تشخیص نظرسنجی فوروارد شده
+    if message.forward_origin and message.poll:
+        return await handle_poll_forward_receive(update, context)    
     
     # ============ تشخیص فوروارد (اصلاح‌شده) ============
     # ✅ استفاده از چت فعلی (چت کاربر با بات) به جای منبع اصلی
