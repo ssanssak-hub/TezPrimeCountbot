@@ -1201,11 +1201,11 @@ def setup_handlers():
     
     # ============ 🆕 هندلرهای standalone برای دکمه‌های DM ============
     # جزئیات پیام ارسالی ادمین
-    application.add_handler(CallbackQueryHandler(dm_admin_view_detail, pattern="r^dm_admin_detail_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_view_detail, pattern=r"^dm_admin_detail_\d+$"))
     # حذف پیام ارسالی ادمین
     application.add_handler(CallbackQueryHandler(dm_admin_delete_message, pattern=r"^dm_admin_delete_\d+$"))
     # علامت‌گذاری خوانده شده
-    application.add_handler(CallbackQueryHandler(dm_admin_read_message, pattern="r^dm_admin_read_\d+$"))
+    application.add_handler(CallbackQueryHandler(dm_admin_read_message, pattern=r"^dm_admin_read_\d+$"))
     # حذف پیام کاربر توسط ادمین
     application.add_handler(CallbackQueryHandler(dm_admin_delete_user_msg, pattern=r"^dm_admin_delete_umsg_\d+$"))
     # نادیده گرفتن پیام کاربر
