@@ -44,6 +44,27 @@ from admin.admin_handlers import (
     BAN_USER_ID, ADD_ADMIN_ID, SEARCH_USER_ID
 )
 
+from direct_messages import init_dm_db
+from direct_messages.dm_handlers import (
+    dm_admin_menu, dm_admin_send_start, dm_admin_handle_content_type,
+    dm_admin_receive_content, dm_admin_handle_buttons, dm_admin_button_text_input,
+    dm_admin_ask_user_ids, dm_admin_send_to_users,
+    dm_admin_view_sent, dm_admin_view_detail,
+    dm_admin_delete_message, dm_admin_read_message,
+    dm_admin_delete_user_msg, dm_admin_ignore_message,
+    dm_admin_ban_user, dm_admin_view_user_messages,
+    dm_admin_view_umsg_detail,
+    dm_user_menu, dm_user_send_start, dm_user_handle_content_type,
+    dm_user_receive_content, dm_user_handle_buttons, dm_user_button_text_input,
+    dm_user_select_admins, dm_user_toggle_admin, dm_user_send_to_admins,
+    dm_user_view_received, dm_user_view_sent,
+    dm_user_view_detail, dm_user_view_sent_detail,
+    dm_user_delete_message,
+    dm_handle_pagination,
+    dm_back_to_admin_menu, dm_back_to_user_menu, dm_cancel,
+    DM_TITLE, DM_CONTENT, DM_BUTTONS, DM_USER_IDS, DM_SELECT_ADMINS
+)
+
 from admin.admin_database import init_admin_db
 
 from database import init_db, is_user_admin, is_bot_active, is_user_banned as db_is_banned
@@ -539,6 +560,29 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cancel_reminder(update, context)
     elif data.startswith("activate_"):
         await activate_reminder_handler(update, context)
+
+    # ============ 🆕 دکمه‌های DM ============
+    if data == "dm_admin_menu":
+        await dm_admin_menu(update, context)
+        return
+    elif data == "dm_user_menu":
+        await dm_user_menu(update, context)
+        return
+    elif data == "dm_admin_view_sent":
+        await dm_admin_view_sent(update, context)
+        return
+    elif data == "dm_admin_delete":
+        await dm_admin_delete_message(update, context)
+        return
+    elif data == "dm_user_view_received":
+        await dm_user_view_received(update, context)
+        return
+    elif data == "dm_user_view_sent":
+        await dm_user_view_sent(update, context)
+        return
+    elif data == "dm_user_delete":
+        await dm_user_delete_message(update, context)
+        return
     
     # ---- بازگشت‌ها ----
     elif data == "back_to_main":
@@ -968,6 +1012,7 @@ def setup_handlers():
         edit_broadcast_buttons
     )    
     
+    # ============ ConversationHandler ادمین (broadcast, ban, add_admin, search) ============
     admin_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_now_start, pattern="^admin_broadcast_now$"),
@@ -993,13 +1038,9 @@ def setup_handlers():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_now_message),
             ],
             BROADCAST_BUTTONS: [
-                # ✅ دکمه‌های مدیریت دکمه‌های شیشه‌ای (افزودن/حذف/تأیید/رد)
                 CallbackQueryHandler(handle_inline_buttons, pattern="^ib_"),
-                # ✅ تأیید نهایی ارسال پیشرفته (هم برای فوری و هم زمان‌بندی)
                 CallbackQueryHandler(confirm_advanced_broadcast, pattern="^confirm_adv_broadcast_"),
-                # ✅ ویرایش دکمه‌های یک broadcast ذخیره شده
                 CallbackQueryHandler(edit_broadcast_buttons, pattern="^broadcast_edit_buttons_"),
-                # ✅ دریافت متن/لینک دکمه جدید
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button_text_input),
             ],            
             BROADCAST_DATE: [
@@ -1033,6 +1074,7 @@ def setup_handlers():
     )
     application.add_handler(admin_conv)
     
+    # ============ ConversationHandler ریمایندر ============
     reminder_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(set_reminder_start, pattern="^set_reminder$")
@@ -1056,6 +1098,136 @@ def setup_handlers():
     )
     application.add_handler(reminder_conv)
     
+    # ============ 🆕 ConversationHandler پیام مستقیم ادمین ============
+    from direct_messages.dm_handlers import (
+        dm_admin_menu, dm_admin_send_start, dm_admin_handle_content_type,
+        dm_admin_receive_content, dm_admin_handle_buttons, dm_admin_button_text_input,
+        dm_admin_ask_user_ids, dm_admin_send_to_users,
+        dm_admin_view_sent, dm_admin_view_detail,
+        dm_admin_delete_message, dm_admin_read_message,
+        dm_admin_delete_user_msg, dm_admin_ignore_message,
+        dm_admin_ban_user, dm_admin_view_user_messages,
+        dm_admin_view_umsg_detail,
+        dm_user_menu, dm_user_send_start, dm_user_handle_content_type,
+        dm_user_receive_content, dm_user_handle_buttons, dm_user_button_text_input,
+        dm_user_select_admins, dm_user_toggle_admin, dm_user_send_to_admins,
+        dm_user_view_received, dm_user_view_sent,
+        dm_user_view_detail, dm_user_view_sent_detail,
+        dm_user_delete_message,
+        dm_handle_pagination,
+        dm_back_to_admin_menu, dm_back_to_user_menu, dm_cancel,
+        DM_TITLE, DM_CONTENT, DM_BUTTONS, DM_USER_IDS, DM_SELECT_ADMINS
+    )
+    
+    dm_admin_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(dm_admin_menu, pattern="^dm_admin_menu$"),
+            CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_send$"),
+            CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_send_to_\d+$"),
+        ],
+        states={
+            DM_TITLE: [
+                CallbackQueryHandler(dm_admin_handle_content_type, pattern="^content_type_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_admin_receive_content),
+                MessageHandler(filters.PHOTO, dm_admin_receive_content),
+                MessageHandler(filters.VIDEO, dm_admin_receive_content),
+                MessageHandler(filters.VIDEO_NOTE, dm_admin_receive_content),
+                MessageHandler(filters.Document.ALL, dm_admin_receive_content),
+                MessageHandler(filters.AUDIO, dm_admin_receive_content),
+                MessageHandler(filters.VOICE, dm_admin_receive_content),
+            ],
+            DM_CONTENT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_admin_receive_content),
+            ],
+            DM_BUTTONS: [
+                CallbackQueryHandler(dm_admin_handle_buttons, pattern="^ib_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_admin_button_text_input),
+            ],
+            DM_USER_IDS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_admin_send_to_users),
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", dm_cancel),
+            CallbackQueryHandler(dm_admin_menu, pattern="^dm_admin_menu$"),
+            CallbackQueryHandler(admin_panel, pattern="^admin_panel$"),
+            CallbackQueryHandler(back_to_main, pattern="^back_to_main$"),
+        ],
+        name="dm_admin_conversation",
+        allow_reentry=True
+    )
+    application.add_handler(dm_admin_conv)
+    
+    # ============ 🆕 ConversationHandler پیام مستقیم کاربر ============
+    dm_user_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(dm_user_menu, pattern="^dm_user_menu$"),
+            CallbackQueryHandler(dm_user_send_start, pattern="^dm_user_send$"),
+        ],
+        states={
+            DM_TITLE: [
+                CallbackQueryHandler(dm_user_handle_content_type, pattern="^content_type_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_user_receive_content),
+                MessageHandler(filters.PHOTO, dm_user_receive_content),
+                MessageHandler(filters.VIDEO, dm_user_receive_content),
+                MessageHandler(filters.VIDEO_NOTE, dm_user_receive_content),
+                MessageHandler(filters.Document.ALL, dm_user_receive_content),
+                MessageHandler(filters.AUDIO, dm_user_receive_content),
+                MessageHandler(filters.VOICE, dm_user_receive_content),
+            ],
+            DM_CONTENT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_user_receive_content),
+            ],
+            DM_BUTTONS: [
+                CallbackQueryHandler(dm_user_handle_buttons, pattern="^ib_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, dm_user_button_text_input),
+            ],
+            DM_SELECT_ADMINS: [
+                CallbackQueryHandler(dm_user_toggle_admin, pattern="^dm_select_admin_"),
+                CallbackQueryHandler(dm_user_toggle_admin, pattern="^dm_select_all$"),
+                CallbackQueryHandler(dm_user_toggle_admin, pattern="^dm_select_none$"),
+                CallbackQueryHandler(dm_user_toggle_admin, pattern="^dm_confirm_admins$"),
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", dm_cancel),
+            CallbackQueryHandler(dm_user_menu, pattern="^dm_user_menu$"),
+            CallbackQueryHandler(back_to_main, pattern="^back_to_main$"),
+        ],
+        name="dm_user_conversation",
+        allow_reentry=True
+    )
+    application.add_handler(dm_user_conv)
+    
+    # ============ 🆕 هندلرهای standalone برای دکمه‌های DM ============
+    # جزئیات پیام ارسالی ادمین
+    application.add_handler(CallbackQueryHandler(dm_admin_view_detail, pattern="^dm_admin_detail_\d+$"))
+    # حذف پیام ارسالی ادمین
+    application.add_handler(CallbackQueryHandler(dm_admin_delete_message, pattern="^dm_admin_delete_\d+$"))
+    # علامت‌گذاری خوانده شده
+    application.add_handler(CallbackQueryHandler(dm_admin_read_message, pattern="^dm_admin_read_\d+$"))
+    # حذف پیام کاربر توسط ادمین
+    application.add_handler(CallbackQueryHandler(dm_admin_delete_user_msg, pattern="^dm_admin_delete_umsg_\d+$"))
+    # نادیده گرفتن پیام کاربر
+    application.add_handler(CallbackQueryHandler(dm_admin_ignore_message, pattern="^dm_admin_ignore_\d+$"))
+    # بن کردن کاربر از طریق پیام
+    application.add_handler(CallbackQueryHandler(dm_admin_ban_user, pattern="^dm_admin_ban_\d+_\d+$"))
+    # مشاهده پیام‌های یک کاربر خاص
+    application.add_handler(CallbackQueryHandler(dm_admin_view_user_messages, pattern="^dm_admin_user_msgs_\d+$"))
+    # مشاهده جزئیات پیام کاربر توسط ادمین
+    application.add_handler(CallbackQueryHandler(dm_admin_view_umsg_detail, pattern="^dm_admin_view_umsg_\d+$"))
+    # پاسخ به کاربر (ارسال پیام)
+    application.add_handler(CallbackQueryHandler(dm_admin_send_start, pattern="^dm_admin_reply_\d+$"))
+    # جزئیات پیام دریافتی کاربر
+    application.add_handler(CallbackQueryHandler(dm_user_view_detail, pattern="^dm_user_detail_\d+$"))
+    # جزئیات پیام ارسالی کاربر
+    application.add_handler(CallbackQueryHandler(dm_user_view_sent_detail, pattern="^dm_user_sent_detail_\d+$"))
+    # حذف پیام توسط کاربر
+    application.add_handler(CallbackQueryHandler(dm_user_delete_message, pattern="^dm_user_delete_\d+$"))
+    # pagination ها
+    application.add_handler(CallbackQueryHandler(dm_handle_pagination, pattern="^dm_.*_page_\d+$"))
+    
+    # ============ هندلرهای اصلی ============
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
@@ -1071,6 +1243,7 @@ def main():
     init_db()
     init_reminder_db()
     init_admin_db()
+    init_dm_db()
     logger.info("✅ All databases initialized")
     
     application = Application.builder().token(TOKEN).build()
