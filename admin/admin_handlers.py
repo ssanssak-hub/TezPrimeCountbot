@@ -2820,7 +2820,10 @@ async def show_final_preview(update: Update, context: ContextTypes.DEFAULT_TYPE)
         file_caption=broadcast_data.get('caption'),
         inline_buttons=buttons,
         from_chat_id=broadcast_data.get('from_chat_id'),        # ✅ اضافه
-        from_message_id=broadcast_data.get('from_message_id')   # ✅ اضافه
+        from_message_id=broadcast_data.get('from_message_id'),   # ✅ اضافه
+        poll_mode=broadcast_data.get('poll_mode'),
+        poll_question=broadcast_data.get('poll_question'),
+        poll_options=broadcast_data.get('poll_options'),
     )
     
     users_count = get_total_users_count()
