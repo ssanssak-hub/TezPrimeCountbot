@@ -1349,6 +1349,33 @@ def main():
     async def setup_webhook():
         await application.bot.set_webhook(WEBHOOK_URL)
         logger.info(f"✅ Webhook set to {WEBHOOK_URL}")
+        
+        # ✅ چک کانال
+        try:
+            chat = await application.bot.get_chat("@video_amouzeshi")
+            logger.info(f"✅ Bot is member of: {chat.title} (@{chat.username}) - Type: {chat.type}")
+            
+            # ✅ چک ادمین بودن و دسترسی‌ها
+            bot_member = await application.bot.get_chat_member("@video_amouzeshi", application.bot.id)
+            logger.info(f"👑 Bot status: {bot_member.status}")
+            logger.info(f"👑 Bot is admin: {bot_member.status == 'administrator'}")
+            
+            if bot_member.status == 'administrator':
+                logger.info(f"   can_manage_chat: {bot_member.can_manage_chat}")
+                logger.info(f"   can_change_info: {bot_member.can_change_info}")
+                logger.info(f"   can_post_messages: {bot_member.can_post_messages}")
+                logger.info(f"   can_edit_messages: {bot_member.can_edit_messages}")
+                logger.info(f"   can_delete_messages: {bot_member.can_delete_messages}")
+                logger.info(f"   can_invite_users: {bot_member.can_invite_users}")
+                logger.info(f"   can_restrict_members: {bot_member.can_restrict_members}")
+                logger.info(f"   can_pin_messages: {bot_member.can_pin_messages}")
+                logger.info(f"   can_promote_members: {bot_member.can_promote_members}")
+                logger.info(f"   can_manage_video_chats: {bot_member.can_manage_video_chats}")
+            else:
+                logger.warning(f"⚠️ Bot is NOT admin! Only {bot_member.status}")
+                
+        except Exception as e:
+            logger.error(f"❌ Bot check failed for @video_amouzeshi: {e}")
     
     bot_loop.run_until_complete(setup_webhook())
     
