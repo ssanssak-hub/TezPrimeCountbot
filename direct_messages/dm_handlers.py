@@ -706,7 +706,6 @@ async def dm_admin_view_umsg_detail(update: Update, context: ContextTypes.DEFAUL
     if msg['status'] == 'pending':
         update_user_message_status(msg_id, 'read', 'viewed')
 
-        # اطلاع به کاربر
         try:
             await context.bot.send_message(
                 chat_id=msg['user_id'],
@@ -717,8 +716,13 @@ async def dm_admin_view_umsg_detail(update: Update, context: ContextTypes.DEFAUL
             pass
 
     user_info = get_user_info(msg['user_id'])
-    user_name = user_info['first_name'] if user_info else 'ناشناس'
-    username = f" @{user_info['username']}" if user_info and user_info.get('username') else ""
+    if user_info:
+        user_info = dict(user_info)  # ✅ تبدیل به dict
+        user_name = user_info.get('first_name', 'ناشناس')
+        username = f" @{user_info['username']}" if user_info.get('username') else ""
+    else:
+        user_name = 'ناشناس'
+        username = ""
 
     text = (
         f"📋 <b>پیام از کاربر</b>\n"
@@ -734,7 +738,6 @@ async def dm_admin_view_umsg_detail(update: Update, context: ContextTypes.DEFAUL
     if msg['content_type'] == 'text' and msg['message']:
         text += f"📝 متن:\n{msg['message'][:500]}\n"
 
-    # نمایش محتوای فوروارد شده
     if msg.get('from_chat_id') and msg.get('from_message_id'):
         try:
             await context.bot.copy_message(
@@ -750,7 +753,6 @@ async def dm_admin_view_umsg_detail(update: Update, context: ContextTypes.DEFAUL
         reply_markup=dm_admin_action_keyboard(msg_id, msg['user_id']),
         parse_mode='HTML'
     )
-
 
 # ============================================================
 #                   بخش کاربر
@@ -855,7 +857,6 @@ async def dm_user_button_text_input(update: Update, context: ContextTypes.DEFAUL
     """دریافت متن دکمه (کاربر)"""
     return await dm_admin_button_text_input(update, context)
 
-
 async def dm_user_select_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """انتخاب ادمین(های) گیرنده"""
     query = update.callback_query
@@ -884,7 +885,6 @@ async def dm_user_select_admins(update: Update, context: ContextTypes.DEFAULT_TY
         parse_mode='HTML'
     )
     return DM_SELECT_ADMINS
-
 
 async def dm_user_toggle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تاگل انتخاب ادمین"""
@@ -918,7 +918,6 @@ async def dm_user_toggle_admin(update: Update, context: ContextTypes.DEFAULT_TYP
         parse_mode='HTML'
     )
     return DM_SELECT_ADMINS
-
 
 async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ارسال پیام به ادمین‌های انتخاب شده"""
@@ -996,7 +995,6 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
     )
     return ConversationHandler.END
 
-
 async def dm_user_view_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مشاهده پیام‌های دریافتی از مدیر"""
     query = update.callback_query
@@ -1015,7 +1013,6 @@ async def dm_user_view_received(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=dm_user_received_list_keyboard(messages),
         parse_mode='HTML'
     )
-
 
 async def dm_user_view_sent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مشاهده پیام‌های ارسالی به مدیر"""
@@ -1036,7 +1033,6 @@ async def dm_user_view_sent(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
-
 async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مشاهده جزئیات پیام دریافتی از مدیر"""
     query = update.callback_query
@@ -1052,55 +1048,11 @@ async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     mark_admin_message_read(msg_id)
 
     admin_info = get_user_info(msg['admin_id'])
-    admin_name = admin_info['first_name'] if admin_info else 'ادمین'
-
-    text = (
-        f"📋 <b>پیام از مدیر</b>\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"👤 فرستنده: <b>{admin_name}</b>\n"
-        f"📌 عنوان: <b>{msg['title']}</b>\n"
-        f"📎 نوع: <b>{get_content_type_fa(msg['content_type'])}</b>\n"
-        f"📅 تاریخ: {msg['created_at']}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-    )
-
-    if msg['content_type'] == 'text' and msg['message']:
-        text += f"📝 متن:\n{msg['message'][:500]}\n"
-
-    # نمایش محتوای فوروارد شده
-    if msg.get('from_chat_id') and msg.get('from_message_id'):
-        try:
-            await context.bot.copy_message(
-                chat_id=update.effective_user.id,
-                from_chat_id=msg['from_chat_id'],
-                message_id=msg['from_message_id']
-            )
-        except:
-            pass
-
-    await query.edit_message_text(
-        text,
-        reply_markup=dm_user_detail_keyboard(msg_id),
-        parse_mode='HTML'
-    )
-
-
-async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مشاهده جزئیات پیام دریافتی از مدیر"""
-    query = update.callback_query
-    await query.answer()
-
-    msg_id = int(query.data.split("_")[-1])
-    msg = get_admin_message_by_id(msg_id)
-
-    if not msg:
-        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=dm_user_menu_keyboard())
-        return
-
-    mark_admin_message_read(msg_id)
-
-    admin_info = get_user_info(msg['admin_id'])
-    admin_name = admin_info['first_name'] if admin_info else 'ادمین'
+    if admin_info:
+        admin_info = dict(admin_info)  # ✅ تبدیل به dict
+        admin_name = admin_info.get('first_name', 'ادمین')
+    else:
+        admin_name = 'ادمین'
 
     text = (
         f"📋 <b>پیام از مدیر</b>\n"
@@ -1127,19 +1079,17 @@ async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
                     if btn.get('type') == 'url':
                         keyboard.append([InlineKeyboardButton(btn['text'][:64], url=btn['url'])])
                     elif btn.get('type') == 'callback':
-                        keyboard.append([InlineKeyboardButton(btn['text'][:64], callback_data=btn['callback_data'])])
+                        keyboard.append([InlineKeyboardButton(btn['text'][:64], callback_data=btn.get('callback_data', 'noop'))])
             if keyboard:
-                # دکمه بازگشت رو اضافه کن
                 keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="dm_user_view_received")])
                 reply_markup = InlineKeyboardMarkup(keyboard)
         except Exception as e:
             logger.error(f"Error parsing inline buttons: {e}")
 
-    # اگه دکمه‌ای نبود، فقط دکمه بازگشت
     if not reply_markup:
         reply_markup = dm_user_detail_keyboard(msg_id)
 
-    # نمایش محتوای فوروارد شده
+    # نمایش محتوای فوروارد شده - ✅ msg دیکشنریه، پس msg.get کار می‌کنه
     if msg.get('from_chat_id') and msg.get('from_message_id'):
         try:
             await context.bot.copy_message(
@@ -1155,7 +1105,6 @@ async def dm_user_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup=reply_markup,
         parse_mode='HTML'
     )
-
 
 async def dm_user_delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حذف پیام ارسالی توسط کاربر"""
