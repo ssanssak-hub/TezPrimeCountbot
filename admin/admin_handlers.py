@@ -110,6 +110,9 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
     """دریافت عنوان و پیام - با پشتیبانی از فوروارد متن"""
     if not context.user_data.get('awaiting_message'):
         return ConversationHandler.END
+    
+    # ✅ اول msg رو تعریف کن!
+    msg = update.message
         
     # ✅ لاگ کامل
     logger.info(f"📩 broadcast_now_message RECEIVED:")
@@ -143,7 +146,6 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
     
     # ============ دریافت اطلاعات پیام ============
-    msg = update.message
     text_content = msg.text
     step = context.user_data.get('broadcast_step', 'title')
     
@@ -213,7 +215,7 @@ async def broadcast_now_message(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode='HTML'
         )
         return BROADCAST_BUTTONS
-
+        
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تایید و ارسال فوری با مدیریت بهتر"""
     query = update.callback_query
