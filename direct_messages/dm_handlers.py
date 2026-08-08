@@ -291,11 +291,12 @@ async def dm_admin_handle_buttons(update: Update, context: ContextTypes.DEFAULT_
 
     return DM_BUTTONS
 
-
 async def dm_admin_button_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت متن/لینک دکمه"""
     if not context.user_data.get('awaiting_button'):
-        return ConversationHandler.END    text = update.message.text.strip()
+        return ConversationHandler.END
+    
+    text = update.message.text.strip()
     buttons = context.user_data.get('inline_buttons', [])
     btn_type = context.user_data.get('adding_button_type')
 
@@ -343,7 +344,6 @@ async def dm_admin_button_text_input(update: Update, context: ContextTypes.DEFAU
         parse_mode='HTML'
     )
     return DM_BUTTONS
-
 
 async def dm_admin_ask_user_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """درخواست آیدی کاربر(ها)"""
