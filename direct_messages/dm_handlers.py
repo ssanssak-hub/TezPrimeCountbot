@@ -1224,3 +1224,45 @@ async def dm_handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=dm_user_delete_list_keyboard(messages, page),
             parse_mode='HTML'
         )
+
+# ============================================================
+#                   برگشت به منوها
+# ============================================================
+
+async def dm_back_to_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """برگشت به منوی ادمین"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    admin_id = int(os.getenv('ADMIN_ID'))
+    
+    await query.edit_message_text(
+        "📨 <b>ارسال پیام به کاربر</b>\n\nاز منوی زیر انتخاب کنید:",
+        reply_markup=dm_admin_menu_keyboard(),
+        parse_mode='HTML'
+    )
+
+
+async def dm_back_to_user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """برگشت به منوی کاربر"""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "📨 <b>پیام به مدیر</b>\n\nاز منوی زیر انتخاب کنید:",
+        reply_markup=dm_user_menu_keyboard(),
+        parse_mode='HTML'
+    )
+
+
+async def dm_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو عملیات"""
+    context.user_data.clear()
+    
+    if update.message:
+        await update.message.reply_text("❌ عملیات لغو شد.", reply_markup=back_to_admin_keyboard())
+    elif update.callback_query:
+        await update.callback_query.edit_message_text("❌ عملیات لغو شد.", reply_markup=back_to_admin_keyboard())
+    
+    return ConversationHandler.END
