@@ -50,7 +50,10 @@ def admin_panel_keyboard(user_id=None, admin_id=None):
         
         if is_main_admin or check_admin_permission(user_id, admin_id, "perm_manage_users"):
             keyboard.append([InlineKeyboardButton("🚫 مدیریت کاربران", callback_data="admin_manage_users")])
-        
+            
+        if is_main_admin or check_admin_permission(user_id, admin_id, "perm_manage_users"):
+            keyboard.append([InlineKeyboardButton("📨 ارسال پیام به کاربر", callback_data="dm_admin_menu")])
+
         if is_main_admin or check_admin_permission(user_id, admin_id, "perm_search_user"):
             keyboard.append([InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="admin_search_user")])
         
