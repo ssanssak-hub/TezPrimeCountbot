@@ -176,7 +176,7 @@ async def handle_send_now_from_scheduled(update: Update, context: ContextTypes.D
         await progress_msg.edit_text(f"❌ خطا: {str(e)[:200]}", reply_markup=back_to_admin_keyboard())
 
 async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش جزئیات کامل یک پیام همگانی (با پشتیبانی از فوروارد برای متن و فایل)"""
+    """نمایش جزئیات کامل یک پیام همگانی (با پشتیبانی از فوروارد برای متن، فایل و نظرسنجی)"""
     query = update.callback_query
     await query.answer("🔍 در حال دریافت جزئیات...")
     
@@ -201,6 +201,16 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     file_caption = b.get('file_caption') or ''
     from_chat_id = b.get('from_chat_id')
     from_message_id = b.get('from_message_id')
+    poll_mode = b.get('poll_mode')
+    poll_question = b.get('poll_question')
+    poll_options = b.get('poll_options')
+    
+    # ✅ تبدیل poll_options از JSON به list
+    if poll_options and isinstance(poll_options, str):
+        try:
+            poll_options = json.loads(poll_options)
+        except:
+            poll_options = []
     
     # لاگ برای دیباگ
     logger.info(f"📊 DETAILS: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}")
@@ -214,7 +224,8 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     
     content_emoji = {
         'text': '📝 متن', 'photo': '🖼 عکس', 'video': '🎥 فیلم',
-        'video_note': '📼 ویدئو مسیج', 'document': '📄 فایل', 'audio': '🎵 صدا/ویس'
+        'video_note': '📼 ویدئو مسیج', 'document': '📄 فایل', 'audio': '🎵 صدا/ویس',
+        'poll': '📊 نظرسنجی', 'voice': '🎤 ویس'
     }
     content_text = content_emoji.get(content_type, content_type)
     
@@ -275,7 +286,18 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     text += f"\n🆔 شناسه: {b.get('admin_id')}\n"
     text += f"━━━━━━━━━━━━━━━━\n"
     
-    if content_type == 'text' and message:
+    if content_type == 'poll':
+        text += f"📊 سوال نظرسنجی: {poll_question or title}\n"
+        if poll_options:
+            text += f"🔘 گزینه‌ها:\n"
+            for i, opt in enumerate(poll_options, 1):
+                text += f"  {i}. {opt}\n"
+        text += f"📤 حالت: {'فوروارد شده' if poll_mode == 'forward' else 'ساخته شده'}\n"
+        if from_chat_id and from_message_id:
+            text += f"📤 نوع ارسال: فوروارد شده (با هدر اصلی)\n"
+        else:
+            text += f"📤 نوع ارسال: ساخته شده با send_poll\n"
+    elif content_type == 'text' and message:
         text += f"📝 متن پیام:\n{message[:300]}{'...' if len(message) > 300 else ''}\n"
         text += f"📏 طول: {len(message)} کاراکتر\n"
         
@@ -311,8 +333,7 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
     else:
         text += f"⚡ ارسال فوری\n"
     
-    # ============ ارسال متن اصلی (برای متن فورواردی) ============
-    # ابتدا متن جزئیات رو ارسال کن
+    # ============ ارسال متن جزئیات ============
     await query.message.reply_text(text)
     
     # ============ ارسال محتوای اصلی با فوروارد ============
@@ -322,10 +343,39 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         # ✅ اگر اطلاعات فوروارد وجود دارد
         if from_chat_id and from_message_id:
             
-            # ====== برای متن ======
-            if content_type == 'text':
+            # ====== برای نظرسنجی ======
+            if content_type == 'poll':
                 try:
-                    # ارسال متن با forward_message (هدر اصلی حفظ می‌شود)
+                    await context.bot.forward_message(
+                        chat_id=admin_chat_id,
+                        from_chat_id=from_chat_id,
+                        message_id=from_message_id
+                    )
+                    logger.info(f"📊 نمایش نظرسنجی با forward_message از {from_chat_id}/{from_message_id}")
+                    
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"📊 نظرسنجی پیام #{broadcast_id}: {title[:50]}",
+                        parse_mode='HTML'
+                    )
+                    return
+                    
+                except Exception as forward_error:
+                    logger.warning(f"⚠️ Forward failed for poll: {forward_error}")
+                    try:
+                        await context.bot.copy_message(
+                            chat_id=admin_chat_id,
+                            from_chat_id=from_chat_id,
+                            message_id=from_message_id
+                        )
+                        logger.info(f"📊 نمایش نظرسنجی با copy_message")
+                        return
+                    except:
+                        pass  # ادامه به fallback
+            
+            # ====== برای متن ======
+            elif content_type == 'text':
+                try:
                     await context.bot.forward_message(
                         chat_id=admin_chat_id,
                         from_chat_id=from_chat_id,
@@ -333,17 +383,15 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
                     )
                     logger.info(f"📤 نمایش متن با forward_message از {from_chat_id}/{from_message_id}")
                     
-                    # ارسال توضیح به صورت پیام جداگانه
                     await context.bot.send_message(
                         chat_id=admin_chat_id,
                         text=f"📝 متن اصلی پیام #{broadcast_id}: {title[:50]}",
                         parse_mode='HTML'
                     )
-                    return  # موفقیت آمیز بود
+                    return
                     
                 except Exception as forward_error:
                     logger.warning(f"⚠️ Forward failed for text: {forward_error}")
-                    # اگر فوروارد خطا داد، متن را به صورت عادی ارسال کن
                     await context.bot.send_message(
                         chat_id=admin_chat_id,
                         text=f"📝 متن اصلی:\n\n{message[:500]}",
@@ -376,8 +424,19 @@ async def show_broadcast_details(update: Update, context: ContextTypes.DEFAULT_T
         # ============ Fallback: ارسال با file_id یا متن ساده ============
         logger.info(f"📤 ارسال با روش fallback")
         
-        if content_type == 'text':
-            # اگر فورواردی نیست، متن رو به صورت عادی ارسال کن
+        if content_type == 'poll':
+            # برای poll بدون فوروارد، فقط اطلاعات رو نشون بده
+            poll_info = f"📊 نظرسنجی: {poll_question or title}\n"
+            if poll_options:
+                poll_info += "🔘 گزینه‌ها:\n"
+                for i, opt in enumerate(poll_options, 1):
+                    poll_info += f"  {i}. {opt}\n"
+            await context.bot.send_message(
+                chat_id=admin_chat_id,
+                text=poll_info,
+                parse_mode='HTML'
+            )
+        elif content_type == 'text':
             await context.bot.send_message(
                 chat_id=admin_chat_id,
                 text=f"📝 متن اصلی:\n\n{message[:500]}",
