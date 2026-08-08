@@ -784,6 +784,14 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پاسخ به پیام‌های متنی"""
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
+    msg = update.message
+    
+    # ✅ لاگ دیباگ
+    logger.info(f"📢 ECHO: awaiting_message={context.user_data.get('awaiting_message')}, "
+                f"broadcast_type={context.user_data.get('broadcast_type')}, "
+                f"broadcast_step={context.user_data.get('broadcast_step')}, "
+                f"poll={msg.poll is not None if msg else False}, "
+                f"forward={msg.forward_origin is not None if msg else False}")
     
     if not is_bot_active() and not is_admin:
         return
@@ -801,6 +809,11 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         broadcast_type = context.user_data.get('broadcast_type')
         
         if broadcast_type in ['now', 'scheduled']:
+            # ✅ چک poll - اگه پیام شامل poll باشه، بفرست به تابع مخصوص
+            if msg and msg.poll:
+                logger.info(f"📊 ECHO: Poll detected! Redirecting to handle_poll_forward_receive")
+                from admin.admin_handlers import handle_poll_forward_receive
+                return await handle_poll_forward_receive(update, context)
             return
         
         if context.user_data.get('awaiting_admin'):
