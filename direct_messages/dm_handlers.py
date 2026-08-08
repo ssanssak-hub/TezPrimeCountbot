@@ -431,17 +431,18 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                 from_message_id=from_message_id
             )
 
-            # ۲. ارسال محتوای اصلی - اولویت با copy_message
+            # ✅ جدید - forward با هدر:
             if from_chat_id and from_message_id:
                 try:
-                    await bot.copy_message(
+                    await bot.forward_message(
                         chat_id=user_id,
                         from_chat_id=from_chat_id,
                         message_id=from_message_id
                     )
-                    logger.info(f"📤 Copied message to user {user_id}")
+                    logger.info(f"📤 forwarded message to user {user_id}")
+                    
                 except Exception as copy_error:
-                    logger.warning(f"⚠️ Copy failed for user {user_id}: {copy_error}")
+                    logger.warning(f"⚠️ forward failed for user {user_id}: {copy_error}")
                     # Fallback: ارسال متن یا فایل
                     if content_type == 'text' and dm_data.get('message'):
                         await bot.send_message(user_id, text=dm_data.get('message'))
@@ -1180,17 +1181,17 @@ async def dm_user_send_to_admins(update: Update, context: ContextTypes.DEFAULT_T
                 from_message_id=from_message_id
             )
 
-            # ✅ ارسال محتوای اصلی - اولویت با فوروارد/کپی
+            #ارسال محتوای اصلی - اولویت با فوروارد/کپی
             if from_chat_id and from_message_id:
                 try:
-                    await bot.copy_message(
-                        chat_id=admin_id,
+                    await bot.forward_message(
+                        chat_id=user_id,
                         from_chat_id=from_chat_id,
                         message_id=from_message_id
                     )
-                    logger.info(f"📤 Copied message to admin {admin_id}")
+                    logger.info(f"📤 Forwarded message to admin {admin_id}")
                 except Exception as copy_error:
-                    logger.warning(f"⚠️ Copy failed for admin {admin_id}: {copy_error}")
+                    logger.warning(f"⚠️ Forward failed for admin {admin_id}: {copy_error}")
                     # Fallback: ارسال متن ساده
                     if content_type == 'text' and dm_data.get('message'):
                         await bot.send_message(admin_id, text=dm_data.get('message'))
