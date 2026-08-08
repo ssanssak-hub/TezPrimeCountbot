@@ -1298,3 +1298,42 @@ async def dm_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text("❌ عملیات لغو شد.", reply_markup=back_to_admin_keyboard())
     
     return ConversationHandler.END
+
+async def dm_user_view_sent_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مشاهده جزئیات پیام ارسالی به مدیر"""
+    query = update.callback_query
+    await query.answer()
+
+    msg_id = int(query.data.split("_")[-1])
+    msg = get_user_message_by_id(msg_id)
+
+    if not msg:
+        await query.edit_message_text("❌ پیام یافت نشد!", reply_markup=dm_user_menu_keyboard())
+        return
+
+    status_text = {
+        'pending': '⏳ در انتظار مشاهده',
+        'read': '👁 مشاهده شده',
+        'ignored': '👀 دیده شده',
+        'deleted': '🗑️ حذف شده توسط مدیر',
+        'replied': '💬 پاسخ داده شده',
+    }.get(msg['status'], msg['status'])
+
+    text = (
+        f"📋 <b>پیام ارسالی به مدیر</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📌 عنوان: <b>{msg['title']}</b>\n"
+        f"📎 نوع: <b>{get_content_type_fa(msg['content_type'])}</b>\n"
+        f"📊 وضعیت: {status_text}\n"
+        f"📅 تاریخ: {msg['created_at']}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+    )
+
+    if msg['content_type'] == 'text' and msg['message']:
+        text += f"📝 متن:\n{msg['message'][:300]}\n"
+
+    await query.edit_message_text(
+        text,
+        reply_markup=dm_user_sent_detail_keyboard(msg_id),
+        parse_mode='HTML'
+    )
