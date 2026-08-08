@@ -412,7 +412,7 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
 
     for user_id in user_ids:
         try:
-            # ذخیره در دیتابیس
+            # ۱. ذخیره در دیتابیس
             msg_id = save_admin_message(
                 admin_id=admin_id,
                 user_id=user_id,
@@ -426,18 +426,62 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
                 from_message_id=dm_data.get('from_message_id')
             )
 
-            # ارسال نوتیفیکیشن به کاربر
-            notif_text = (
-                f"📨 <b>پیام جدید از مدیر</b>\n\n"
-                f"👤 <b>{admin_name}</b> در تاریخ <b>{persian_date}</b> "
-                f"ساعت <b>{time_str}</b> برای شما پیامی ارسال کرده است.\n\n"
-                f"👇 برای مشاهده روی دکمه زیر کلیک کنید:"
+            # ۲. 🆕 ارسال محتوای اصلی (فوروارد/کپی/فایل/متن)
+            content_type = dm_data.get('content_type', 'text')
+            from_chat_id = dm_data.get('from_chat_id')
+            from_message_id = dm_data.get('from_message_id')
+
+            if from_chat_id and from_message_id:
+                # فوروارد یا کپی
+                try:
+                    await bot.forward_message(
+                        chat_id=user_id,
+                        from_chat_id=from_chat_id,
+                        message_id=from_message_id
+                    )
+                except Exception:
+                    try:
+                        await bot.copy_message(
+                            chat_id=user_id,
+                            from_chat_id=from_chat_id,
+                            message_id=from_message_id
+                        )
+                    except Exception as copy_error:
+                        logger.warning(f"⚠️ Copy failed for {user_id}: {copy_error}")
+                        # Fallback: ارسال با file_id یا متن
+                        if content_type == 'text':
+                            await bot.send_message(user_id, text=dm_data.get('message', ''))
+                        elif dm_data.get('file_id'):
+                            await _send_file_by_type(bot, user_id, content_type, dm_data)
+            elif content_type == 'text':
+                await bot.send_message(user_id, text=dm_data.get('message', ''))
+            elif dm_data.get('file_id'):
+                await _send_file_by_type(bot, user_id, content_type, dm_data)
+
+            # ۳. 🆕 ساخت reply_markup از دکمه‌های شیشه‌ای
+            reply_markup = _build_inline_keyboard(buttons)
+
+            # ۴. 🆕 ارسال فوتر با اطلاعات ادمین
+            footer_text = (
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 مدیر: <b>{admin_name}</b>\n"
+                f"📅 تاریخ: <b>{persian_date}</b>\n"
+                f"⏰ ساعت: <b>{time_str}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
             )
 
+            await bot.send_message(
+                chat_id=user_id,
+                text=footer_text,
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+
+            # ۵. ارسال نوتیفیکیشن (اختیاری - کوچیک)
+            notif_text = f"📨 پیام جدید از <b>{admin_name}</b> 👆"
             notif_msg = await bot.send_message(
                 chat_id=user_id,
                 text=notif_text,
-                reply_markup=dm_user_notif_keyboard(msg_id),
                 parse_mode='HTML'
             )
 
@@ -459,6 +503,47 @@ async def dm_admin_send_to_users(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text(report, reply_markup=dm_admin_menu_keyboard(), parse_mode='HTML')
     return ConversationHandler.END
 
+
+# ============ توابع کمکی ============
+
+def _build_inline_keyboard(buttons):
+    """ساخت InlineKeyboardMarkup از لیست دکمه‌ها"""
+    if not buttons:
+        return None
+    
+    try:
+        keyboard = []
+        for btn in buttons:
+            if isinstance(btn, dict):
+                if btn.get('type') == 'url':
+                    keyboard.append([InlineKeyboardButton(btn['text'][:64], url=btn['url'])])
+                elif btn.get('type') == 'callback':
+                    keyboard.append([InlineKeyboardButton(btn['text'][:64], callback_data=btn.get('callback_data', 'noop'))])
+        
+        if keyboard:
+            keyboard.append([InlineKeyboardButton("👁 مشاهده همه پیام‌های مدیر", callback_data="dm_user_view_received")])
+            return InlineKeyboardMarkup(keyboard)
+    except Exception as e:
+        logger.error(f"Error building inline keyboard: {e}")
+    
+    return None
+
+
+async def _send_file_by_type(bot, user_id, content_type, dm_data):
+    """ارسال فایل بر اساس نوع محتوا"""
+    file_id = dm_data.get('file_id')
+    caption = dm_data.get('caption', '')
+
+    if content_type == 'photo':
+        await bot.send_photo(user_id, file_id, caption=caption)
+    elif content_type == 'video':
+        await bot.send_video(user_id, file_id, caption=caption)
+    elif content_type == 'video_note':
+        await bot.send_video_note(user_id, file_id)
+    elif content_type == 'document':
+        await bot.send_document(user_id, file_id, caption=caption)
+    elif content_type == 'audio' or content_type == 'voice':
+        await bot.send_audio(user_id, file_id, caption=caption)
 
 async def dm_admin_view_sent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مشاهده پیام‌های ارسالی"""
