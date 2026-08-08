@@ -583,6 +583,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "dm_user_delete":
         await dm_user_delete_message(update, context)
         return
+    elif data == "admin_panel" and context.user_data.get('dm_type'):
+    # اگه توی conversation DM بود، ازش خارج شو
+        context.user_data.clear()
+        await admin_panel(update, context)
+        return
     
     # ---- بازگشت‌ها ----
     elif data == "back_to_main":
@@ -1064,11 +1069,14 @@ def setup_handlers():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, search_user_result)
             ],
         },
+         
         fallbacks=[
-            CommandHandler("cancel", admin_cancel),
-            CallbackQueryHandler(admin_panel, pattern="^admin_panel$"),
-            CallbackQueryHandler(back_to_main, pattern="^back_to_main$"),
+            CommandHandler("cancel", dm_cancel),
+            CallbackQueryHandler(dm_admin_menu, pattern=r"^dm_admin_menu$"),
+            CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),
+            CallbackQueryHandler(back_to_main, pattern=r"^back_to_main$"),
         ],
+    
         name="admin_conversation",
         allow_reentry=True
     )
