@@ -583,11 +583,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "dm_user_delete":
         await dm_user_delete_message(update, context)
         return
-    elif data == "admin_panel" and context.user_data.get('dm_type'):
-    # اگه توی conversation DM بود، ازش خارج شو
-        context.user_data.clear()
+    elif data == "admin_panel":
         await admin_panel(update, context)
-        return
+        return  # ✅ اینو اضافه کن
     
     # ---- بازگشت‌ها ----
     elif data == "back_to_main":
