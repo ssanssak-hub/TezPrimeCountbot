@@ -2283,6 +2283,185 @@ async def search_user_result(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data.clear()
     return ConversationHandler.END
 
+# ============ هندلرهای نظرسنجی ============
+
+async def handle_poll_type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت انتخاب نوع نظرسنجی (ساخت جدید یا فوروارد)"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data == "poll_create":
+        # ✅ ساخت نظرسنجی جدید
+        context.user_data['broadcast']['poll_mode'] = 'create'
+        context.user_data['broadcast_step'] = 'poll_question'
+        context.user_data['awaiting_message'] = True
+        
+        await query.edit_message_text(
+            "📊 <b>ساخت نظرسنجی جدید</b>\n\n"
+            "لطفاً <b>سوال نظرسنجی</b> را وارد کنید:\n\n"
+            "📌 مثال: کدوم زبان برنامه‌نویسی رو ترجیح میدی؟\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_POLL_QUESTION
+    
+    elif data == "poll_forward":
+        # ✅ دریافت فوروارد نظرسنجی
+        context.user_data['broadcast']['poll_mode'] = 'forward'
+        context.user_data['broadcast_step'] = 'poll_forward'
+        context.user_data['awaiting_message'] = True
+        
+        await query.edit_message_text(
+            "📤 <b>فوروارد نظرسنجی</b>\n\n"
+            "لطفاً یک <b>نظرسنجی</b> را از کانال/گروه دیگر فوروارد کنید:\n\n"
+            "⚠️ <b>نکات:</b>\n"
+            "• حتماً باید پیام حاوی نظرسنجی باشد\n"
+            "• نظرسنجی به صورت زنده برای کاربران ارسال می‌شود\n"
+            "• هدر فوروارد (Forwarded from) حفظ می‌شود\n\n"
+            "🔙 برای بازگشت /cancel را بزنید",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_TITLE
+
+
+async def handle_poll_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت سوال نظرسنجی (برای ساخت جدید)"""
+    if not context.user_data.get('awaiting_message'):
+        return ConversationHandler.END
+    
+    question = update.message.text.strip()
+    
+    if len(question) > 255:
+        await update.message.reply_text(
+            f"❌ سوال نمی‌تواند بیشتر از ۲۵۵ کاراکتر باشد! (فعلی: {len(question)})\n"
+            "لطفاً کوتاه‌تر وارد کنید:",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return BROADCAST_POLL_QUESTION
+    
+    context.user_data['broadcast']['poll_question'] = question
+    context.user_data['broadcast']['title'] = f"📊 {question[:50]}"
+    context.user_data['broadcast_step'] = 'poll_options'
+    
+    await update.message.reply_text(
+        f"📊 <b>سوال:</b> {question}\n\n"
+        f"حالا <b>گزینه‌ها</b> را وارد کنید:\n\n"
+        f"📌 هر خط = یک گزینه\n"
+        f"📌 حداقل ۲ گزینه، حداکثر ۱۰ گزینه\n"
+        f"📌 هر گزینه حداکثر ۱۰۰ کاراکتر\n\n"
+        f"<b>مثال:</b>\n"
+        f"<code>پایتون\n"
+        f"جاوااسکریپت\n"
+        f"گو\n"
+        f"راست</code>\n\n"
+        f"🔙 برای بازگشت /cancel را بزنید",
+        reply_markup=back_to_admin_keyboard(),
+        parse_mode='HTML'
+    )
+    return BROADCAST_POLL_OPTIONS
+
+
+async def handle_poll_options(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت گزینه‌های نظرسنجی و ذخیره"""
+    options_text = update.message.text.strip()
+    options = [opt.strip() for opt in options_text.split('\n') if opt.strip()]
+    
+    if len(options) < 2:
+        await update.message.reply_text(
+            "❌ حداقل ۲ گزینه لازم است! دوباره وارد کنید:",
+            reply_markup=back_to_admin_keyboard()
+        )
+        return BROADCAST_POLL_OPTIONS
+    
+    if len(options) > 10:
+        options = options[:10]
+        await update.message.reply_text("⚠️ حداکثر ۱۰ گزینه مجاز است. ۱۰ گزینه اول ذخیره شد.")
+    
+    # چک طول هر گزینه
+    for i, opt in enumerate(options):
+        if len(opt) > 100:
+            await update.message.reply_text(
+                f"❌ گزینه {i+1} بیشتر از ۱۰۰ کاراکتر است! ({len(opt)} کاراکتر)\n"
+                "لطفاً دوباره وارد کنید:",
+                reply_markup=back_to_admin_keyboard()
+            )
+            return BROADCAST_POLL_OPTIONS
+    
+    context.user_data['broadcast']['poll_options'] = options
+    context.user_data['broadcast_step'] = 'buttons'
+    context.user_data['awaiting_message'] = False
+    
+    # نمایش خلاصه
+    options_preview = "\n".join([f"  {i+1}. {opt}" for i, opt in enumerate(options)])
+    await update.message.reply_text(
+        f"📊 <b>نظرسنجی آماده!</b>\n\n"
+        f"📝 سوال: {context.user_data['broadcast']['poll_question']}\n\n"
+        f"🔘 گزینه‌ها ({len(options)} عدد):\n{options_preview}\n\n"
+        f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> اضافه کنید:",
+        reply_markup=inline_buttons_keyboard(),
+        parse_mode='HTML'
+    )
+    return BROADCAST_BUTTONS
+
+
+async def handle_poll_forward_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت نظرسنجی فوروارد شده"""
+    msg = update.message
+    
+    # ✅ چک کن که پیام فوروارد شده و شامل poll باشه
+    if msg.forward_origin and msg.poll:
+        # ✅ ذخیره اطلاعات فوروارد
+        context.user_data['broadcast']['from_chat_id'] = str(msg.chat.id)
+        context.user_data['broadcast']['from_message_id'] = msg.message_id
+        context.user_data['broadcast']['is_forward'] = True
+        context.user_data['broadcast']['poll_question'] = msg.poll.question
+        context.user_data['broadcast']['title'] = f"📊 {msg.poll.question[:50]}"
+        
+        # ذخیره گزینه‌ها (برای نمایش)
+        context.user_data['broadcast']['poll_options'] = [opt.text for opt in msg.poll.options]
+        
+        context.user_data['broadcast_step'] = 'buttons'
+        context.user_data['awaiting_message'] = False
+        
+        options_text = "\n".join([f"  {i+1}. {opt.text}" for i, opt in enumerate(msg.poll.options)])
+        await msg.reply_text(
+            f"✅ <b>نظرسنجی فوروارد شده دریافت شد!</b>\n\n"
+            f"📝 سوال: {msg.poll.question}\n"
+            f"🔘 گزینه‌ها:\n{options_text}\n"
+            f"👥 آرای فعلی: {msg.poll.total_voter_count}\n"
+            f"🔒 ناشناس: {'بله' if msg.poll.is_anonymous else 'خیر'}\n\n"
+            f"⚠️ <b>نکته:</b> نظرسنجی با هدر فوروارد ارسال می‌شود\n"
+            f"و به صورت زنده برای همه کاربران یکسان خواهد بود.\n\n"
+            f"حالا می‌توانید <b>دکمه‌های شیشه‌ای</b> اضافه کنید:",
+            reply_markup=inline_buttons_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_BUTTONS
+    
+    elif msg.poll and not msg.forward_origin:
+        # ✅ نظرسنجی هست ولی فوروارد نشده (مستقیم ساخته شده)
+        await msg.reply_text(
+            "⚠️ لطفاً نظرسنجی را <b>فوروارد</b> کنید، نه اینکه مستقیم بسازید!\n\n"
+            "برای ساخت نظرسنجی جدید، گزینه «ساخت نظرسنجی جدید» را انتخاب کنید.\n"
+            "دوباره تلاش کنید:",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_TITLE
+    
+    else:
+        await msg.reply_text(
+            "❌ پیام فوروارد شده باید حاوی <b>نظرسنجی</b> باشد!\n"
+            "لطفاً یک نظرسنجی فوروارد کنید:",
+            reply_markup=back_to_admin_keyboard(),
+            parse_mode='HTML'
+        )
+        return BROADCAST_TITLE
+
 # ---------- برگشت به پنل (اصلاح‌شده) ----------
 
 async def back_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
