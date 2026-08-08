@@ -1069,8 +1069,9 @@ def setup_handlers():
             ],
         },
         fallbacks=[
-            CommandHandler("cancel", admin_cancel),
-            CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),
+            CommandHandler("cancel", dm_cancel),
+            CallbackQueryHandler(dm_user_menu, pattern=r"^dm_user_menu$"),
+            CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),  # ✅ اضافه کن
             CallbackQueryHandler(back_to_main, pattern=r"^back_to_main$"),
         ],
         name="admin_conversation",
