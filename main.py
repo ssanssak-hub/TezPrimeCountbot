@@ -473,6 +473,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- پنل ادمین ----
     elif data == "admin_panel":
         await admin_panel(update, context)
+        return  # ✅ اینو اضافه کن
     elif data == "back_to_admin_panel":
         await back_to_admin(update, context)
     
@@ -583,9 +584,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "dm_user_delete":
         await dm_user_delete_message(update, context)
         return
-    elif data == "admin_panel":
-        await admin_panel(update, context)
-        return  # ✅ اینو اضافه کن
+
     
     # ---- بازگشت‌ها ----
     elif data == "back_to_main":
@@ -1067,8 +1066,7 @@ def setup_handlers():
             ],
         },
         fallbacks=[
-            CommandHandler("cancel", dm_cancel),
-            CallbackQueryHandler(dm_user_menu, pattern=r"^dm_user_menu$"),
+            CommandHandler("cancel", admin_cancel),
             CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"),  # ✅ اضافه کن
             CallbackQueryHandler(back_to_main, pattern=r"^back_to_main$"),
         ],
