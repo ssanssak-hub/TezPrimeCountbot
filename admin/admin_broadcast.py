@@ -387,6 +387,7 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
     Returns:
         tuple: (sent, failed, total)
     """
+    import json
     if bot is None:
         from admin.admin_broadcast import bot as global_bot
         bot = global_bot
@@ -426,6 +427,22 @@ async def send_broadcast_advanced(broadcast_id, admin_id, broadcast_data, bot=No
     poll_mode = broadcast_data.get('poll_mode')
     poll_question = broadcast_data.get('poll_question')
     poll_options = broadcast_data.get('poll_options')
+    
+    # ✅ تبدیل poll_options از JSON به list
+    if poll_options and isinstance(poll_options, str):
+        try:
+            poll_options = json.loads(poll_options)
+        except Exception as e:
+            logger.error(f"❌ Error parsing poll_options JSON: {e}")
+            poll_options = ['بله', 'خیر']
+    elif not poll_options:
+        poll_options = ['بله', 'خیر']
+    
+    # ✅ اطمینان از اینکه poll_options یک لیست معتبر است
+    if not isinstance(poll_options, list) or len(poll_options) < 2:
+        poll_options = ['بله', 'خیر']
+    
+    logger.info(f"📊 POLL DATA: question={poll_question}, options={poll_options}")
     
     # لاگ اطلاعات فوروارد
     logger.info(f"📤 SENDING BROADCAST: from_chat_id={from_chat_id}, from_message_id={from_message_id}, content_type={content_type}, poll_mode={poll_mode}")
