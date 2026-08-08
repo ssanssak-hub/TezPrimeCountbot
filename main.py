@@ -782,23 +782,18 @@ async def show_cancel_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پاسخ به پیام‌های متنی"""
-    # ✅ اینو اول همه چیز بذار
-    logger.info(f"🔵🔵🔵 ECHO CALLED! msg type: {update.message}")    
     user_id = update.effective_user.id
     is_admin, _ = is_user_admin(user_id, ADMIN_ID)
     msg = update.message
 
-    # ✅ این لاگ رو اول تابع بذار - قبل از همه چک‌ها
-    logger.info(f"📢 ECHO START: user={user_id}, "
-                f"has_text={msg.text is not None if msg else False}, "
-                f"has_poll={msg.poll is not None if msg else False}, "
-                f"has_forward={msg.forward_origin is not None if msg else False}")    
-    # ✅ لاگ دیباگ
-    logger.info(f"📢 ECHO: awaiting_message={context.user_data.get('awaiting_message')}, "
-                f"broadcast_type={context.user_data.get('broadcast_type')}, "
-                f"broadcast_step={context.user_data.get('broadcast_step')}, "
-                f"poll={msg.poll is not None if msg else False}, "
+    logger.info(f"🔵 ECHO CALLED: poll={msg.poll is not None if msg else False}, "
                 f"forward={msg.forward_origin is not None if msg else False}")
+
+    # ✅ اول از همه - poll رو چک کن (حتی قبل از is_bot_active!)
+    if msg and msg.poll:
+        logger.info(f"📊 ECHO: Poll detected! Redirecting to handle_poll_forward_receive")
+        from admin.admin_handlers import handle_poll_forward_receive
+        return await handle_poll_forward_receive(update, context)
     
     if not is_bot_active() and not is_admin:
         return
@@ -807,20 +802,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 شما از ربات بن شده‌اید!")
         return
     
-    # 🆕 اگه توی conversation DM هست، بذار ConversationHandler هندل کنه
     if context.user_data.get('awaiting_dm'):
         return
     
-    # ✅ چک کن awaiting_message
     if context.user_data.get('awaiting_message'):
         broadcast_type = context.user_data.get('broadcast_type')
         
         if broadcast_type in ['now', 'scheduled']:
-            # ✅ چک poll - اگه پیام شامل poll باشه، بفرست به تابع مخصوص
-            if msg and msg.poll:
-                logger.info(f"📊 ECHO: Poll detected! Redirecting to handle_poll_forward_receive")
-                from admin.admin_handlers import handle_poll_forward_receive
-                return await handle_poll_forward_receive(update, context)
             return
         
         if context.user_data.get('awaiting_admin'):
@@ -842,7 +830,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "کسکش چی گوهی داری میخوری بزن /start کیری بن میشی کونی."
     )
-
+    
 async def handle_broadcast_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     مدیریت کلیک کاربران روی دکمه‌های شیشه‌ای پیام همگانی
