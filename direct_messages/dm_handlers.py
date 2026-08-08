@@ -552,15 +552,23 @@ async def dm_admin_view_sent(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     messages = get_all_admin_messages()
     if not messages:
-        await query.edit_message_text("📭 هیچ پیامی ارسال نشده!", reply_markup=dm_admin_menu_keyboard())
+        try:
+            await query.edit_message_text("📭 هیچ پیامی ارسال نشده!", reply_markup=dm_admin_menu_keyboard())
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                raise
         return
 
     context.user_data['dm_admin_msgs'] = messages
-    await query.edit_message_text(
-        "📋 <b>پیام‌های ارسالی به کاربران</b>",
-        reply_markup=dm_admin_sent_list_keyboard(messages),
-        parse_mode='HTML'
-    )
+    try:
+        await query.edit_message_text(
+            "📋 <b>پیام‌های ارسالی به کاربران</b>",
+            reply_markup=dm_admin_sent_list_keyboard(messages),
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def dm_admin_view_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
